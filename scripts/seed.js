@@ -16,22 +16,18 @@ async function seedUsers(client) {
       );
     `;
 
-    console.log(`Created "users" table`);
-
     // Insert data into the "users" table
     const insertedUsers = await Promise.all(
       users.map(async (user) => {
         const hashedPassword = await bcrypt.hash(user.password, 10);
 
         return client.sql`
-        INSERT INTO users (first_name, last_name, email, password)
-        VALUES (${user.first_name}, ${user.last_name}, ${user.email}, ${hashedPassword})
+        INSERT INTO users (id, first_name, last_name, email, password)
+        VALUES (${user.id}, ${user.first_name}, ${user.last_name}, ${user.email}, ${hashedPassword})
         ON CONFLICT (id) DO NOTHING;
       `;
       }),
     );
-
-    console.log(`Seeded ${insertedUsers.length} users`);
 
     return {
       createTable,

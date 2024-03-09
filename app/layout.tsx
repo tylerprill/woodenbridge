@@ -1,5 +1,4 @@
 import '@/app/global.css';
-import { inter } from '@/components/fonts';
 
 export default function RootLayout({
   children,
@@ -8,9 +7,7 @@ export default function RootLayout({
 }) {
   return (
     <html lang="en" className={'h-full bg-gray-50'}>
-      <body className={`${inter.className} h-full antialiased`}>
-        {children}
-      </body>
+      <body className={`h-full antialiased`}>{children}</body>
     </html>
   );
 }

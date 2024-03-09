@@ -13,7 +13,8 @@
     "prettier": "prettier --write --ignore-unknown .",
     "prettier:check": "prettier --check --ignore-unknown .",
     "seed": "node -r dotenv/config ./scripts/seed.js",
-    "start": "next start"
+    "start": "next start",
+    "start80": "next start -p 80"
   },
   "dependencies": {
     "@heroicons/react": "^2.0.18",
