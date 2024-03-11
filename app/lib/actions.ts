@@ -17,7 +17,7 @@ export async function authenticate(
     if (error instanceof AuthError) {
       switch (error.type) {
         case 'CredentialsSignin':
-          return 'Invalid credentials.';
+          return 'Either Email Address or Password were incorrect.';
         default:
           return 'Something went wrong.';
       }
@@ -47,18 +47,12 @@ export async function createUser(
     .safeParse(potentialUser);
 
   if (parsedCredentials.success) {
-    console.log('success');
-    console.log('Emaiil', potentialUser.email);
-
     const existingUsers = await getUser(potentialUser.email);
-    console.log('Existing User', existingUsers);
-
     if (existingUsers) {
       return 'Email address is already in use.';
     }
 
     await addUser(potentialUser);
-    console.log('Successfully added user');
     await signIn('credentials', formData);
   }
 }
