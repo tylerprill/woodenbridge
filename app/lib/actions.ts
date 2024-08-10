@@ -1,6 +1,6 @@
 'use server';
 
-import { auth, signIn } from '@/auth';
+import { auth, signIn, signOut } from '@/auth';
 import { AuthError } from 'next-auth';
 
 import { z } from 'zod';
@@ -55,4 +55,8 @@ export async function createUser(
     await addUser(potentialUser);
     await signIn('credentials', formData);
   }
+}
+
+export async function logOut() {
+  await signOut();
 }
