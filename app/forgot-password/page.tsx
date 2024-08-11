@@ -16,8 +16,8 @@ export default function SignUp() {
             Trouble Logging In?
           </h2>
           <p className="text-center">
-            Enter your email address and we'll send you a link to get back into
-            your account.
+            Enter your email address and we&apos;ll send you a link to get back
+            into your account.
           </p>
         </div>
 
