@@ -1,4 +1,5 @@
-import LoginForm from '@/components/login-form';
+'use client';
+import LoginForm from '@/components/unclean/login-form';
 
 export default function LoginPage() {
   return (
@@ -17,6 +18,23 @@ export default function LoginPage() {
 
         <div className="mt-10 sm:mx-auto sm:w-full sm:max-w-[480px]">
           <div className="bg-white px-6 py-12 shadow sm:rounded-lg sm:px-12">
+            <a
+              href="/"
+              className="flex flex-row pb-4 text-indigo-600 hover:text-indigo-500"
+            >
+              <svg
+                xmlns="http://www.w3.org/2000/svg"
+                height="24"
+                viewBox="0 -960 960 960"
+                width="18"
+                fill="#4e46e5"
+              >
+                <path d="m313-440 224 224-57 56-320-320 320-320 57 56-224 224h487v80H313Z" />
+              </svg>
+              <span className="pl-1 font-semibold text-indigo-600 hover:text-indigo-500">
+                Back
+              </span>
+            </a>
             <LoginForm />
           </div>
 

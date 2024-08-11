@@ -1,6 +1,6 @@
 'use client';
 
-import ForgotPasswordForm from '@/components/forgot-password-form';
+import ForgotPasswordForm from '@/components/unclean/forgot-password-form';
 
 export default function SignUp() {
   return (
@@ -31,7 +31,7 @@ export default function SignUp() {
               }}
               className="flex flex-row pb-4 text-indigo-600 hover:text-indigo-500"
             >
-              <svg 
+              <svg
                 xmlns="http://www.w3.org/2000/svg"
                 height="24"
                 viewBox="0 -960 960 960"
