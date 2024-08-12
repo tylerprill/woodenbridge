@@ -1,6 +1,10 @@
+'use client';
+
 import { ArrowRightIcon } from '@heroicons/react/24/outline';
-import Link from 'next/link';
+import { Modal } from '@/components/clean/Modal';
 import Image from 'next/image';
+import LoginForm from '@/components/unclean/login-form';
+import Link from 'next/link';
 
 export default function Page() {
   return (
@@ -16,6 +20,9 @@ export default function Page() {
           </p>
           <Link
             href="/login"
+            // onClick={() => {
+            //   console.log('Log in clicked');
+            // }}
             className="flex items-center gap-5 self-start rounded-lg bg-blue-500 px-6 py-3 text-sm font-medium text-white transition-colors hover:bg-blue-400 md:text-base"
           >
             <span>Log in</span> <ArrowRightIcon className="w-5 md:w-6" />
@@ -31,6 +38,38 @@ export default function Page() {
           />
         </div>
       </div>
+      {/* <Modal>
+        <>
+          <div className="flex min-h-full flex-1 flex-col justify-center">
+            <div className="sm:mx-auto sm:w-full sm:max-w-md">
+              <img
+                className="mx-auto h-10 w-auto"
+                src="https://tailwindui.com/img/logos/mark.svg?color=indigo&shade=600"
+                alt="Your Company"
+              />
+              <h2 className="mt-6 text-center text-2xl font-bold leading-9 tracking-tight text-gray-900">
+                Sign in to your account
+              </h2>
+            </div>
+
+            <div className="mt-10 sm:mx-auto sm:w-full sm:max-w-[480px]">
+              <div className="bg-white  sm:rounded-lg">
+                <LoginForm />
+              </div>
+
+              <p className="mt-10 text-center text-sm text-gray-500">
+                Not a member?{' '}
+                <a
+                  href="/sign-up"
+                  className="font-semibold leading-6 text-indigo-600 hover:text-indigo-500"
+                >
+                  Sign Up
+                </a>
+              </p>
+            </div>
+          </div>
+        </>
+      </Modal> */}
     </main>
   );
 }
