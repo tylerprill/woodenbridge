@@ -1,12 +1,24 @@
+import type { Metadata } from 'next';
+
+import { auth } from '@/auth';
 import SideNav from '@/components/unclean/dashboard/sidenav';
 
-export default function Layout({ children }: { children: React.ReactNode }) {
+export const metadata: Metadata = {
+  title: 'Your atlas — Wooden Bridge',
+  description: 'Your saved crossings, field notes, and future journeys.',
+};
+
+export const dynamic = 'force-dynamic';
+
+export default async function DashboardLayout({
+  children,
+}: Readonly<{ children: React.ReactNode }>) {
+  const session = await auth();
+
   return (
-    <div className="flex h-screen flex-col md:flex-row md:overflow-hidden">
-      <div className="w-full flex-none md:w-64">
-        <SideNav />
-      </div>
-      <div className="flex-grow p-6 md:overflow-y-auto md:p-12">{children}</div>
+    <div className="dashboard-shell">
+      <SideNav userEmail={session?.user?.email} />
+      <main className="dashboard-main">{children}</main>
     </div>
   );
 }

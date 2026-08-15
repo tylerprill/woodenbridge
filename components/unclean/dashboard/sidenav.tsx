@@ -1,34 +1,47 @@
 'use client';
 
-import Link from 'next/link';
-import NavLinks from '@/components/unclean/dashboard/nav-links';
-import { PowerIcon } from '@heroicons/react/24/outline';
+import { ArrowRightStartOnRectangleIcon } from '@heroicons/react/24/outline';
+
 import { logOut } from '@/app/lib/actions/auth';
-import { redirect } from 'next/dist/server/api-utils';
+import { BrandLockup } from '@/components/clean/brand-lockup';
+import NavLinks from '@/components/unclean/dashboard/nav-links';
 
-export default function SideNav() {
+type SideNavProps = {
+  userEmail?: string | null;
+};
+
+export default function SideNav({ userEmail }: SideNavProps) {
+  const initial = userEmail?.charAt(0).toUpperCase() ?? 'E';
+
   return (
-    <div className="flex h-full flex-col px-3 py-4 md:px-2">
-      <Link
-        className="mb-2 flex h-20 items-end justify-start rounded-md bg-blue-600 p-4 md:h-40"
-        href="/"
-      >
-        test
-      </Link>
-      <div className="flex grow flex-row justify-between space-x-2 md:flex-col md:space-x-0 md:space-y-2">
-        <NavLinks />
-        <div className="hidden h-auto w-full grow rounded-md bg-gray-50 md:block"></div>
+    <aside className="dashboard-sidebar">
+      <div className="dashboard-sidebar-inner">
+        <BrandLockup className="dashboard-brand" label="Personal atlas" />
 
-        <button
-          onClick={async () => {
-            await logOut({ redirectTo: '/' });
-          }}
-          className="flex h-[48px] w-full grow items-center justify-center gap-2 rounded-md bg-gray-50 p-3 text-sm font-medium hover:bg-sky-100 hover:text-blue-600 md:flex-none md:justify-start md:p-2 md:px-3"
-        >
-          <PowerIcon className="w-6" />
-          <div className="hidden md:block">Sign Out</div>
-        </button>
+        <nav className="dashboard-nav" aria-label="Dashboard navigation">
+          <p>Your atlas</p>
+          <div className="dashboard-nav-links">
+            <NavLinks />
+          </div>
+        </nav>
+
+        <div className="dashboard-account">
+          <span className="dashboard-avatar" aria-hidden="true">
+            {initial}
+          </span>
+          <span className="dashboard-account-copy">
+            <strong>Explorer</strong>
+            <small>{userEmail ?? 'Your account'}</small>
+          </span>
+          <button
+            type="button"
+            onClick={() => logOut({ redirectTo: '/' })}
+            aria-label="Sign out"
+          >
+            <ArrowRightStartOnRectangleIcon aria-hidden="true" />
+          </button>
+        </div>
       </div>
-    </div>
+    </aside>
   );
 }

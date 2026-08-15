@@ -1,86 +1,76 @@
 'use client';
 
-import { useFormState } from 'react-dom';
+import {
+  ArrowRightIcon,
+  EnvelopeIcon,
+  LockClosedIcon,
+} from '@heroicons/react/24/outline';
+import Link from 'next/link';
+import { useFormState, useFormStatus } from 'react-dom';
+
 import { authenticate } from '@/app/lib/actions';
+
+function SubmitButton() {
+  const { pending } = useFormStatus();
+
+  return (
+    <button className="auth-submit" type="submit" disabled={pending}>
+      <span>{pending ? 'Signing in…' : 'Sign in'}</span>
+      {pending ? (
+        <span className="auth-spinner" aria-hidden="true" />
+      ) : (
+        <ArrowRightIcon aria-hidden="true" />
+      )}
+    </button>
+  );
+}
 
 export default function LoginForm() {
   const [errorMessage, dispatch] = useFormState(authenticate, undefined);
 
   return (
-    <form action={dispatch}>
-      <div>
-        <label
-          htmlFor="email"
-          className="block text-sm font-medium leading-6 text-gray-900"
-        >
-          Email address
-        </label>
-        <div className="mt-2">
+    <form className="auth-form" action={dispatch}>
+      <div className="auth-field">
+        <label htmlFor="email">Email address</label>
+        <div className="auth-input-wrap">
+          <EnvelopeIcon aria-hidden="true" />
           <input
             id="email"
             name="email"
             type="email"
             autoComplete="email"
+            placeholder="you@example.com"
             required
-            className="block w-full rounded-md border-0 py-1.5 text-gray-900 shadow-sm ring-1 ring-inset ring-gray-300 placeholder:text-gray-400 focus:ring-2 focus:ring-inset focus:ring-indigo-600 sm:text-sm sm:leading-6"
           />
         </div>
       </div>
 
-      <div className={'pt-4'}>
-        <label
-          htmlFor="password"
-          className="block text-sm font-medium leading-6 text-gray-900"
-        >
-          Password
-        </label>
-        <div className="mt-2">
+      <div className="auth-field">
+        <div className="auth-label-row">
+          <label htmlFor="password">Password</label>
+          <Link href="/forgot-password">Forgot password?</Link>
+        </div>
+        <div className="auth-input-wrap">
+          <LockClosedIcon aria-hidden="true" />
           <input
             id="password"
             name="password"
             type="password"
             autoComplete="current-password"
+            placeholder="Enter your password"
+            minLength={6}
             required
-            className="block w-full rounded-md border-0 py-1.5 text-gray-900 shadow-sm ring-1 ring-inset ring-gray-300 placeholder:text-gray-400 focus:ring-2 focus:ring-inset focus:ring-indigo-600 sm:text-sm sm:leading-6"
           />
         </div>
       </div>
 
-      <div className="flex items-center justify-between pt-4 ">
-        <div className="flex items-center">
-          <input
-            id="remember-me"
-            name="remember-me"
-            type="checkbox"
-            className="h-4 w-4 rounded border-gray-300 text-indigo-600 focus:ring-indigo-600"
-          />
-          <label
-            htmlFor="remember-me"
-            className="ml-3 block text-sm leading-6 text-gray-900"
-          >
-            Remember me
-          </label>
-        </div>
+      {errorMessage ? (
+        <p id="login-error" className="auth-error" role="alert">
+          {errorMessage}
+        </p>
+      ) : null}
 
-        <div className="text-sm leading-6">
-          <a
-            href="/forgot-password"
-            className="font-semibold text-indigo-600 hover:text-indigo-500"
-          >
-            Forgot password?
-          </a>
-        </div>
-      </div>
-
-      <div className={'pt-6'}>
-        <button
-          type="submit"
-          className="flex w-full justify-center rounded-md bg-indigo-600 px-3 py-1.5 text-sm font-semibold leading-6 text-white shadow-sm hover:bg-indigo-500 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo-600"
-        >
-          Sign in
-        </button>
-      </div>
-      <div>{errorMessage && <div className={'pt-4'}>{errorMessage}</div>}</div>
+      <SubmitButton />
     </form>
   );
 }

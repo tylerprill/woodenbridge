@@ -1,54 +1,32 @@
-'use client';
+import type { Metadata } from 'next';
+import Link from 'next/link';
+
+import { AuthShell } from '@/components/clean/auth-shell';
 import LoginForm from '@/components/unclean/login-form';
+
+export const metadata: Metadata = {
+  title: 'Sign in — Wooden Bridge',
+  description: 'Sign in to continue building your personal field atlas.',
+};
 
 export default function LoginPage() {
   return (
-    <>
-      <div className="flex min-h-full flex-1 flex-col justify-center py-12 sm:px-6 lg:px-8">
-        <div className="sm:mx-auto sm:w-full sm:max-w-md">
-          <img
-            className="mx-auto h-10 w-auto"
-            src="https://tailwindui.com/img/logos/mark.svg?color=indigo&shade=600"
-            alt="Your Company"
-          />
-          <h2 className="mt-6 text-center text-2xl font-bold leading-9 tracking-tight text-gray-900">
-            Sign in to your account
-          </h2>
-        </div>
-
-        <div className="mt-10 sm:mx-auto sm:w-full sm:max-w-[480px]">
-          <div className="bg-white px-6 py-12 shadow sm:rounded-lg sm:px-12">
-            <a
-              href="/"
-              className="flex flex-row pb-4 text-indigo-600 hover:text-indigo-500"
-            >
-              <svg
-                xmlns="http://www.w3.org/2000/svg"
-                height="24"
-                viewBox="0 -960 960 960"
-                width="18"
-                fill="#4e46e5"
-              >
-                <path d="m313-440 224 224-57 56-320-320 320-320 57 56-224 224h487v80H313Z" />
-              </svg>
-              <span className="pl-1 font-semibold text-indigo-600 hover:text-indigo-500">
-                Back
-              </span>
-            </a>
-            <LoginForm />
-          </div>
-
-          <p className="mt-10 text-center text-sm text-gray-500">
-            Not a member?{' '}
-            <a
-              href="/sign-up"
-              className="font-semibold leading-6 text-indigo-600 hover:text-indigo-500"
-            >
-              Sign Up
-            </a>
-          </p>
-        </div>
-      </div>
-    </>
+    <AuthShell
+      headingId="login-title"
+      panelDescription="Enter the email and password connected to your account."
+      panelEyebrow="Your collection"
+      panelTitle="Sign in to continue"
+      storyDescription="Return to the bridges you have saved and the journeys still on your horizon."
+      storyEyebrow="Welcome back"
+      storyNote="The best way across is rarely the quickest."
+      storyTitle="Your next crossing is waiting."
+      footer={
+        <p className="auth-signup-prompt">
+          New to the atlas? <Link href="/sign-up">Create an account</Link>
+        </p>
+      }
+    >
+      <LoginForm />
+    </AuthShell>
   );
 }

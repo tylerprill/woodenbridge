@@ -1,101 +1,109 @@
 'use client';
 
-import { useFormState } from 'react-dom';
+import {
+  ArrowRightIcon,
+  EnvelopeIcon,
+  LockClosedIcon,
+  UserIcon,
+} from '@heroicons/react/24/outline';
+import { useFormState, useFormStatus } from 'react-dom';
+
 import { createUser } from '@/app/lib/actions';
+
+function SubmitButton() {
+  const { pending } = useFormStatus();
+
+  return (
+    <button className="auth-submit" type="submit" disabled={pending}>
+      <span>{pending ? 'Creating your atlas…' : 'Create account'}</span>
+      {pending ? (
+        <span className="auth-spinner" aria-hidden="true" />
+      ) : (
+        <ArrowRightIcon aria-hidden="true" />
+      )}
+    </button>
+  );
+}
 
 export default function SignUpForm() {
   const [errorMessage, dispatch] = useFormState(createUser, undefined);
 
   return (
-    <form action={dispatch}>
-      <div className="flex flex-row">
-        <div>
-          <label
-            htmlFor="first_name"
-            className="block text-sm font-medium leading-6 text-gray-900"
-          >
-            First Name
-          </label>
-          <div className="mt-2">
+    <form className="auth-form" action={dispatch}>
+      <div className="auth-field-row">
+        <div className="auth-field">
+          <label htmlFor="first_name">First name</label>
+          <div className="auth-input-wrap">
+            <UserIcon aria-hidden="true" />
             <input
               id="first_name"
               name="first_name"
               type="text"
               autoComplete="given-name"
+              placeholder="First name"
               required
-              className="block w-full rounded-md border-0 py-1.5 text-gray-900 shadow-sm ring-1 ring-inset ring-gray-300 placeholder:text-gray-400 focus:ring-2 focus:ring-inset focus:ring-indigo-600 sm:text-sm sm:leading-6"
             />
           </div>
         </div>
-        <div className={'px-2'}></div>
-        <div>
-          <label
-            htmlFor="last_name"
-            className="block text-sm font-medium leading-6 text-gray-900"
-          >
-            Last Name
-          </label>
-          <div className="mt-2">
+
+        <div className="auth-field">
+          <label htmlFor="last_name">Last name</label>
+          <div className="auth-input-wrap">
+            <UserIcon aria-hidden="true" />
             <input
               id="last_name"
               name="last_name"
               type="text"
               autoComplete="family-name"
+              placeholder="Last name"
               required
-              className="block w-full rounded-md border-0 py-1.5 text-gray-900 shadow-sm ring-1 ring-inset ring-gray-300 placeholder:text-gray-400 focus:ring-2 focus:ring-inset focus:ring-indigo-600 sm:text-sm sm:leading-6"
             />
           </div>
         </div>
       </div>
 
-      <div className="pt-4">
-        <label
-          htmlFor="email"
-          className="block text-sm font-medium leading-6 text-gray-900"
-        >
-          Email address
-        </label>
-        <div className="mt-2">
+      <div className="auth-field">
+        <label htmlFor="email">Email address</label>
+        <div className="auth-input-wrap">
+          <EnvelopeIcon aria-hidden="true" />
           <input
             id="email"
             name="email"
             type="email"
             autoComplete="email"
+            placeholder="you@example.com"
             required
-            className="block w-full rounded-md border-0 py-1.5 text-gray-900 shadow-sm ring-1 ring-inset ring-gray-300 placeholder:text-gray-400 focus:ring-2 focus:ring-inset focus:ring-indigo-600 sm:text-sm sm:leading-6"
           />
         </div>
       </div>
 
-      <div className={'pt-4'}>
-        <label
-          htmlFor="password"
-          className="block text-sm font-medium leading-6 text-gray-900"
-        >
-          Password
-        </label>
-        <div className="mt-2">
+      <div className="auth-field">
+        <div className="auth-label-row">
+          <label htmlFor="password">Password</label>
+          <span id="password-requirements">At least 6 characters</span>
+        </div>
+        <div className="auth-input-wrap">
+          <LockClosedIcon aria-hidden="true" />
           <input
             id="password"
             name="password"
             type="password"
-            autoComplete="current-password"
+            autoComplete="new-password"
+            placeholder="Create a password"
+            aria-describedby="password-requirements"
+            minLength={6}
             required
-            className="block w-full rounded-md border-0 py-1.5 text-gray-900 shadow-sm ring-1 ring-inset ring-gray-300 placeholder:text-gray-400 focus:ring-2 focus:ring-inset focus:ring-indigo-600 sm:text-sm sm:leading-6"
           />
         </div>
       </div>
 
-      <div className={'pt-6'}>
-        <button
-          type="submit"
-          className="flex w-full justify-center rounded-md bg-indigo-600 px-3 py-1.5 text-sm font-semibold leading-6 text-white shadow-sm hover:bg-indigo-500 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo-600"
-        >
-          Create Account
-        </button>
-      </div>
+      {errorMessage ? (
+        <p id="sign-up-error" className="auth-error" role="alert">
+          {errorMessage}
+        </p>
+      ) : null}
 
-      <div>{errorMessage && <div className={'pt-4'}>{errorMessage}</div>}</div>
+      <SubmitButton />
     </form>
   );
 }
