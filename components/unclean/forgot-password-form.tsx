@@ -1,16 +1,20 @@
 'use client';
 
 import { ArrowRightIcon, EnvelopeIcon } from '@heroicons/react/24/outline';
-import { useFormState, useFormStatus } from 'react-dom';
+import { useActionState } from 'react';
+import { useFormStatus } from 'react-dom';
 
-import { checkRecoveryOptions } from '@/app/lib/actions';
+import {
+  requestPasswordReset,
+  type PasswordResetState,
+} from '@/app/lib/actions/password-reset';
 
 function SubmitButton() {
   const { pending } = useFormStatus();
 
   return (
     <button className="auth-submit" type="submit" disabled={pending}>
-      <span>{pending ? 'Checking options…' : 'Check recovery options'}</span>
+      <span>{pending ? 'Sending reset link…' : 'Send reset link'}</span>
       {pending ? (
         <span className="auth-spinner" aria-hidden="true" />
       ) : (
@@ -21,7 +25,10 @@ function SubmitButton() {
 }
 
 export default function ForgotPasswordForm() {
-  const [message, dispatch] = useFormState(checkRecoveryOptions, undefined);
+  const [state, dispatch] = useActionState<PasswordResetState, FormData>(
+    requestPasswordReset,
+    undefined,
+  );
 
   return (
     <form className="auth-form" action={dispatch}>
@@ -40,9 +47,12 @@ export default function ForgotPasswordForm() {
         </div>
       </div>
 
-      {message ? (
-        <p className="auth-notice" role="status">
-          {message}
+      {state ? (
+        <p
+          className={state.status === 'error' ? 'auth-error' : 'auth-notice'}
+          role={state.status === 'error' ? 'alert' : 'status'}
+        >
+          {state.message}
         </p>
       ) : null}
 

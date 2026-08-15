@@ -9,7 +9,14 @@ export const metadata: Metadata = {
   description: 'Sign in to continue building your personal field atlas.',
 };
 
-export default function LoginPage() {
+export default async function LoginPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ reset?: string | string[] }>;
+}) {
+  const params = await searchParams;
+  const resetComplete = params.reset === 'success';
+
   return (
     <AuthShell
       headingId="login-title"
@@ -26,7 +33,7 @@ export default function LoginPage() {
         </p>
       }
     >
-      <LoginForm />
+      <LoginForm resetComplete={resetComplete} />
     </AuthShell>
   );
 }

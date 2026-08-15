@@ -6,9 +6,14 @@ import {
   LockClosedIcon,
   UserIcon,
 } from '@heroicons/react/24/outline';
-import { useFormState, useFormStatus } from 'react-dom';
+import { useActionState } from 'react';
+import { useFormStatus } from 'react-dom';
 
 import { createUser } from '@/app/lib/actions';
+import {
+  MAX_PASSWORD_BYTES,
+  MIN_PASSWORD_LENGTH,
+} from '@/app/lib/auth/password';
 
 function SubmitButton() {
   const { pending } = useFormStatus();
@@ -26,7 +31,7 @@ function SubmitButton() {
 }
 
 export default function SignUpForm() {
-  const [errorMessage, dispatch] = useFormState(createUser, undefined);
+  const [errorMessage, dispatch] = useActionState(createUser, undefined);
 
   return (
     <form className="auth-form" action={dispatch}>
@@ -80,7 +85,9 @@ export default function SignUpForm() {
       <div className="auth-field">
         <div className="auth-label-row">
           <label htmlFor="password">Password</label>
-          <span id="password-requirements">At least 6 characters</span>
+          <span id="password-requirements">
+            {MIN_PASSWORD_LENGTH}+ characters
+          </span>
         </div>
         <div className="auth-input-wrap">
           <LockClosedIcon aria-hidden="true" />
@@ -91,7 +98,8 @@ export default function SignUpForm() {
             autoComplete="new-password"
             placeholder="Create a password"
             aria-describedby="password-requirements"
-            minLength={6}
+            minLength={MIN_PASSWORD_LENGTH}
+            maxLength={MAX_PASSWORD_BYTES}
             required
           />
         </div>

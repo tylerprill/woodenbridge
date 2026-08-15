@@ -1,4 +1,5 @@
 import type { Metadata } from 'next';
+import { redirect } from 'next/navigation';
 
 import { auth } from '@/auth';
 import SideNav from '@/components/unclean/dashboard/sidenav';
@@ -14,6 +15,10 @@ export default async function DashboardLayout({
   children,
 }: Readonly<{ children: React.ReactNode }>) {
   const session = await auth();
+
+  if (!session?.user || !session.sessionValid) {
+    redirect('/login');
+  }
 
   return (
     <div className="dashboard-shell">

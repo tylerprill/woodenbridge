@@ -6,7 +6,8 @@ import {
   LockClosedIcon,
 } from '@heroicons/react/24/outline';
 import Link from 'next/link';
-import { useFormState, useFormStatus } from 'react-dom';
+import { useActionState } from 'react';
+import { useFormStatus } from 'react-dom';
 
 import { authenticate } from '@/app/lib/actions';
 
@@ -25,11 +26,21 @@ function SubmitButton() {
   );
 }
 
-export default function LoginForm() {
-  const [errorMessage, dispatch] = useFormState(authenticate, undefined);
+export default function LoginForm({
+  resetComplete = false,
+}: {
+  resetComplete?: boolean;
+}) {
+  const [errorMessage, dispatch] = useActionState(authenticate, undefined);
 
   return (
     <form className="auth-form" action={dispatch}>
+      {resetComplete ? (
+        <p className="auth-notice" role="status">
+          Your password has been changed. Sign in with your new password.
+        </p>
+      ) : null}
+
       <div className="auth-field">
         <label htmlFor="email">Email address</label>
         <div className="auth-input-wrap">

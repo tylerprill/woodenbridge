@@ -10,6 +10,7 @@
     "build": "next build --webpack",
     "dev": "next dev",
     "lint": "eslint .",
+    "migrate:auth": "node -r dotenv/config ./scripts/migrate-auth.js",
     "prettier": "prettier --write --ignore-unknown .",
     "prettier:check": "prettier --check --ignore-unknown .",
     "seed": "node -r dotenv/config ./scripts/seed.js",

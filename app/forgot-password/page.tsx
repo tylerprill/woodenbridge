@@ -5,17 +5,17 @@ import { AuthShell } from '@/components/clean/auth-shell';
 import ForgotPasswordForm from '@/components/unclean/forgot-password-form';
 
 export const metadata: Metadata = {
-  title: 'Account recovery — Wooden Bridge',
-  description: 'Find the available recovery options for your account.',
+  title: 'Reset your password — Wooden Bridge',
+  description: 'Request a secure link to reset your Wooden Bridge password.',
 };
 
 export default function ForgotPasswordPage() {
   return (
     <AuthShell
       headingId="recovery-title"
-      panelDescription="Enter your email to check the recovery options available for your account."
+      panelDescription="Enter your email and we’ll send a secure, single-use link that expires in 30 minutes."
       panelEyebrow="Account recovery"
-      panelTitle="Find your way back"
+      panelTitle="Reset your password"
       storyDescription="A missed turn does not have to end the journey. Start here and we will point you toward the next step."
       storyEyebrow="Lost the trail?"
       storyNote="The surest way forward sometimes begins by retracing a step."

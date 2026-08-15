@@ -16,6 +16,20 @@ The Wooded Bridge App is a web application that provides a platform for users to
 2. Install dependencies: `npm install`
 3. Start the application: `npm start`
 
+## Password recovery
+
+Password reset links are random, hashed at rest, single-use, and expire after
+30 minutes. Apply the required database schema before starting the app:
+
+```bash
+npm run migrate:auth
+```
+
+Copy `.env.example` to `.env` and configure `APP_URL`, `AUTH_SECRET`, and
+`DATABASE_URL`. Production email delivery uses Resend and additionally requires
+`RESEND_API_KEY` plus a verified `RESEND_FROM_EMAIL`. Local development defaults
+to console delivery; the reset URL appears only in the local server log.
+
 ## Usage
 
 1. Open the app in your web browser.

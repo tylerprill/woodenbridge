@@ -5,7 +5,8 @@ import { AuthError } from 'next-auth';
 
 import { z } from 'zod';
 import { getUser, addUser } from './data';
-import { User } from './definitions';
+import { NewUser } from './definitions';
+import { newPasswordSchema, normalizeEmail } from './auth/password';
 
 export async function authenticate(
   prevState: string | undefined,
@@ -26,23 +27,6 @@ export async function authenticate(
   }
 }
 
-export async function checkRecoveryOptions(
-  prevState: string | undefined,
-  formData: FormData,
-) {
-  const parsedEmail = z
-    .string()
-    .trim()
-    .email('Enter a valid email address.')
-    .safeParse(formData.get('email'));
-
-  if (!parsedEmail.success) {
-    return parsedEmail.error.issues[0]?.message ?? 'Check your email address.';
-  }
-
-  return 'Recovery email delivery is not connected yet, so no message was sent. Your account and password are unchanged.';
-}
-
 export async function createUser(
   prevState: string | undefined,
   formData: FormData,
@@ -58,10 +42,12 @@ export async function createUser(
     .object({
       first_name: z.string().trim().min(1, 'Enter your first name.'),
       last_name: z.string().trim().min(1, 'Enter your last name.'),
-      email: z.string().trim().email('Enter a valid email address.'),
-      password: z
+      email: z
         .string()
-        .min(6, 'Use at least 6 characters for your password.'),
+        .trim()
+        .email('Enter a valid email address.')
+        .transform(normalizeEmail),
+      password: newPasswordSchema,
     })
     .safeParse(potentialUser);
 
@@ -69,7 +55,7 @@ export async function createUser(
     return parsedCredentials.error.issues[0]?.message ?? 'Check your details.';
   }
 
-  const user = parsedCredentials.data as User;
+  const user = parsedCredentials.data as NewUser;
   const existingUser = await getUser(user.email);
 
   if (existingUser) {
@@ -80,6 +66,11 @@ export async function createUser(
   formData.set('last_name', user.last_name);
   formData.set('email', user.email);
 
-  await addUser(user);
+  const userCreated = await addUser(user);
+
+  if (!userCreated) {
+    return 'An account already exists for this email address.';
+  }
+
   await signIn('credentials', formData);
 }
