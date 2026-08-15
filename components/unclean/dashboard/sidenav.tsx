@@ -1,6 +1,6 @@
 'use client';
 
-import { ArrowRightStartOnRectangleIcon } from '@heroicons/react/24/outline';
+import { ArrowRightOnRectangleIcon } from '@heroicons/react/24/outline';
 
 import { logOut } from '@/app/lib/actions/auth';
 import { BrandLockup } from '@/components/clean/brand-lockup';
@@ -38,7 +38,7 @@ export default function SideNav({ userEmail }: SideNavProps) {
             onClick={() => logOut({ redirectTo: '/' })}
             aria-label="Sign out"
           >
-            <ArrowRightStartOnRectangleIcon aria-hidden="true" />
+            <ArrowRightOnRectangleIcon aria-hidden="true" />
           </button>
         </div>
       </div>
