@@ -22,6 +22,11 @@ import { getNewPasswordRejection } from './auth/compromised-password';
 import { hashPassword } from './auth/password-hash';
 import { recordSecurityEvent } from './auth/security-events';
 import {
+  createLoginErrorState,
+  getLoginEmail,
+  type LoginState,
+} from './auth/login';
+import {
   createSignUpErrorState,
   getSignUpInput,
   signUpSchema,
@@ -36,18 +41,23 @@ function redirectToAuthenticatedHome(formData: FormData) {
 }
 
 export async function authenticate(
-  prevState: string | undefined,
+  prevState: LoginState,
   formData: FormData,
-) {
+): Promise<LoginState> {
+  const email = getLoginEmail(formData);
+
   try {
     await signIn('credentials', redirectToAuthenticatedHome(formData));
   } catch (error) {
     if (error instanceof AuthError) {
       switch (error.type) {
         case 'CredentialsSignin':
-          return 'Either Email Address or Password were incorrect.';
+          return createLoginErrorState(
+            email,
+            'Either Email Address or Password were incorrect.',
+          );
         default:
-          return 'Something went wrong.';
+          return createLoginErrorState(email, 'Something went wrong.');
       }
     }
     throw error;

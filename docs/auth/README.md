@@ -132,6 +132,7 @@ version.
 | Session authorization  | Cached server-only DAL requires verified, current session state                                    |
 | Session revocation     | Password reset increments `users.session_version`; deleted users lose JWTs                         |
 | Login resistance       | Generic response; dummy hash work for unknown accounts; 10/email and 30/IP failures per 15 minutes |
+| Remembered login       | Opt-in local-storage email only; passwords and sessions are never stored                           |
 | Signup resistance      | Generic account result; 5/email and 20/IP requests per hour                                        |
 | Verification code      | Cryptographically random six-digit code, 10-minute expiry, one use                                 |
 | Verification storage   | HMAC-SHA-256 digest keyed by `AUTH_SECRET`; plaintext code is not stored                           |
@@ -237,6 +238,9 @@ Use a unique email address for each clean signup test.
   landing page.
 - Sign in to an unverified account and confirm every route redirects the
   restricted session back to `/verify-email`.
+- Submit an incorrect password and confirm the email remains while the password
+  clears. Enable Remember me, reload `/login`, and confirm only the email is
+  restored; disable it and confirm the stored email is removed.
 - Request a password reset and confirm the response does not reveal whether an
   account exists.
 - Use the reset link once, then confirm reuse fails.

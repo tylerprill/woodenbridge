@@ -6,14 +6,22 @@ import {
   LockClosedIcon,
 } from '@heroicons/react/24/outline';
 import Link from 'next/link';
-import { useActionState } from 'react';
-import { useFormStatus } from 'react-dom';
+import {
+  useActionState,
+  useEffect,
+  useState,
+  useTransition,
+  type FormEvent,
+} from 'react';
 
 import { authenticate } from '@/app/lib/actions';
+import type { LoginState } from '@/app/lib/auth/login';
+import {
+  readRememberedEmail,
+  writeRememberedEmail,
+} from '@/app/lib/auth/remembered-email';
 
-function SubmitButton() {
-  const { pending } = useFormStatus();
-
+function SubmitButton({ pending }: { pending: boolean }) {
   return (
     <button className="auth-submit" type="submit" disabled={pending}>
       <span>{pending ? 'Signing in…' : 'Sign in'}</span>
@@ -33,10 +41,45 @@ export default function LoginForm({
   resetComplete?: boolean;
   verificationComplete?: boolean;
 }) {
-  const [errorMessage, dispatch] = useActionState(authenticate, undefined);
+  const [state, dispatch] = useActionState<LoginState, FormData>(
+    authenticate,
+    undefined,
+  );
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
+  const [rememberEmail, setRememberEmail] = useState(false);
+  const [pending, startTransition] = useTransition();
+
+  useEffect(() => {
+    const rememberedEmail = readRememberedEmail(window.localStorage);
+    if (!rememberedEmail) return;
+
+    const frame = requestAnimationFrame(() => {
+      setEmail(rememberedEmail);
+      setRememberEmail(true);
+    });
+    return () => cancelAnimationFrame(frame);
+  }, []);
+
+  useEffect(() => {
+    if (!state) return;
+
+    const frame = requestAnimationFrame(() => {
+      setEmail(state.email);
+      setPassword('');
+    });
+    return () => cancelAnimationFrame(frame);
+  }, [state]);
+
+  function handleSubmit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    const formData = new FormData(event.currentTarget);
+
+    startTransition(() => dispatch(formData));
+  }
 
   return (
-    <form className="auth-form" action={dispatch}>
+    <form className="auth-form" action={dispatch} onSubmit={handleSubmit}>
       {resetComplete ? (
         <p className="auth-notice" role="status">
           Your password has been changed. Sign in with your new password.
@@ -57,8 +100,16 @@ export default function LoginForm({
             id="email"
             name="email"
             type="email"
-            autoComplete="email"
+            autoComplete="username"
             placeholder="you@example.com"
+            value={email}
+            onChange={(event) => {
+              const nextEmail = event.target.value;
+              setEmail(nextEmail);
+              if (rememberEmail) {
+                writeRememberedEmail(window.localStorage, nextEmail);
+              }
+            }}
             required
           />
         </div>
@@ -78,18 +129,39 @@ export default function LoginForm({
             autoComplete="current-password"
             placeholder="Enter your password"
             minLength={6}
+            value={password}
+            onChange={(event) => setPassword(event.target.value)}
             required
           />
         </div>
       </div>
 
-      {errorMessage ? (
+      <div className="auth-remember-row">
+        <label className="auth-remember-control">
+          <input
+            type="checkbox"
+            checked={rememberEmail}
+            onChange={(event) => {
+              const checked = event.target.checked;
+              setRememberEmail(checked);
+              writeRememberedEmail(
+                window.localStorage,
+                checked ? email : undefined,
+              );
+            }}
+          />
+          <span>Remember me</span>
+        </label>
+        <span>Stores only your email on this device.</span>
+      </div>
+
+      {state ? (
         <p id="login-error" className="auth-error" role="alert">
-          {errorMessage}
+          {state.message}
         </p>
       ) : null}
 
-      <SubmitButton />
+      <SubmitButton pending={pending} />
 
       <p className="auth-inline-help">
         Waiting for a verification code?{' '}
