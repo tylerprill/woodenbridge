@@ -1,4 +1,4 @@
-# Wooded Bridge App
+# Wooden Bridge App
 
 The Wooded Bridge App is a web application that provides a platform for users to explore and discover various wooden bridges around the world. It aims to showcase the beauty and craftsmanship of these structures while also providing useful information for travelers and enthusiasts.
 
@@ -16,19 +16,26 @@ The Wooded Bridge App is a web application that provides a platform for users to
 2. Install dependencies: `npm install`
 3. Start the application: `npm start`
 
-## Password recovery
+## Authentication
 
-Password reset links are random, hashed at rest, single-use, and expire after
-30 minutes. Apply the required database schema before starting the app:
+The full signup, email verification, login, session, password recovery, and
+logout design is documented in the
+[authentication README](docs/auth/README.md), including Mermaid flow and state
+diagrams, route behavior, security controls, and a manual test checklist.
+
+Authentication migrations create the email-verification and password-recovery
+tables, along with the durable `email_verified_at` and `session_version` user
+fields. Apply them before starting the app:
 
 ```bash
 npm run migrate:auth
 ```
 
-Copy `.env.example` to `.env` and configure `APP_URL`, `AUTH_SECRET`, and
-`DATABASE_URL`. Production email delivery uses Resend and additionally requires
-`RESEND_API_KEY` plus a verified `RESEND_FROM_EMAIL`. Local development defaults
-to console delivery; the reset URL appears only in the local server log.
+Copy `.env.example` to an ignored local environment file and configure
+`APP_URL`, `AUTH_SECRET`, and `DATABASE_URL`. Production email delivery uses
+Resend and additionally requires `RESEND_API_KEY` plus a verified
+`RESEND_FROM_EMAIL`. Local development may use console delivery for verification
+codes and password-reset links.
 
 ## Usage
 
