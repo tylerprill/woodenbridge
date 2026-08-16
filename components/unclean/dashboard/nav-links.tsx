@@ -4,10 +4,13 @@ import {
   BookmarkIcon,
   MapIcon,
   Squares2X2Icon,
+  UsersIcon,
 } from '@heroicons/react/24/outline';
 import clsx from 'clsx';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
+
+import type { AppRole } from '@/app/lib/auth/roles';
 
 const links = [
   { name: 'Overview', href: '/dashboard', icon: Squares2X2Icon },
@@ -15,12 +18,17 @@ const links = [
   { name: 'Discover', href: '/', icon: MapIcon },
 ];
 
-export default function NavLinks() {
+const ownerLinks = [
+  { name: 'Users', href: '/dashboard/owner/users', icon: UsersIcon },
+];
+
+export default function NavLinks({ role }: { role: AppRole }) {
   const pathname = usePathname();
+  const visibleLinks = role === 'owner' ? [...links, ...ownerLinks] : links;
 
   return (
     <>
-      {links.map((link) => {
+      {visibleLinks.map((link) => {
         const LinkIcon = link.icon;
 
         return (
@@ -28,7 +36,10 @@ export default function NavLinks() {
             key={link.name}
             href={link.href}
             className={clsx('dashboard-nav-link', {
-              'dashboard-nav-link-active': pathname === link.href,
+              'dashboard-nav-link-active':
+                pathname === link.href ||
+                (link.href !== '/dashboard' &&
+                  pathname.startsWith(`${link.href}/`)),
             })}
           >
             <LinkIcon aria-hidden="true" />

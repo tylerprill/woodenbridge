@@ -3,6 +3,8 @@ import 'server-only';
 type SecurityEvent =
   | 'login.attempt'
   | 'login.rate_limited'
+  | 'owner.sessions_revoked'
+  | 'owner.user_role_changed'
   | 'password.compromised_check_unavailable'
   | 'password.reset'
   | 'signup.attempt'

@@ -18,6 +18,7 @@ import {
 import { getClientIpHash, hashRateLimitKey } from '@/app/lib/auth/security';
 import { recordSecurityEvent } from '@/app/lib/auth/security-events';
 import { upgradeUserPasswordHash } from '@/app/lib/data';
+import type { AppRole } from '@/app/lib/auth/roles';
 
 type AuthUserRow = {
   id: string;
@@ -27,11 +28,12 @@ type AuthUserRow = {
   password: string;
   session_version: number;
   email_verified_at: Date | null;
+  role: AppRole;
 };
 
 type SessionStateRow = Pick<
   AuthUserRow,
-  'session_version' | 'email_verified_at'
+  'session_version' | 'email_verified_at' | 'role'
 >;
 
 async function getUser(email: string): Promise<AuthUserRow | undefined> {
@@ -44,7 +46,8 @@ async function getUser(email: string): Promise<AuthUserRow | undefined> {
         email,
         password,
         session_version,
-        email_verified_at
+        email_verified_at,
+        role
       FROM users
       WHERE LOWER(email) = ${email}
       LIMIT 1
@@ -58,7 +61,7 @@ async function getUser(email: string): Promise<AuthUserRow | undefined> {
 async function getSessionState(userId: string) {
   try {
     const result = await sql<SessionStateRow>`
-      SELECT session_version, email_verified_at
+      SELECT session_version, email_verified_at, role
       FROM users
       WHERE id = ${userId}
       LIMIT 1
@@ -85,6 +88,7 @@ export const { auth, signIn, signOut } = NextAuth({
       if (user) {
         token.sessionVersion = user.sessionVersion;
         token.emailVerified = user.emailVerified;
+        token.role = user.role;
       }
 
       if (!token.sub) return null;
@@ -99,6 +103,7 @@ export const { auth, signIn, signOut } = NextAuth({
       }
 
       token.emailVerified = Boolean(sessionState.row.email_verified_at);
+      token.role = sessionState.row.role;
       token.sessionValid =
         typeof token.sessionVersion === 'number' &&
         sessionState.row.session_version === token.sessionVersion &&
@@ -110,6 +115,7 @@ export const { auth, signIn, signOut } = NextAuth({
       session.user.id = token.sub ?? '';
       session.emailVerified = token.emailVerified === true;
       session.sessionValid = token.sessionValid === true;
+      session.role = token.role === 'owner' ? 'owner' : 'user';
       return session;
     },
   },
@@ -164,6 +170,7 @@ export const { auth, signIn, signOut } = NextAuth({
               name: `${user.first_name} ${user.last_name}`.trim(),
               sessionVersion: user.session_version,
               emailVerified: Boolean(user.email_verified_at),
+              role: user.role,
             };
           }
         }

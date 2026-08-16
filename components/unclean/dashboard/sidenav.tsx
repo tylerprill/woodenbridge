@@ -3,15 +3,17 @@
 import { ArrowRightOnRectangleIcon } from '@heroicons/react/24/outline';
 
 import { logOut } from '@/app/lib/actions/auth';
+import type { AppRole } from '@/app/lib/auth/roles';
 import { BrandLockup } from '@/components/clean/brand-lockup';
 import NavLinks from '@/components/unclean/dashboard/nav-links';
 
 type SideNavProps = {
   userEmail?: string | null;
   userName?: string | null;
+  role: AppRole;
 };
 
-export default function SideNav({ userEmail, userName }: SideNavProps) {
+export default function SideNav({ userEmail, userName, role }: SideNavProps) {
   const displayName = userName?.trim() || 'Explorer';
   const initial = displayName.charAt(0).toUpperCase();
 
@@ -23,7 +25,7 @@ export default function SideNav({ userEmail, userName }: SideNavProps) {
         <nav className="dashboard-nav" aria-label="Dashboard navigation">
           <p>Your atlas</p>
           <div className="dashboard-nav-links">
-            <NavLinks />
+            <NavLinks role={role} />
           </div>
         </nav>
 

@@ -5,7 +5,7 @@ import { normalizeEmail } from './auth/password';
 export async function getUser(email: string) {
   try {
     const user = await sql`
-      SELECT id, first_name, last_name, email, password, email_verified_at
+      SELECT id, first_name, last_name, email, password, email_verified_at, role
       FROM users
       WHERE LOWER(email) = ${normalizeEmail(email)}
       LIMIT 1

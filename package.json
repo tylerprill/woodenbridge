@@ -13,6 +13,7 @@
     "migrate:auth": "node -r dotenv/config ./scripts/migrate-auth.js",
     "prettier": "prettier --write --ignore-unknown .",
     "prettier:check": "prettier --check --ignore-unknown .",
+    "role:set": "node -r dotenv/config ./scripts/set-user-role.js",
     "seed": "node -r dotenv/config ./scripts/seed.js",
     "start": "next start",
     "start80": "next start -p 80",

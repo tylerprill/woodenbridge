@@ -90,6 +90,8 @@ with current database state:
 `email_verified_at` is the durable proof that the address was verified.
 `session_version` is the revocation switch. `sessionValid` is the final access
 decision and must be true before a feature treats a request as authenticated.
+The current database role is also refreshed during session evaluation, so a
+JWT cannot preserve an old role after the database assignment changes.
 
 For future feature gating, keep account policy separate from identity proof. For
 example, add an explicit `account_status` such as `active`, `suspended`, or
@@ -113,11 +115,47 @@ Do not infer suspension or product entitlement from `email_verified_at`.
 | `/reset-password?token=...` | Allowed   | Redirected to `/verify-email` | Allowed                         |
 | `/dashboard/**`             | Denied    | Denied                        | Allowed                         |
 
+`/dashboard/owner/**` adds a second server-side boundary and requires the
+current database role to be `owner`. A verified `user` is redirected back to
+their dashboard even if they manually enter an owner URL.
+
 The route proxy is a first boundary, not the only boundary. Protected pages,
 server actions, route handlers, and data mutations should call
 `requireVerifiedSession()` at the point of use before reading or changing
 private data. This helper requires a user, verified email, and current session
 version.
+
+## Authorization roles
+
+Wooden Bridge has two application roles:
+
+| Role    | Intended access                                                        |
+| ------- | ---------------------------------------------------------------------- |
+| `user`  | Public features plus the verified user's own atlas, notes, and profile |
+| `owner` | All user features plus explicitly protected company-owner operations   |
+
+New accounts always receive the database default of `user`; public signup does
+not accept a role field. Owner-only server code must call
+`requireOwnerSession()` or `requireRole('owner')`. Role checks supplement, but
+never replace, resource ownership checks such as matching a collection's
+`user_id` to `session.user.id` on every read and mutation.
+
+Role assignment is an operator-only database action:
+
+```bash
+npm run role:set -- account@example.com owner
+```
+
+Changing a role increments `session_version`, which revokes existing sessions.
+The next sign-in obtains the current role from the database. Demotion uses the
+same command with `user` and also revokes existing sessions.
+
+The owner user directory deliberately exposes only account identity,
+verification state, and application role. Its available mutations are limited
+to role assignment and session revocation. It does not reveal password hashes,
+mark email addresses verified, reset passwords, or delete accounts. The active
+owner cannot demote or revoke itself, and a transaction-level policy prevents
+removing the final owner.
 
 ## Security controls
 
