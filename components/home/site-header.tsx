@@ -1,10 +1,12 @@
 import { ArrowRightIcon } from '@heroicons/react/24/outline';
-import { BrandLockup } from '@/components/clean/brand-lockup';
+import Link from 'next/link';
+
 import {
   getAccountDisplayName,
   getAccountInitial,
 } from '@/app/lib/auth/account-display';
-import Link from 'next/link';
+import { BrandLockup } from '@/components/clean/brand-lockup';
+import { HeaderLogoutButton } from '@/components/home/header-logout-button';
 
 const navigation = [
   { label: 'Explore', href: '#featured' },
@@ -35,25 +37,33 @@ export function SiteHeader({ user }: SiteHeaderProps) {
       </nav>
 
       {user ? (
-        <Link
-          className="header-account"
-          href="/dashboard"
-          aria-label={`Open ${displayName}'s dashboard`}
-        >
-          <span className="header-account-avatar" aria-hidden="true">
-            {getAccountInitial(user)}
-          </span>
-          <span className="header-account-copy">
-            <strong>{displayName}</strong>
-            <small>View your atlas</small>
-          </span>
-          <ArrowRightIcon aria-hidden="true" />
-        </Link>
+        <div className="header-session-actions">
+          <Link
+            className="header-account"
+            href="/dashboard"
+            aria-label={`Open ${displayName}'s dashboard`}
+          >
+            <span className="header-account-avatar" aria-hidden="true">
+              {getAccountInitial(user)}
+            </span>
+            <span className="header-account-copy">
+              <strong>{displayName}</strong>
+              <small>View your atlas</small>
+            </span>
+            <ArrowRightIcon aria-hidden="true" />
+          </Link>
+          <HeaderLogoutButton />
+        </div>
       ) : (
-        <Link className="header-action" href="/login">
-          Sign in
-          <span aria-hidden="true">↗</span>
-        </Link>
+        <div className="header-auth-actions">
+          <Link className="header-action header-action-secondary" href="/login">
+            Sign in
+          </Link>
+          <Link className="header-action header-action-primary" href="/sign-up">
+            Create account
+            <span aria-hidden="true">↗</span>
+          </Link>
+        </div>
       )}
     </header>
   );

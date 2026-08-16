@@ -224,7 +224,6 @@ body {
 .header-action {
   display: inline-flex;
   align-items: center;
-  justify-self: end;
   gap: 0.55rem;
   padding: 0.66rem 0.9rem 0.66rem 1rem;
   border: 1px solid rgba(16, 35, 29, 0.18);
@@ -239,10 +238,73 @@ body {
   backdrop-filter: blur(16px);
 }
 
+.header-auth-actions,
+.header-session-actions {
+  display: flex;
+  align-items: center;
+  justify-self: end;
+  gap: 0.55rem;
+}
+
+.header-action-primary {
+  border-color: var(--forest-950);
+  background: var(--forest-950);
+  color: var(--paper-light);
+}
+
+.header-action-secondary {
+  border-color: transparent;
+  background: transparent;
+  backdrop-filter: none;
+}
+
+.header-logout {
+  display: grid;
+  width: 2.8rem;
+  height: 2.8rem;
+  flex: 0 0 auto;
+  place-items: center;
+  border: 1px solid rgba(16, 35, 29, 0.18);
+  border-radius: 50%;
+  background: rgba(251, 250, 245, 0.64);
+  color: var(--forest-700);
+  cursor: pointer;
+  transition:
+    border-color 180ms ease,
+    background 180ms ease,
+    color 180ms ease,
+    transform 180ms ease;
+  backdrop-filter: blur(16px);
+}
+
+.header-logout:hover,
+.header-logout:focus-visible {
+  border-color: rgba(16, 35, 29, 0.4);
+  background: rgba(238, 228, 209, 0.88);
+  color: var(--forest-950);
+  transform: translateY(-1px);
+}
+
+.header-logout:disabled {
+  cursor: wait;
+  opacity: 0.55;
+}
+
+.header-logout svg {
+  width: 1rem;
+}
+
 .header-action:hover {
   border-color: rgba(16, 35, 29, 0.4);
-  background: var(--paper-light);
+  background: rgba(238, 228, 209, 0.88);
   transform: translateY(-1px);
+}
+
+.header-action-primary:hover,
+.header-action-primary:focus-visible {
+  border-color: var(--forest-800);
+  background: var(--forest-800);
+  color: var(--paper-light);
 }
 
 .header-account {
@@ -267,7 +329,7 @@ body {
 .header-account:hover,
 .header-account:focus-visible {
   border-color: rgba(16, 35, 29, 0.4);
-  background: var(--paper-light);
+  background: rgba(238, 228, 209, 0.88);
   transform: translateY(-1px);
 }
 
@@ -2636,16 +2698,30 @@ input[type='number']::-webkit-outer-spin-button {
     padding-block: 1rem;
   }
 
-  .brand-name {
-    font-size: 0.9rem;
+  .site-header .brand-name {
+    display: none;
   }
 
   .header-action {
     padding: 0.58rem 0.74rem;
   }
 
-  .header-action span {
+  .header-action-primary span {
     display: none;
+  }
+
+  .header-action-primary {
+    padding-inline: 0.8rem;
+  }
+
+  .header-auth-actions,
+  .header-session-actions {
+    gap: 0.4rem;
+  }
+
+  .header-logout {
+    width: 2.75rem;
+    height: 2.75rem;
   }
 
   .header-account {
