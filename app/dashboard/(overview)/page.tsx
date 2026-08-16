@@ -57,7 +57,7 @@ export default async function DashboardPage() {
             <ArrowRightIcon aria-hidden="true" />
           </Link>
         </div>
-        <BridgeScene className="dashboard-welcome-scene" tone="cedar" />
+        <BridgeScene className="dashboard-welcome-scene" tone="ember" />
         <div className="dashboard-welcome-rings" aria-hidden="true" />
       </section>
 

@@ -7,7 +7,7 @@ export function HomeFooter({ isLoggedIn = false }: { isLoggedIn?: boolean }) {
         <span className="footer-mark" aria-hidden="true" />
         <strong>Field Atlas</strong>
       </div>
-      <p>Go far. Remember well.</p>
+      <p>For everywhere worth remembering.</p>
       <nav aria-label="Footer navigation">
         <Link href={isLoggedIn ? '/dashboard' : '/login'}>
           {isLoggedIn ? 'Your atlas' : 'Sign in'}

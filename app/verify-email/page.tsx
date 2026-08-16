@@ -12,6 +12,7 @@ export const metadata: Metadata = {
   title: 'Verify your email — Field Atlas',
   description: 'Verify your email address to open your Field Atlas account.',
   referrer: 'no-referrer',
+  robots: { index: false, follow: false },
 };
 
 export default async function VerifyEmailPage({

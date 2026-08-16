@@ -7,6 +7,7 @@ import ForgotPasswordForm from '@/components/unclean/forgot-password-form';
 export const metadata: Metadata = {
   title: 'Reset your password — Field Atlas',
   description: 'Request a secure link to reset your Field Atlas password.',
+  robots: { index: false, follow: false },
 };
 
 export default function ForgotPasswordPage() {

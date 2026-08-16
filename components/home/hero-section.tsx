@@ -26,8 +26,9 @@ export function HeroSection() {
         </h1>
 
         <p className="hero-intro">
-          Pin the places you have traveled, add the moments that made them
-          matter, and build a map that is unmistakably yours.
+          Create a personal travel map of the places you have explored. Add
+          photos and field notes to every pin, then keep each journey in a
+          private atlas that is unmistakably yours.
         </p>
 
         <div className="hero-actions">

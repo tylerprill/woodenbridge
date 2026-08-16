@@ -37,6 +37,27 @@ body {
   color: var(--paper-light);
 }
 
+.skip-link {
+  position: fixed;
+  top: 0.75rem;
+  left: 0.75rem;
+  z-index: 100;
+  transform: translateY(-160%);
+  border-radius: 999px;
+  background: var(--forest-950);
+  color: var(--paper-light);
+  padding: 0.75rem 1rem;
+  font-weight: 700;
+  text-decoration: none;
+  transition: transform 160ms ease;
+}
+
+.skip-link:focus-visible {
+  transform: translateY(0);
+  outline: 3px solid var(--timber-light);
+  outline-offset: 3px;
+}
+
 .home-shell {
   position: relative;
   min-height: 100svh;
@@ -719,11 +740,13 @@ body {
 }
 
 .section-heading {
-  display: grid;
-  grid-template-columns: 0.55fr 1.6fr 0.8fr;
-  align-items: end;
+  display: flex;
+  width: min(100%, 56rem);
+  align-items: center;
+  flex-direction: column;
   margin-bottom: clamp(2.5rem, 5vw, 4.5rem);
-  gap: 2rem;
+  margin-inline: auto;
+  text-align: center;
 }
 
 .section-heading > p,
@@ -746,12 +769,18 @@ body {
 
 .section-heading h2 {
   max-width: 14ch;
+  margin-top: 1.15rem;
   font-size: clamp(2.7rem, 5vw, 5rem);
   line-height: 0.98;
 }
 
+.section-heading > p {
+  align-self: center;
+}
+
 .section-heading > span {
-  max-width: 22rem;
+  max-width: 34rem;
+  margin-top: 1.35rem;
   color: var(--forest-600);
   font-size: 0.9rem;
   line-height: 1.7;
@@ -796,15 +825,15 @@ body {
 }
 
 .bridge-card-art-cedar {
-  background: linear-gradient(150deg, #e4bd8e, #a8623d 52%, #49362c);
+  background: linear-gradient(155deg, #f2e8d7, #ddc8b7 48%, #91a28f);
 }
 
 .bridge-card-art-alpine {
-  background: linear-gradient(150deg, #dce2d4, #8da493 48%, #314c43);
+  background: linear-gradient(155deg, #e3ebe7, #a7c0bc 48%, #52746e);
 }
 
 .bridge-card-art-ember {
-  background: linear-gradient(150deg, #d5c7ae, #9c7655 50%, #423a2f);
+  background: linear-gradient(155deg, #ead7bf, #c98961 48%, #684534);
 }
 
 .card-sun {
@@ -885,10 +914,182 @@ body {
   transform: translate(-50%, -50%);
 }
 
+.bridge-card-art-cedar .card-sun {
+  background: rgba(231, 174, 146, 0.58);
+  box-shadow: 0 0 3rem rgba(231, 174, 146, 0.28);
+}
+
+.bridge-card-art-cedar .card-ridge-far {
+  bottom: 20%;
+  height: 34%;
+  background: rgba(112, 139, 119, 0.62);
+  clip-path: polygon(
+    0 64%,
+    13% 52%,
+    28% 60%,
+    43% 43%,
+    58% 59%,
+    74% 46%,
+    88% 57%,
+    100% 48%,
+    100% 100%,
+    0 100%
+  );
+}
+
+.bridge-card-art-cedar .card-ridge-near {
+  bottom: -14%;
+  height: 45%;
+  background: rgba(37, 72, 59, 0.88);
+  clip-path: polygon(
+    0 44%,
+    11% 31%,
+    23% 42%,
+    37% 27%,
+    52% 45%,
+    65% 29%,
+    79% 42%,
+    91% 24%,
+    100% 36%,
+    100% 100%,
+    0 100%
+  );
+}
+
+.bridge-card-art-cedar .card-span {
+  right: auto;
+  bottom: 17%;
+  left: 50%;
+  width: 45%;
+  height: 34%;
+  border-radius: 0;
+  background: linear-gradient(
+    90deg,
+    transparent 12%,
+    #873b2a 12% 22%,
+    transparent 22% 78%,
+    #873b2a 78% 88%,
+    transparent 88%
+  );
+  filter: drop-shadow(0 0.7rem 0.6rem rgba(25, 18, 14, 0.2));
+  transform: translateX(-50%);
+}
+
+.bridge-card-art-cedar .card-span::before,
+.bridge-card-art-cedar .card-span::after {
+  position: absolute;
+  left: 0;
+  width: 100%;
+  border-radius: 0.08rem;
+  background: #ad5034;
+  content: '';
+  transform: none;
+}
+
+.bridge-card-art-cedar .card-span::before {
+  top: 0;
+  height: 11%;
+}
+
+.bridge-card-art-cedar .card-span::after {
+  top: 18%;
+  left: 7%;
+  width: 86%;
+  height: 8%;
+  background: #873b2a;
+}
+
+.bridge-card-art-alpine .card-ridge-far {
+  bottom: 38%;
+  height: 44%;
+  background: rgba(62, 94, 85, 0.62);
+}
+
+.bridge-card-art-alpine .card-ridge-near {
+  right: 0;
+  bottom: 0;
+  left: 0;
+  height: 42%;
+  border-radius: 0;
+  background: repeating-linear-gradient(
+    180deg,
+    rgba(73, 112, 107, 0.9) 0 9%,
+    rgba(106, 143, 137, 0.82) 9% 13%
+  );
+  clip-path: none;
+}
+
 .bridge-card-art-alpine .card-span {
-  right: 20%;
-  bottom: 34%;
-  background: rgba(52, 79, 69, 0.96);
+  right: 17%;
+  bottom: 19%;
+  width: 15%;
+  height: 22%;
+  border-radius: 0;
+  background: rgba(251, 250, 245, 0.9);
+  clip-path: polygon(0 84%, 72% 0, 72% 84%);
+  filter: drop-shadow(0 0.5rem 0.45rem rgba(17, 38, 32, 0.24));
+  transform: none;
+}
+
+.bridge-card-art-alpine .card-span::before {
+  position: absolute;
+  top: 0;
+  right: 25%;
+  width: 6%;
+  height: 100%;
+  background: var(--forest-800);
+  content: '';
+}
+
+.bridge-card-art-alpine .card-span::after {
+  top: auto;
+  bottom: 0;
+  left: -10%;
+  width: 120%;
+  height: 12%;
+  border-radius: 0 0 70% 70%;
+  background: var(--forest-800);
+  transform: none;
+}
+
+.bridge-card-art-ember .card-ridge-far {
+  bottom: 23%;
+  height: 43%;
+  background: rgba(143, 79, 54, 0.55);
+  clip-path: polygon(
+    0 68%,
+    10% 68%,
+    15% 34%,
+    31% 34%,
+    36% 68%,
+    54% 68%,
+    61% 20%,
+    78% 20%,
+    84% 68%,
+    100% 68%,
+    100% 100%,
+    0 100%
+  );
+}
+
+.bridge-card-art-ember .card-ridge-near {
+  bottom: -10%;
+  height: 50%;
+  background: rgba(90, 56, 43, 0.9);
+  clip-path: polygon(
+    0 55%,
+    12% 55%,
+    18% 30%,
+    36% 30%,
+    41% 55%,
+    61% 55%,
+    69% 18%,
+    87% 18%,
+    94% 55%,
+    100% 55%,
+    100% 100%,
+    0 100%
+  );
 }
 
 .bridge-card-art-ember .card-span {
@@ -2202,12 +2403,14 @@ body {
 }
 
 .dashboard-bridge-row > .bridge-card-art .card-span {
-  border-width: 0.3rem;
+  filter: none;
 }
 
-.dashboard-bridge-row > .bridge-card-art .card-span::after {
-  bottom: -0.26rem;
-  height: 0.26rem;
+.dashboard-bridge-row > .bridge-card-art-ember .card-span {
+  right: 10%;
+  bottom: 14%;
+  width: 1.35rem;
+  height: 1.35rem;
 }
 
 .dashboard-bridge-row > div:nth-child(2) > span {
@@ -2889,14 +3092,6 @@ input[type='number']::-webkit-outer-spin-button {
   .hero-art {
     width: min(100%, 38rem);
     justify-self: center;
-  }
-
-  .section-heading {
-    grid-template-columns: 1fr;
-  }
-
-  .section-heading > span {
-    max-width: 34rem;
   }
 
   .bridge-grid {

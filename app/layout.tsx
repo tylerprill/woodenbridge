@@ -1,35 +1,31 @@
-import type { Metadata } from 'next';
-import '@/app/global.css';
+import type { Metadata, Viewport } from 'next';
 
-const siteUrl = process.env.VERCEL_PROJECT_PRODUCTION_URL
-  ? `https://${process.env.VERCEL_PROJECT_PRODUCTION_URL}`
-  : 'http://localhost:3000';
+import '@/app/global.css';
+import {
+  SITE_DESCRIPTION,
+  SITE_NAME,
+  SITE_TITLE,
+  SITE_URL,
+} from '@/app/lib/site-config';
 
 export const metadata: Metadata = {
-  metadataBase: new URL(siteUrl),
-  title: 'Field Atlas — Your travels, thoughtfully mapped',
-  description:
-    'Pin the places you have traveled, add photos and field notes, and keep every journey in one personal atlas.',
-  openGraph: {
-    title: 'Field Atlas — Your travels, thoughtfully mapped',
-    description:
-      'Pin the places you have traveled, add photos and field notes, and keep every journey in one personal atlas.',
-    images: [
-      {
-        url: '/og.png',
-        width: 1732,
-        height: 909,
-        alt: 'Field Atlas — Your travels, thoughtfully mapped',
-      },
-    ],
-  },
-  twitter: {
-    card: 'summary_large_image',
-    title: 'Field Atlas — Your travels, thoughtfully mapped',
-    description:
-      'Pin the places you have traveled, add photos and field notes, and keep every journey in one personal atlas.',
-    images: ['/og.png'],
-  },
+  metadataBase: SITE_URL,
+  title: SITE_TITLE,
+  description: SITE_DESCRIPTION,
+  applicationName: SITE_NAME,
+  authors: [{ name: SITE_NAME, url: SITE_URL }],
+  creator: SITE_NAME,
+  publisher: SITE_NAME,
+  category: 'travel',
+  manifest: '/manifest.webmanifest',
+  verification: process.env.GOOGLE_SITE_VERIFICATION
+    ? { google: process.env.GOOGLE_SITE_VERIFICATION }
+    : undefined,
+};
+
+export const viewport: Viewport = {
+  colorScheme: 'light',
+  themeColor: '#f5f2e9',
 };
 
 export default function RootLayout({

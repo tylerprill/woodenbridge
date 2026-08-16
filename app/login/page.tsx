@@ -7,6 +7,7 @@ import LoginForm from '@/components/unclean/login-form';
 export const metadata: Metadata = {
   title: 'Sign in — Field Atlas',
   description: 'Sign in to continue building your personal field atlas.',
+  robots: { index: false, follow: false },
 };
 
 export default async function LoginPage({

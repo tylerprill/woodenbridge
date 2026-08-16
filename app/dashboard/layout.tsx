@@ -6,6 +6,7 @@ import SideNav from '@/components/unclean/dashboard/sidenav';
 export const metadata: Metadata = {
   title: 'Your atlas — Field Atlas',
   description: 'Your saved places, field notes, and future journeys.',
+  robots: { index: false, follow: false },
 };
 
 export const dynamic = 'force-dynamic';

@@ -38,7 +38,7 @@ export function FeaturedBridges() {
     >
       <div className="section-heading">
         <p>Selected memories · 01</p>
-        <h2 id="featured-title">Three moments worth keeping.</h2>
+        <h2 id="featured-title">Moments worth keeping.</h2>
         <span>
           A glimpse of the places, photographs, and stories that shape an atlas.
         </span>

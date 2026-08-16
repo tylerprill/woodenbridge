@@ -7,6 +7,7 @@ import SignUpForm from '@/components/unclean/sign-up-form';
 export const metadata: Metadata = {
   title: 'Create an account — Field Atlas',
   description: 'Create an account and begin your personal field atlas.',
+  robots: { index: false, follow: false },
 };
 
 export default function SignUpPage() {

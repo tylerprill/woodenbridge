@@ -11,6 +11,7 @@ export const metadata: Metadata = {
   title: 'Choose a new password — Field Atlas',
   description: 'Choose a new password for your Field Atlas account.',
   referrer: 'no-referrer',
+  robots: { index: false, follow: false },
 };
 
 export default async function ResetPasswordPage({
