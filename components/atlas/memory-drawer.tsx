@@ -25,7 +25,10 @@ import {
   ATLAS_PLACE_MAX_LENGTH,
   ATLAS_TITLE_MAX_LENGTH,
 } from '@/app/lib/atlas/validation';
-import { getAtlasPlaceContextLabel } from '@/app/lib/atlas/place';
+import {
+  getAtlasPlaceContextLabel,
+  getAtlasPlaceInputLabel,
+} from '@/app/lib/atlas/place';
 import styles from './atlas.module.css';
 import { MemoryPhotos } from './memory-photos';
 
@@ -99,6 +102,22 @@ export function MemoryDrawer({
     setMessage('');
   };
 
+  const detectedPlace = entry.placeName
+    ? getAtlasPlaceContextLabel({ ...entry, placeLabel: '' })
+    : '';
+  const storedPlaceLabel = form.placeLabel.trim() || entry.placeLabel.trim();
+  const placeValue = placeTouched
+    ? form.placeLabel
+    : getAtlasPlaceInputLabel({
+        ...entry,
+        placeLabel: storedPlaceLabel,
+      });
+  const hasCustomPlaceLabel = Boolean(
+    placeTouched ||
+    (storedPlaceLabel &&
+      placeValue.toLocaleLowerCase() !== detectedPlace.toLocaleLowerCase()),
+  );
+
   const save = useCallback(async () => {
     if (savingRef.current) return;
     if (!form.title.trim()) {
@@ -118,6 +137,7 @@ export function MemoryDrawer({
         id: entry.id,
         version: versionRef.current,
         ...form,
+        placeLabel: placeValue,
       });
 
       if (result.ok) {
@@ -140,20 +160,7 @@ export function MemoryDrawer({
     } finally {
       savingRef.current = false;
     }
-  }, [entry.id, form, onUpdate]);
-
-  const detectedPlace = entry.placeName
-    ? getAtlasPlaceContextLabel({ ...entry, placeLabel: '' })
-    : '';
-  const placeValue = placeTouched
-    ? form.placeLabel
-    : form.placeLabel || entry.placeLabel || detectedPlace;
-
-  useEffect(() => {
-    if (!dirty || !form.title.trim()) return;
-    const timer = window.setTimeout(() => void save(), 900);
-    return () => window.clearTimeout(timer);
-  }, [dirty, form, save]);
+  }, [entry.id, form, onUpdate, placeValue]);
 
   const archive = async () => {
     if (!archiveArmed) {
@@ -295,7 +302,7 @@ export function MemoryDrawer({
             >
               {placeResolving && !detectedPlace
                 ? 'Finding the city, region, and country…'
-                : entry.placeLabel.trim() || placeTouched
+                : hasCustomPlaceLabel
                   ? `Atlas context: ${detectedPlace}`
                   : 'Autofilled from your pin · Edit to rename'}
             </small>

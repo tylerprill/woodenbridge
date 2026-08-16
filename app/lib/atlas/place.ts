@@ -65,6 +65,26 @@ export function getAtlasPlaceContextLabel(entry: AtlasPlaceFields) {
   return parts.join(', ') || 'Place awaiting detail';
 }
 
+export function getAtlasPlaceInputLabel(entry: AtlasPlaceFields) {
+  const storedLabel = entry.placeLabel.trim();
+  const detectedLabel = getAtlasPlaceContextLabel({
+    ...entry,
+    placeLabel: '',
+  });
+
+  if (!storedLabel) return detectedLabel;
+
+  const normalizedStoredLabel = storedLabel.toLocaleLowerCase();
+  const isRecognizedFragment = [
+    entry.placeName,
+    entry.placeLocality,
+    entry.placeRegion,
+    entry.placeCountry,
+  ].some((part) => part?.trim().toLocaleLowerCase() === normalizedStoredLabel);
+
+  return isRecognizedFragment ? detectedLabel : storedLabel;
+}
+
 export function formatAtlasDate(
   entry: Pick<AtlasEntry, 'visitedOn' | 'journeyState'>,
 ) {

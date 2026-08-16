@@ -46,6 +46,7 @@ function CardContents({
   tone,
   index,
   variant,
+  href,
 }: Omit<KeepsakeCardProps, 'tone'> & {
   tone: KeepsakeTone;
   variant: KeepsakeVariant;
@@ -58,23 +59,22 @@ function CardContents({
   const status = entry.journeyState === 'visited' ? 'Remembered' : 'Ahead';
 
   if (variant === 'row') {
-    return (
+    const copy = (
       <>
-        <MemoryArtwork
-          entry={entry}
-          tone={tone}
-          sizes="(max-width: 768px) 25vw, 4.8rem"
-        />
         <div className="keepsake-card-row-copy">
           {index ? <span className="keepsake-card-index">{index}</span> : null}
           <h3>{title}</h3>
           <p className="keepsake-card-location">
             <MapPinIcon aria-hidden="true" />
-            {place}
+            <span>{place}</span>
           </p>
-          <p className="keepsake-card-row-meta">
-            {status} · {date}
-          </p>
+          <div className="keepsake-card-meta-main">
+            <span>
+              <CalendarDaysIcon aria-hidden="true" />
+              {date}
+            </span>
+            <small>{status}</small>
+          </div>
         </div>
         <ArrowUpRightIcon
           className="keepsake-card-row-arrow"
@@ -82,7 +82,53 @@ function CardContents({
         />
       </>
     );
+
+    return (
+      <>
+        <MemoryArtwork
+          entry={entry}
+          tone={tone}
+          eager={index === '01'}
+          sizes="(max-width: 768px) 25vw, 4.8rem"
+        />
+        {href ? (
+          <Link
+            className="keepsake-card-link keepsake-card-row-link"
+            href={href}
+            aria-label={`Open ${title} keepsake — ${place}`}
+          >
+            {copy}
+          </Link>
+        ) : (
+          <div className="keepsake-card-row-link">{copy}</div>
+        )}
+      </>
+    );
   }
+
+  const copy = (
+    <div className={`keepsake-card-copy keepsake-card-copy-${variant}`}>
+      {variant === 'feature' ? (
+        <p className="section-kicker">Field note</p>
+      ) : null}
+      <h2>{title}</h2>
+      <p className="keepsake-card-location keepsake-card-location-prominent">
+        <MapPinIcon aria-hidden="true" />
+        <span>{place}</span>
+      </p>
+      <p className="keepsake-card-description">{description}</p>
+      <div className="keepsake-card-meta">
+        <div className="keepsake-card-meta-main">
+          <span>
+            <CalendarDaysIcon aria-hidden="true" />
+            {date}
+          </span>
+          <small>{status}</small>
+        </div>
+        {variant === 'grid' ? <ArrowUpRightIcon aria-hidden="true" /> : null}
+      </div>
+    </div>
+  );
 
   return (
     <>
@@ -90,33 +136,24 @@ function CardContents({
         entry={entry}
         index={index}
         tone={tone}
+        eager={variant === 'feature' || index === '01'}
         sizes={
           variant === 'feature'
             ? '(max-width: 768px) 100vw, 48rem'
             : '(max-width: 768px) 100vw, 33vw'
         }
       />
-      <div className={`keepsake-card-copy keepsake-card-copy-${variant}`}>
-        <div className="keepsake-card-topline">
-          <p className="bridge-location">
-            <MapPinIcon aria-hidden="true" />
-            <span>{place}</span>
-          </p>
-          <span className="keepsake-card-status">{status}</span>
-        </div>
-        {variant === 'feature' ? (
-          <p className="section-kicker">Field note</p>
-        ) : null}
-        <h2>{title}</h2>
-        <p className="keepsake-card-description">{description}</p>
-        <div className="keepsake-card-meta">
-          <span>
-            <CalendarDaysIcon aria-hidden="true" />
-            {date}
-          </span>
-          {variant === 'grid' ? <ArrowUpRightIcon aria-hidden="true" /> : null}
-        </div>
-      </div>
+      {href ? (
+        <Link
+          className="keepsake-card-link"
+          href={href}
+          aria-label={`Open ${title} keepsake — ${place}`}
+        >
+          {copy}
+        </Link>
+      ) : (
+        copy
+      )}
     </>
   );
 }
@@ -130,23 +167,22 @@ export function KeepsakeCard({
 }: KeepsakeCardProps) {
   const className = `keepsake-card keepsake-card-${variant}`;
   const resolvedTone = tone ?? getKeepsakeTone(entry);
-  const label = `Open ${entry.title || 'Untitled place'} keepsake — ${getAtlasPlaceContextLabel(entry)}`;
   const contents = (
     <CardContents
       entry={entry}
       tone={resolvedTone}
       index={index}
       variant={variant}
+      href={href}
     />
   );
 
-  if (href) {
-    return (
-      <Link className={className} href={href} aria-label={label}>
-        {contents}
-      </Link>
-    );
-  }
-
-  return <article className={className}>{contents}</article>;
+  return (
+    <article
+      className={className}
+      data-has-carousel={entry.media.length > 1 ? 'true' : undefined}
+    >
+      {contents}
+    </article>
+  );
 }

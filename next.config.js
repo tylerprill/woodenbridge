@@ -5,7 +5,7 @@ const contentSecurityPolicy = [
   "style-src 'self' 'unsafe-inline'",
   "img-src 'self' blob: data: https://tiles.openfreemap.org",
   "font-src 'self'",
-  `connect-src 'self' https://tiles.openfreemap.org https://*.blob.vercel-storage.com${isDevelopment ? ' ws: wss:' : ''}`,
+  `connect-src 'self' https://tiles.openfreemap.org https://vercel.com/api/blob/ https://*.blob.vercel-storage.com${isDevelopment ? ' ws: wss:' : ''}`,
   "worker-src 'self' blob:",
   "child-src 'self' blob:",
   "object-src 'none'",

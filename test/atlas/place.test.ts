@@ -1,6 +1,7 @@
 import {
   formatAtlasDate,
   getAtlasPlaceContextLabel,
+  getAtlasPlaceInputLabel,
 } from '@/app/lib/atlas/place';
 
 const entry = {
@@ -20,6 +21,18 @@ describe('getAtlasPlaceContextLabel', () => {
 
   it('formats a locality and region as the primary context', () => {
     expect(getAtlasPlaceContextLabel(entry)).toBe('Kyoto, Kyoto Prefecture');
+  });
+
+  it('formats a US locality with its state', () => {
+    expect(
+      getAtlasPlaceContextLabel({
+        placeLabel: '',
+        placeName: 'Mount Pleasant',
+        placeLocality: 'Mount Pleasant',
+        placeRegion: 'Michigan',
+        placeCountry: 'United States',
+      }),
+    ).toBe('Mount Pleasant, Michigan');
   });
 
   it('falls back to country when no region is available', () => {
@@ -48,6 +61,29 @@ describe('getAtlasPlaceContextLabel', () => {
         placeRegion: null,
       }),
     ).toBe('Kyoto, Japan');
+  });
+});
+
+describe('getAtlasPlaceInputLabel', () => {
+  it('upgrades a previously stored locality fragment to city and state', () => {
+    expect(
+      getAtlasPlaceInputLabel({
+        placeLabel: 'Mount Pleasant',
+        placeName: 'Mount Pleasant',
+        placeLocality: 'Mount Pleasant',
+        placeRegion: 'Michigan',
+        placeCountry: 'United States',
+      }),
+    ).toBe('Mount Pleasant, Michigan');
+  });
+
+  it('keeps a user-authored place name', () => {
+    expect(
+      getAtlasPlaceInputLabel({
+        ...entry,
+        placeLabel: 'The quiet corner',
+      }),
+    ).toBe('The quiet corner');
   });
 });
 

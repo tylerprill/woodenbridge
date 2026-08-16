@@ -2397,6 +2397,7 @@ body {
   position: relative;
   overflow: hidden;
   background: rgba(16, 35, 29, 0.08);
+  touch-action: pan-y pinch-zoom;
 }
 
 .atlas-memory-artwork img {
@@ -2404,16 +2405,142 @@ body {
   transition: transform 420ms cubic-bezier(0.22, 1, 0.36, 1);
 }
 
-.atlas-memory-artwork > span {
+.atlas-memory-artwork-fallback {
+  width: 100%;
+  height: 100%;
+  aspect-ratio: auto;
+  border: 0;
+  border-radius: inherit;
+  box-shadow: none;
+}
+
+.atlas-memory-artwork-index {
   position: absolute;
   right: 0.85rem;
-  bottom: 0.72rem;
-  z-index: 1;
+  top: 0.72rem;
+  z-index: 3;
   color: var(--paper-light);
   font-family: Georgia, 'Times New Roman', serif;
   font-size: 0.65rem;
   font-style: italic;
   text-shadow: 0 1px 0.8rem rgba(16, 35, 29, 0.65);
+}
+
+.atlas-carousel-control {
+  position: absolute;
+  top: 50%;
+  z-index: 4;
+  display: grid;
+  width: 2.25rem;
+  height: 2.25rem;
+  place-items: center;
+  border: 1px solid rgba(251, 250, 245, 0.42);
+  border-radius: 999px;
+  background: rgba(16, 35, 29, 0.68);
+  color: var(--paper-light);
+  opacity: 0;
+  transform: translateY(-50%);
+  transition:
+    background 160ms ease,
+    border-color 160ms ease,
+    opacity 160ms ease,
+    transform 160ms ease;
+  backdrop-filter: blur(0.5rem);
+}
+
+.atlas-carousel-control-previous {
+  left: 0.75rem;
+}
+
+.atlas-carousel-control-next {
+  right: 0.75rem;
+}
+
+.atlas-carousel-control svg {
+  width: 1rem;
+}
+
+.atlas-memory-artwork:hover .atlas-carousel-control,
+.atlas-memory-artwork:focus-within .atlas-carousel-control {
+  opacity: 1;
+}
+
+.atlas-carousel-control:hover,
+.atlas-carousel-control:focus-visible {
+  border-color: rgba(251, 250, 245, 0.72);
+  background: rgba(16, 35, 29, 0.88);
+}
+
+.atlas-carousel-control-previous:hover,
+.atlas-carousel-control-previous:focus-visible {
+  transform: translate(-0.12rem, -50%);
+}
+
+.atlas-carousel-control-next:hover,
+.atlas-carousel-control-next:focus-visible {
+  transform: translate(0.12rem, -50%);
+}
+
+.atlas-carousel-dots {
+  position: absolute;
+  bottom: 0.78rem;
+  left: 50%;
+  z-index: 4;
+  display: flex;
+  align-items: center;
+  padding: 0.2rem 0.3rem;
+  border-radius: 999px;
+  background: rgba(16, 35, 29, 0.52);
+  gap: 0.5rem;
+  transform: translateX(-50%);
+  backdrop-filter: blur(0.4rem);
+}
+
+.atlas-carousel-dots button {
+  position: relative;
+  width: 1rem;
+  height: 1rem;
+  border: 0;
+  border-radius: 999px;
+  background: transparent;
+}
+
+.atlas-carousel-dots button::before {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 0.35rem;
+  height: 0.35rem;
+  border-radius: 999px;
+  background: rgba(251, 250, 245, 0.5);
+  content: '';
+  transform: translate(-50%, -50%);
+  transition:
+    background 160ms ease,
+    transform 160ms ease;
+}
+
+.atlas-carousel-dots button:hover::before,
+.atlas-carousel-dots button:focus-visible::before,
+.atlas-carousel-dots button[aria-current='true']::before {
+  background: var(--paper-light);
+  transform: translate(-50%, -50%) scale(1.4);
+}
+
+.atlas-carousel-count {
+  position: absolute;
+  right: 0.72rem;
+  bottom: 0.72rem;
+  z-index: 4;
+  padding: 0.3rem 0.45rem;
+  border-radius: 999px;
+  background: rgba(16, 35, 29, 0.58);
+  color: var(--paper-light);
+  font-size: 0.52rem;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+  line-height: 1;
+  backdrop-filter: blur(0.4rem);
 }
 
 .dashboard-note {
@@ -2531,14 +2658,27 @@ body {
 /* Keepsake cards share one visual language across the collection, journal,
    tooltip hand-off, and the full-card view. */
 .keepsake-card {
+  position: relative;
   min-width: 0;
   color: var(--forest-950);
+}
+
+.keepsake-card-link {
+  display: block;
+  min-width: 0;
+  color: inherit;
   text-decoration: none;
 }
 
-.keepsake-card:focus-visible {
-  outline: 0.18rem solid rgba(76, 106, 91, 0.42);
-  outline-offset: 0.25rem;
+.keepsake-card-link:focus-visible {
+  outline: none;
+}
+
+.keepsake-card:not([data-has-carousel='true']) .keepsake-card-link::before {
+  position: absolute;
+  z-index: 2;
+  inset: 0;
+  content: '';
 }
 
 .keepsake-card-grid {
@@ -2555,10 +2695,15 @@ body {
 }
 
 .keepsake-card-grid:hover,
-.keepsake-card-grid:focus-visible {
+.keepsake-card-grid:focus-within {
   border-color: rgba(76, 106, 91, 0.28);
   box-shadow: 0 1.5rem 3rem rgba(16, 35, 29, 0.13);
   transform: translateY(-0.3rem);
+}
+
+.keepsake-card-grid:has(.keepsake-card-link:focus-visible) {
+  outline: 0.18rem solid rgba(76, 106, 91, 0.42);
+  outline-offset: 0.25rem;
 }
 
 .keepsake-card-grid > .bridge-card-art,
@@ -2571,7 +2716,7 @@ body {
 }
 
 .keepsake-card-grid:hover > .atlas-memory-artwork img,
-.keepsake-card-grid:focus-visible > .atlas-memory-artwork img {
+.keepsake-card-grid:focus-within > .atlas-memory-artwork img {
   transform: scale(1.025);
 }
 
@@ -2583,42 +2728,7 @@ body {
   padding: 1.3rem;
 }
 
-.keepsake-card-topline {
-  display: flex;
-  min-width: 0;
-  min-height: 1.7rem;
-  align-items: flex-start;
-  justify-content: space-between;
-  gap: 1rem;
-}
-
-.keepsake-card-topline .bridge-location {
-  min-width: 0;
-  align-items: flex-start;
-  line-height: 1.35;
-}
-
-.keepsake-card-topline .bridge-location span {
-  display: -webkit-box;
-  min-width: 0;
-  overflow: hidden;
-  -webkit-box-orient: vertical;
-  -webkit-line-clamp: 2;
-}
-
-.keepsake-card-status {
-  flex: 0 0 auto;
-  padding: 0.38rem 0.58rem;
-  border: 1px solid rgba(76, 106, 91, 0.14);
-  border-radius: 999px;
-  background: rgba(184, 200, 164, 0.12);
-  color: var(--forest-600);
-  font-size: 0.55rem;
-  font-weight: 800;
-}
-
 .keepsake-card-grid h2 {
-  margin-top: 0.55rem;
   font-family: Georgia, 'Times New Roman', serif;
   font-size: 1.55rem;
   font-weight: 400;
@@ -2644,23 +2754,54 @@ body {
   font-size: 0.62rem;
 }
 
-.keepsake-card-meta > span {
-  display: flex;
+.keepsake-card-meta-main {
+  display: grid;
+  min-width: 0;
+  color: var(--forest-600);
+  gap: 0.2rem;
+}
+
+.keepsake-card-meta-main > span {
+  display: inline-flex;
   align-items: center;
   gap: 0.35rem;
 }
 
-.keepsake-card-meta svg {
+.keepsake-card-meta-main small {
+  padding-left: 1.15rem;
+  color: rgba(76, 106, 91, 0.7);
+  font-size: 0.52rem;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+}
+
+.keepsake-card-meta-main svg,
+.keepsake-card-meta > svg {
   width: 0.8rem;
+  height: 0.8rem;
+  flex: 0 0 auto;
 }
 
 .keepsake-card-row {
   display: grid;
-  grid-template-columns: 4.8rem minmax(0, 1fr) auto;
+  grid-template-columns: 4.8rem minmax(0, 1fr);
   align-items: center;
   padding-block: 0.9rem;
   border-bottom: 1px solid rgba(16, 35, 29, 0.1);
   gap: 1rem;
+}
+
+.keepsake-card-row-link {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  min-width: 0;
+  gap: 1rem;
+}
+
+.keepsake-card-row:has(.keepsake-card-link:focus-visible) {
+  outline: 0.18rem solid rgba(76, 106, 91, 0.42);
+  outline-offset: 0.25rem;
 }
 
 .keepsake-card-row:last-child {
@@ -2682,12 +2823,11 @@ body {
 
 .keepsake-card-row-copy h3 {
   margin-top: 0.12rem;
-  overflow: hidden;
   font-family: Georgia, 'Times New Roman', serif;
   font-size: 1rem;
   letter-spacing: -0.025em;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+  line-height: 1.25;
+  overflow-wrap: anywhere;
 }
 
 .keepsake-card-index {
@@ -2699,26 +2839,41 @@ body {
 
 .keepsake-card-location {
   display: flex;
-  align-items: center;
+  align-items: flex-start;
   min-width: 0;
-  margin-top: 0.12rem;
-  overflow: hidden;
+  margin-top: 0.22rem;
   color: var(--forest-600);
   font-size: 0.6rem;
-  text-overflow: ellipsis;
-  white-space: nowrap;
   gap: 0.3rem;
+  line-height: 1.45;
+}
+
+.keepsake-card-location span {
+  min-width: 0;
+  overflow-wrap: anywhere;
 }
 
 .keepsake-card-location svg {
   width: 0.72rem;
   flex: 0 0 auto;
+  margin-top: 0.08rem;
 }
 
-.keepsake-card-row-meta {
-  margin-top: 0.25rem;
-  color: rgba(76, 106, 91, 0.72);
+.keepsake-card-location-prominent {
+  margin-top: 0.5rem;
+  color: var(--timber);
+  font-size: 0.66rem;
+  font-weight: 750;
+}
+
+.keepsake-card-row .keepsake-card-meta-main {
+  margin-top: 0.45rem;
   font-size: 0.56rem;
+}
+
+.keepsake-card-row .keepsake-card-meta-main small {
+  padding-left: 1.07rem;
+  font-size: 0.5rem;
 }
 
 .keepsake-card-row-arrow {
@@ -2728,8 +2883,36 @@ body {
 }
 
 .keepsake-card-row:hover .keepsake-card-row-arrow,
-.keepsake-card-row:focus-visible .keepsake-card-row-arrow {
+.keepsake-card-row:focus-within .keepsake-card-row-arrow {
   transform: translate(0.18rem, -0.18rem);
+}
+
+.keepsake-card-row .atlas-carousel-control {
+  width: 1.5rem;
+  height: 1.5rem;
+}
+
+.keepsake-card-row .atlas-carousel-control-previous {
+  left: 0.22rem;
+}
+
+.keepsake-card-row .atlas-carousel-control-next {
+  right: 0.22rem;
+}
+
+.keepsake-card-row .atlas-carousel-control svg {
+  width: 0.62rem;
+}
+
+.keepsake-card-row .atlas-carousel-dots {
+  display: none;
+}
+
+.keepsake-card-row .atlas-carousel-count {
+  right: 0.25rem;
+  bottom: 0.22rem;
+  padding: 0.2rem 0.3rem;
+  font-size: 0.4rem;
 }
 
 .keepsake-page {
@@ -3996,6 +4179,7 @@ input[type='number']::-webkit-outer-spin-button {
 
   .keepsake-card-row {
     grid-template-columns: 4rem minmax(0, 1fr);
+    align-items: start;
   }
 
   .keepsake-card-row > .bridge-card-art,
@@ -4009,6 +4193,16 @@ input[type='number']::-webkit-outer-spin-button {
 
   .keepsake-card-feature {
     border-radius: 1.4rem;
+  }
+
+  .atlas-carousel-control {
+    opacity: 1;
+  }
+}
+
+@media (hover: none) {
+  .atlas-carousel-control {
+    opacity: 1;
   }
 }
 
@@ -4067,6 +4261,12 @@ input[type='number']::-webkit-outer-spin-button {
   .keepsake-card-feature > .atlas-memory-artwork {
     print-color-adjust: exact;
     -webkit-print-color-adjust: exact;
+  }
+
+  .atlas-carousel-control,
+  .atlas-carousel-dots,
+  .atlas-carousel-count {
+    display: none !important;
   }
 }
 
