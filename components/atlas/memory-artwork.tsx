@@ -14,6 +14,7 @@ type MemoryArtworkProps = {
   tone: 'alpine' | 'cedar' | 'ember';
   sizes?: string;
   eager?: boolean;
+  preview?: boolean;
 };
 
 export function MemoryArtwork({
@@ -22,6 +23,7 @@ export function MemoryArtwork({
   tone,
   sizes,
   eager = false,
+  preview = false,
 }: MemoryArtworkProps) {
   const [activeIndex, setActiveIndex] = useState(0);
   const touchStartX = useRef<number | null>(null);
@@ -40,7 +42,7 @@ export function MemoryArtwork({
   const visual = photo ? (
     <Image
       key={photo.id}
-      src={photo.deliveryUrl}
+      src={preview ? photo.thumbnailUrl : photo.deliveryUrl}
       alt={`${photo.altText.trim() || entry.title.trim() || context}${hasCarousel ? `, photo ${activeIndex + 1} of ${photoCount}` : ''}`}
       fill
       sizes={sizes ?? '(max-width: 768px) 100vw, 33vw'}

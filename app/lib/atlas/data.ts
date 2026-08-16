@@ -81,6 +81,7 @@ async function loadSavedEntries(userId: string, requestedLimit: number) {
       SELECT
         media.id,
         media.entry_id,
+        media.thumbnail_path,
         media.mime_type,
         media.width,
         media.height,
@@ -223,6 +224,7 @@ export async function getAtlasCollectionData({
       SELECT
         media.id,
         media.entry_id,
+        media.thumbnail_path,
         media.mime_type,
         media.width,
         media.height,
@@ -344,6 +346,7 @@ export async function getSavedAtlasEntry(entryId: string) {
       SELECT
         media.id,
         media.entry_id,
+        media.thumbnail_path,
         media.mime_type,
         media.width,
         media.height,

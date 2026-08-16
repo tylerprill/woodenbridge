@@ -229,11 +229,9 @@
   left: 1.25rem;
   z-index: 8;
   display: grid;
-  grid-template-columns: minmax(15rem, 1fr) minmax(20rem, 28rem) minmax(
-      8rem,
-      1fr
-    );
+  grid-template-columns: minmax(0, 1fr) auto;
   align-items: start;
+  gap: 1rem;
   pointer-events: none;
 }
 
@@ -294,14 +292,14 @@
 
 .searchWrap {
   position: relative;
-  display: grid;
+  display: flex;
   grid-column: 2;
-  grid-template-columns: auto minmax(0, 1fr) auto;
   align-items: center;
-  width: 100%;
+  width: 3.25rem;
   min-height: 3.25rem;
+  justify-content: center;
   border: 1px solid rgba(255, 255, 255, 0.62);
-  border-radius: 999px;
+  border-radius: 50%;
   background: var(--atlas-glass);
   box-shadow: 0 0.8rem 2.3rem rgba(16, 35, 29, 0.1);
   backdrop-filter: blur(22px) saturate(1.1);
@@ -329,8 +327,49 @@
 
 .searchWrap > svg {
   width: 1rem;
-  margin-left: 1rem;
+  margin: 0;
   color: var(--forest-600);
+}
+
+.searchWrap input,
+.searchWrap kbd,
+.searchWrap > button {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  opacity: 0;
+}
+
+.searchWrap:focus-within,
+.searchWrap[data-expanded='true'] {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  width: clamp(18rem, 34vw, 28rem);
+  border-radius: 999px;
+}
+
+.searchWrap:focus-within > svg,
+.searchWrap[data-expanded='true'] > svg {
+  margin-left: 1rem;
+}
+
+.searchWrap:focus-within input,
+.searchWrap[data-expanded='true'] input {
+  position: static;
+  width: auto;
+  height: 3.15rem;
+  overflow: visible;
+  opacity: 1;
+}
+
+.searchWrap:focus-within > button,
+.searchWrap[data-expanded='true'] > button {
+  position: static;
+  width: 2rem;
+  height: 2rem;
+  overflow: visible;
+  opacity: 1;
 }
 
 .searchWrap input {
@@ -788,6 +827,29 @@
   gap: 1rem;
 }
 
+.drawerHeader > div {
+  min-width: 0;
+  flex: 1;
+}
+
+.drawerHeader {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+}
+
+.drawerHeader > .drawerHeaderActions {
+  display: flex;
+  align-items: center;
+  flex: 0 0 auto;
+  gap: 0.5rem;
+}
+
+.drawerHeader .drawerKeepsakeLink {
+  min-height: 2.25rem;
+  padding-inline: 0.65rem;
+  font-size: 0.62rem;
+}
+
 .iconButton {
   display: grid;
   width: 2.25rem;
@@ -827,21 +889,28 @@
 
 .drawerKeepsakeLink {
   display: inline-flex;
+  min-height: 2.8rem;
   align-items: center;
-  margin-top: 0.2rem;
-  color: var(--timber);
-  font-size: 0.62rem;
+  justify-content: center;
+  padding-inline: 0.7rem;
+  border: 1px solid rgba(16, 35, 29, 0.12);
+  border-radius: 999px;
+  color: var(--forest-600);
+  font-size: 0.66rem;
   font-weight: 800;
-  gap: 0.32rem;
+  white-space: nowrap;
+  gap: 0.4rem;
 }
 
 .drawerKeepsakeLink:hover,
 .drawerKeepsakeLink:focus-visible {
-  color: #8b5334;
+  border-color: rgba(16, 35, 29, 0.25);
+  background: rgba(16, 35, 29, 0.05);
+  color: var(--forest-950);
 }
 
 .drawerKeepsakeLink svg {
-  width: 0.72rem;
+  width: 0.8rem;
 }
 
 .drawerBody {
@@ -1196,7 +1265,10 @@
 }
 
 .drawerMessage {
-  margin-top: 1rem;
+  width: 100%;
+  max-width: none;
+  margin-top: 0.65rem;
+  grid-column: 1 / -1;
   padding: 0.72rem 0.8rem;
   border: 1px solid rgba(182, 109, 66, 0.22);
   border-radius: 0.75rem;
@@ -1228,7 +1300,13 @@
   justify-content: space-between;
   padding: 1rem 1.3rem 1.2rem;
   border-top: 1px solid rgba(16, 35, 29, 0.09);
-  gap: 0.75rem;
+  gap: 0.55rem;
+}
+
+.drawerFooterActions {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
 }
 
 .archiveButton,
@@ -1244,7 +1322,7 @@
 }
 
 .archiveButton {
-  padding-inline: 0.8rem;
+  padding-inline: 0.65rem;
   color: var(--forest-600);
 }
 
@@ -1264,7 +1342,7 @@
 }
 
 .saveButton {
-  min-width: 8.5rem;
+  min-width: 8rem;
   padding-inline: 1rem;
   background: var(--forest-950);
   color: var(--paper-light);
@@ -1640,7 +1718,7 @@
 
 @media (max-width: 1040px) {
   .atlasHeader {
-    grid-template-columns: auto minmax(18rem, 25rem);
+    grid-template-columns: minmax(0, 1fr) auto;
     justify-content: space-between;
     gap: 1rem;
   }
@@ -1678,26 +1756,8 @@
   }
 
   .searchWrap {
-    display: flex;
-    grid-column: 2;
     width: 3rem;
     min-height: 3rem;
-    justify-content: center;
-    border-radius: 50%;
-  }
-
-  .searchWrap > svg {
-    margin: 0;
-  }
-
-  .searchWrap input,
-  .searchWrap kbd,
-  .searchWrap > button {
-    position: absolute;
-    width: 1px;
-    height: 1px;
-    overflow: hidden;
-    opacity: 0;
   }
 
   .searchWrap:focus-within,
@@ -1710,25 +1770,6 @@
     grid-template-columns: auto minmax(0, 1fr) auto;
     width: auto;
     border-radius: 999px;
-  }
-
-  .searchWrap:focus-within > svg {
-    margin-left: 1rem;
-  }
-
-  .searchWrap[data-expanded='true'] > svg {
-    margin-left: 1rem;
-  }
-
-  .searchWrap:focus-within input,
-  .searchWrap:focus-within > button,
-  .searchWrap[data-expanded='true'] input,
-  .searchWrap[data-expanded='true'] > button {
-    position: static;
-    width: auto;
-    height: auto;
-    overflow: visible;
-    opacity: 1;
   }
 
   .searchWrap input {
@@ -1902,13 +1943,20 @@
     flex-direction: column-reverse;
   }
 
+  .drawerFooterActions {
+    display: grid;
+    width: 100%;
+    grid-template-columns: repeat(auto-fit, minmax(8rem, 1fr));
+  }
+
   .photoHeading {
     align-items: flex-start;
     flex-direction: column;
   }
 
   .archiveButton,
-  .saveButton {
+  .saveButton,
+  .drawerKeepsakeLink {
     width: 100%;
   }
 }

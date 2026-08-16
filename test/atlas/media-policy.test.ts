@@ -1,8 +1,12 @@
 import {
   ATLAS_MEDIA_MAX_BYTES,
+  areAtlasMediaPathsPaired,
   atlasMediaRegistrationSchema,
   createAtlasMediaPath,
+  createAtlasThumbnailPath,
+  getAtlasThumbnailDimensions,
   isAtlasMediaPath,
+  isAtlasThumbnailPath,
 } from '@/app/lib/atlas/media-policy';
 
 describe('atlas media policy', () => {
@@ -30,10 +34,45 @@ describe('atlas media policy', () => {
     ).toBe(false);
   });
 
+  it('creates and pairs a constrained WebP thumbnail pathname', () => {
+    const pathname = createAtlasMediaPath(entryId, photoId, 'image/jpeg');
+    const thumbnailPathname = createAtlasThumbnailPath(entryId, photoId);
+
+    expect(thumbnailPathname).toBe(
+      `atlas/memories/${entryId}/${photoId}.thumbnail.webp`,
+    );
+    expect(isAtlasThumbnailPath(thumbnailPathname, entryId)).toBe(true);
+    expect(areAtlasMediaPathsPaired(pathname, thumbnailPathname, entryId)).toBe(
+      true,
+    );
+    expect(
+      areAtlasMediaPathsPaired(
+        pathname,
+        createAtlasThumbnailPath(
+          entryId,
+          '40504744-8e58-49c8-b4e7-bcb029a96dc5',
+        ),
+        entryId,
+      ),
+    ).toBe(false);
+  });
+
+  it('constrains thumbnails without enlarging small originals', () => {
+    expect(getAtlasThumbnailDimensions(4000, 3000)).toEqual({
+      width: 1024,
+      height: 768,
+    });
+    expect(getAtlasThumbnailDimensions(640, 480)).toEqual({
+      width: 640,
+      height: 480,
+    });
+  });
+
   it('constrains image dimensions and metadata', () => {
     const input = {
       entryId,
       pathname: createAtlasMediaPath(entryId, photoId, 'image/png'),
+      thumbnailPathname: createAtlasThumbnailPath(entryId, photoId),
       width: 2048,
       height: 1365,
       altText: 'A quiet path through Kyoto',

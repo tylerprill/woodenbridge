@@ -89,6 +89,7 @@ function CardContents({
           entry={entry}
           tone={tone}
           eager={index === '01'}
+          preview
           sizes="(max-width: 768px) 25vw, 4.8rem"
         />
         {href ? (
@@ -137,6 +138,7 @@ function CardContents({
         index={index}
         tone={tone}
         eager={variant === 'feature' || index === '01'}
+        preview={variant !== 'feature'}
         sizes={
           variant === 'feature'
             ? '(max-width: 768px) 100vw, 48rem'

@@ -41,6 +41,7 @@ export type AtlasViewRow = {
 export type AtlasMediaRow = {
   id: string;
   entry_id: string;
+  thumbnail_path: string | null;
   mime_type: string;
   width: number | null;
   height: number | null;
@@ -95,6 +96,7 @@ export function toAtlasEntry(
 }
 
 export function toAtlasMedia(row: AtlasMediaRow): AtlasMedia {
+  const deliveryUrl = `/api/atlas/media/${row.id}`;
   return {
     id: row.id,
     entryId: row.entry_id,
@@ -105,7 +107,10 @@ export function toAtlasMedia(row: AtlasMediaRow): AtlasMedia {
     altText: row.alt_text ?? '',
     sortOrder: row.sort_order,
     createdAt: toIsoString(row.created_at),
-    deliveryUrl: `/api/atlas/media/${row.id}`,
+    deliveryUrl,
+    thumbnailUrl: row.thumbnail_path
+      ? `${deliveryUrl}?variant=thumbnail`
+      : deliveryUrl,
   };
 }
 

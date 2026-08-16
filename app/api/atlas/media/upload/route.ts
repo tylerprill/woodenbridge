@@ -6,8 +6,11 @@ import {
   ATLAS_MEDIA_ALLOWED_TYPES,
   ATLAS_MEDIA_MAX_BYTES,
   ATLAS_MEDIA_MAX_FILES,
+  ATLAS_THUMBNAIL_MAX_BYTES,
+  ATLAS_THUMBNAIL_MIME_TYPE,
   atlasMediaClientPayloadSchema,
-  isAtlasMediaPath,
+  isAtlasMediaUploadPath,
+  isAtlasThumbnailPath,
 } from '@/app/lib/atlas/media-policy';
 import { getAtlasBlobToken } from '@/app/lib/atlas/media-storage';
 
@@ -36,10 +39,12 @@ export async function POST(request: Request) {
         const parsed = atlasMediaClientPayloadSchema.safeParse(payload);
         if (
           !parsed.success ||
-          !isAtlasMediaPath(pathname, parsed.data.entryId)
+          !isAtlasMediaUploadPath(pathname, parsed.data.entryId)
         ) {
           throw new Error('Invalid upload request.');
         }
+
+        const isThumbnail = isAtlasThumbnailPath(pathname, parsed.data.entryId);
 
         const ownership = await sql<{ media_count: number | string }>`
           SELECT COUNT(media.id)::int AS media_count
@@ -58,8 +63,12 @@ export async function POST(request: Request) {
         }
 
         return {
-          allowedContentTypes: [...ATLAS_MEDIA_ALLOWED_TYPES],
-          maximumSizeInBytes: ATLAS_MEDIA_MAX_BYTES,
+          allowedContentTypes: isThumbnail
+            ? [ATLAS_THUMBNAIL_MIME_TYPE]
+            : [...ATLAS_MEDIA_ALLOWED_TYPES],
+          maximumSizeInBytes: isThumbnail
+            ? ATLAS_THUMBNAIL_MAX_BYTES
+            : ATLAS_MEDIA_MAX_BYTES,
           validUntil: Date.now() + 10 * 60 * 1000,
           addRandomSuffix: false,
           allowOverwrite: false,
@@ -67,6 +76,7 @@ export async function POST(request: Request) {
           tokenPayload: JSON.stringify({
             userId: session.user.id,
             entryId: parsed.data.entryId,
+            variant: isThumbnail ? 'thumbnail' : 'original',
           }),
         };
       },

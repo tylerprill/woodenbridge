@@ -338,16 +338,23 @@ export async function archiveAtlasEntryAction(
       };
     }
 
-    const media = await client.query<{ storage_path: string }>(
+    const media = await client.query<{
+      storage_path: string;
+      thumbnail_path: string | null;
+    }>(
       `
-        SELECT storage_path
+        SELECT storage_path, thumbnail_path
         FROM atlas_media
         WHERE entry_id = $1
           AND user_id = $2
       `,
       [parsed.data, session.user.id],
     );
-    const storagePaths = media.rows.map((row) => row.storage_path);
+    const storagePaths = media.rows.flatMap((row) =>
+      [row.storage_path, row.thumbnail_path].filter(
+        (pathname): pathname is string => Boolean(pathname),
+      ),
+    );
 
     if (storagePaths.length) {
       await del(storagePaths, { token: getAtlasBlobToken() });

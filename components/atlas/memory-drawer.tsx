@@ -244,6 +244,8 @@ export function MemoryDrawer({
             ) : null}
             {saveState === 'idle' && dirty ? 'Unsaved changes' : null}
           </span>
+        </div>
+        <div className={styles.drawerHeaderActions}>
           {entry.recordState === 'saved' && !dirty && saveState !== 'saving' ? (
             <Link
               className={styles.drawerKeepsakeLink}
@@ -253,15 +255,24 @@ export function MemoryDrawer({
               <ArrowUpRightIcon aria-hidden="true" />
             </Link>
           ) : null}
+          <button
+            type="button"
+            className={styles.iconButton}
+            onClick={requestClose}
+            aria-label={dirty ? 'Review unsaved changes' : 'Close memory'}
+          >
+            <XMarkIcon aria-hidden="true" />
+          </button>
         </div>
-        <button
-          type="button"
-          className={styles.iconButton}
-          onClick={requestClose}
-          aria-label={dirty ? 'Review unsaved changes' : 'Close memory'}
-        >
-          <XMarkIcon aria-hidden="true" />
-        </button>
+        {message ? (
+          <p
+            id="memory-drawer-message"
+            className={styles.drawerMessage}
+            role="alert"
+          >
+            {message}
+          </p>
+        ) : null}
       </header>
 
       <div className={styles.drawerBody}>
@@ -383,16 +394,6 @@ export function MemoryDrawer({
           onChange={(media) => onUpdate({ ...entry, media })}
         />
 
-        {message ? (
-          <p
-            id="memory-drawer-message"
-            className={styles.drawerMessage}
-            role="alert"
-          >
-            {message}
-          </p>
-        ) : null}
-
         <div className={styles.coordinateNote}>
           <span>Exact pin</span>
           <code>
@@ -425,20 +426,23 @@ export function MemoryDrawer({
             {archiveArmed ? 'Remove this memory?' : 'Remove'}
           </button>
         )}
-        <button
-          type="button"
-          className={styles.saveButton}
-          onClick={() => void save()}
-          disabled={
-            saveState === 'saving' || (!dirty && entry.recordState === 'saved')
-          }
-        >
-          {saveState === 'saving'
-            ? 'Saving…'
-            : entry.recordState === 'draft'
-              ? 'Keep memory'
-              : 'Save changes'}
-        </button>
+        <div className={styles.drawerFooterActions}>
+          <button
+            type="button"
+            className={styles.saveButton}
+            onClick={() => void save()}
+            disabled={
+              saveState === 'saving' ||
+              (!dirty && entry.recordState === 'saved')
+            }
+          >
+            {saveState === 'saving'
+              ? 'Saving…'
+              : entry.recordState === 'draft'
+                ? 'Keep memory'
+                : 'Save changes'}
+          </button>
+        </div>
       </footer>
     </aside>
   );

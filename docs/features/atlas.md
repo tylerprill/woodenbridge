@@ -78,13 +78,13 @@ title, summary, or palette, but it must not invent facts about a location.
 Cards should work in the collection, journal, map tooltip, and as a downloadable
 or shareable artifact. A card is the clearest expression of the product's value.
 
-### Priority 3 — Chapters and journeys
+### Priority 3 — My Chapters
 
 Individual memories should be groupable into named chapters such as “Kyoto,
-October 2026” or “Road trip through Michigan.” Chapters can contain an ordered
-set of memories, a route line, dates, a cover card, and a short introduction.
-This gives the map a narrative layer without turning Atlas into an itinerary
-planner.
+October 2026” or “Road trip through Michigan.” My Chapters gives each journey
+an ordered reading experience, a mapped route, derived dates, cover imagery,
+and a short introduction while leaving the original atlas memories intact. This
+gives the map a narrative layer without turning Atlas into an itinerary planner.
 
 ### Priority 4 — The return loop
 

@@ -10,6 +10,7 @@
     "build": "next build --webpack",
     "dev": "next dev",
     "lint": "eslint .",
+    "media:backfill-thumbnails": "node -r dotenv/config ./scripts/backfill-atlas-thumbnails.js",
     "migrate": "node -r dotenv/config ./scripts/migrate-auth.js",
     "migrate:auth": "node -r dotenv/config ./scripts/migrate-auth.js",
     "prettier": "prettier --write --ignore-unknown .",
@@ -38,6 +39,7 @@
     "postcss": "8.5.26",
     "react": "19.2.8",
     "react-dom": "19.2.8",
+    "sharp": "0.35.3",
     "tailwindcss": "3.4.19",
     "zod": "^3.22.2"
   },

@@ -38,6 +38,7 @@ export type AtlasMedia = {
   sortOrder: number;
   createdAt: string;
   deliveryUrl: string;
+  thumbnailUrl: string;
 };
 
 export type AtlasView = {
@@ -80,7 +81,13 @@ export type AtlasViewInput = AtlasView;
 export type AtlasMediaRegistrationInput = {
   entryId: string;
   pathname: string;
+  thumbnailPathname: string;
   width: number;
   height: number;
   altText: string;
 };
+
+export type AtlasMediaDiscardInput = Pick<
+  AtlasMediaRegistrationInput,
+  'entryId' | 'pathname' | 'thumbnailPathname'
+>;
