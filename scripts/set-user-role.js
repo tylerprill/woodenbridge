@@ -1,6 +1,6 @@
 const { db } = require('@vercel/postgres');
 
-const APP_ROLES = new Set(['user', 'owner']);
+const APP_ROLES = new Set(['user', 'admin', 'owner']);
 
 async function main() {
   const [, , emailInput, roleInput] = process.argv;
@@ -8,7 +8,7 @@ async function main() {
   const role = roleInput?.trim().toLowerCase();
 
   if (!email || !role || !APP_ROLES.has(role)) {
-    throw new Error('Usage: npm run role:set -- <email> <user|owner>');
+    throw new Error('Usage: npm run role:set -- <email> <user|admin|owner>');
   }
 
   const client = await db.connect();

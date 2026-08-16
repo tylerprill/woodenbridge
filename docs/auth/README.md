@@ -116,8 +116,8 @@ Do not infer suspension or product entitlement from `email_verified_at`.
 | `/dashboard/**`             | Denied    | Denied                        | Allowed                         |
 
 `/dashboard/owner/**` adds a second server-side boundary and requires the
-current database role to be `owner`. A verified `user` is redirected back to
-their dashboard even if they manually enter an owner URL.
+current database role to be `admin` or `owner`. A verified `user` is redirected
+back to their dashboard even if they manually enter a management URL.
 
 The route proxy is a first boundary, not the only boundary. Protected pages,
 server actions, route handlers, and data mutations should call
@@ -127,35 +127,40 @@ version.
 
 ## Authorization roles
 
-Wooden Bridge has two application roles:
+Wooden Bridge has three hierarchical application roles:
 
-| Role    | Intended access                                                        |
-| ------- | ---------------------------------------------------------------------- |
-| `user`  | Public features plus the verified user's own atlas, notes, and profile |
-| `owner` | All user features plus explicitly protected company-owner operations   |
+| Role    | Intended access                                                               |
+| ------- | ----------------------------------------------------------------------------- |
+| `user`  | Public features plus the verified user's own atlas, notes, and profile        |
+| `admin` | User features plus limited management of ordinary users                       |
+| `owner` | All features plus appointment and removal of administrators; exactly one user |
 
 New accounts always receive the database default of `user`; public signup does
-not accept a role field. Owner-only server code must call
+not accept a role field. Management code calls `requireRole('admin')`, which
+also permits the higher `owner` role. Owner-only server code must call
 `requireOwnerSession()` or `requireRole('owner')`. Role checks supplement, but
-never replace, resource ownership checks such as matching a collection's
+never replace resource ownership checks such as matching a collection's
 `user_id` to `session.user.id` on every read and mutation.
 
 Role assignment is an operator-only database action:
 
 ```bash
-npm run role:set -- account@example.com owner
+npm run role:set -- account@example.com admin
 ```
 
 Changing a role increments `session_version`, which revokes existing sessions.
-The next sign-in obtains the current role from the database. Demotion uses the
-same command with `user` and also revokes existing sessions.
+The next sign-in obtains the current role from the database. Admin demotion uses
+the same command with `user` and also revokes existing sessions. The database
+permits creation of an owner only when no owner exists; after that, the owner
+role and owner account cannot be changed or deleted.
 
-The owner user directory deliberately exposes only account identity,
+The management user directory deliberately exposes only account identity,
 verification state, and application role. Its available mutations are limited
 to role assignment and session revocation. It does not reveal password hashes,
-mark email addresses verified, reset passwords, or delete accounts. The active
-owner cannot demote or revoke itself, and a transaction-level policy prevents
-removing the final owner.
+mark email addresses verified, reset passwords, or delete accounts. Admins can
+revoke sessions only for ordinary users and cannot appoint admins. Only the
+owner can appoint or remove admins. No role can edit, demote, revoke, or delete
+the protected owner account.
 
 ## Security controls
 

@@ -1,51 +1,83 @@
-import { getRoleChangeBlock } from '@/app/lib/auth/owner-user-policy';
+import {
+  getRoleChangeBlock,
+  getSessionRevocationBlock,
+} from '@/app/lib/auth/owner-user-policy';
 
-describe('owner user-management policy', () => {
-  it('prevents an owner from demoting the active account', () => {
+describe('management user policy', () => {
+  it('protects the owner role from every role change', () => {
     expect(
       getRoleChangeBlock({
         actorUserId: 'owner-a',
+        actorRole: 'owner',
         targetUserId: 'owner-a',
         currentRole: 'owner',
-        nextRole: 'user',
-        ownerCount: 2,
+        nextRole: 'admin',
       }),
-    ).toBe('self-protected');
+    ).toBe('protected-owner');
   });
 
-  it('prevents removal of the final owner', () => {
+  it('prevents admins from assigning roles', () => {
     expect(
       getRoleChangeBlock({
-        actorUserId: 'owner-a',
-        targetUserId: 'owner-b',
-        currentRole: 'owner',
-        nextRole: 'user',
-        ownerCount: 1,
-      }),
-    ).toBe('last-owner-protected');
-  });
-
-  it('allows an owner to promote a user', () => {
-    expect(
-      getRoleChangeBlock({
-        actorUserId: 'owner-a',
+        actorUserId: 'admin-a',
+        actorRole: 'admin',
         targetUserId: 'user-b',
         currentRole: 'user',
-        nextRole: 'owner',
-        ownerCount: 1,
+        nextRole: 'admin',
+      }),
+    ).toBe('owner-required');
+  });
+
+  it('allows the owner to appoint and remove admins', () => {
+    expect(
+      getRoleChangeBlock({
+        actorUserId: 'owner-a',
+        actorRole: 'owner',
+        targetUserId: 'user-b',
+        currentRole: 'user',
+        nextRole: 'admin',
+      }),
+    ).toBeUndefined();
+
+    expect(
+      getRoleChangeBlock({
+        actorUserId: 'owner-a',
+        actorRole: 'owner',
+        targetUserId: 'admin-b',
+        currentRole: 'admin',
+        nextRole: 'user',
       }),
     ).toBeUndefined();
   });
 
-  it('allows one owner to demote another when an owner remains', () => {
+  it('allows admins to revoke user sessions but not peer sessions', () => {
     expect(
-      getRoleChangeBlock({
-        actorUserId: 'owner-a',
-        targetUserId: 'owner-b',
-        currentRole: 'owner',
-        nextRole: 'user',
-        ownerCount: 2,
+      getSessionRevocationBlock({
+        actorUserId: 'admin-a',
+        actorRole: 'admin',
+        targetUserId: 'user-b',
+        targetRole: 'user',
       }),
     ).toBeUndefined();
+
+    expect(
+      getSessionRevocationBlock({
+        actorUserId: 'admin-a',
+        actorRole: 'admin',
+        targetUserId: 'admin-b',
+        targetRole: 'admin',
+      }),
+    ).toBe('admin-peer-protected');
+  });
+
+  it('prevents everyone from revoking the owner session', () => {
+    expect(
+      getSessionRevocationBlock({
+        actorUserId: 'admin-a',
+        actorRole: 'admin',
+        targetUserId: 'owner-a',
+        targetRole: 'owner',
+      }),
+    ).toBe('protected-owner');
   });
 });

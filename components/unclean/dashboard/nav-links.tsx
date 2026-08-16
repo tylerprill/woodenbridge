@@ -10,7 +10,7 @@ import clsx from 'clsx';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 
-import type { AppRole } from '@/app/lib/auth/roles';
+import { hasRequiredRole, type AppRole } from '@/app/lib/auth/roles';
 
 const links = [
   { name: 'Overview', href: '/dashboard', icon: Squares2X2Icon },
@@ -24,7 +24,9 @@ const ownerLinks = [
 
 export default function NavLinks({ role }: { role: AppRole }) {
   const pathname = usePathname();
-  const visibleLinks = role === 'owner' ? [...links, ...ownerLinks] : links;
+  const visibleLinks = hasRequiredRole(role, 'admin')
+    ? [...links, ...ownerLinks]
+    : links;
 
   return (
     <>

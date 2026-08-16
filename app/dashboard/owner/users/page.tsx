@@ -15,15 +15,17 @@ import { OwnerActionButton } from '@/components/dashboard/owner-action-button';
 
 export const metadata: Metadata = {
   title: 'Users — Wooden Bridge',
-  description: 'Owner tools for Wooden Bridge user accounts.',
+  description: 'Management tools for Wooden Bridge user accounts.',
 };
 
 const messages = {
   'role-updated': 'The account role was updated and its sessions were revoked.',
   'no-change': 'That account already has the selected role.',
   'sessions-revoked': 'The account must sign in again on every device.',
-  'self-protected': 'Use another owner account to change your active account.',
-  'last-owner-protected': 'Wooden Bridge must retain at least one owner.',
+  'self-protected': 'You cannot change or revoke your current account.',
+  'protected-owner': 'The Wooden Bridge owner account is immutable.',
+  'owner-required': 'Only the owner can appoint or remove administrators.',
+  'admin-peer-protected': 'Administrators cannot manage another administrator.',
   'not-found': 'That account no longer exists.',
   invalid: 'That account action was not valid.',
   failed: 'The account could not be updated. Please try again.',
@@ -48,13 +50,14 @@ export default async function OwnerUsersPage({
   const search = typeof params.q === 'string' ? params.q : '';
   const notice = getMessage(params.notice);
   const error = getMessage(params.error);
-  const { users, counts, currentUserId } = await getManagedUsers(search);
+  const { users, counts, currentUserId, currentRole } =
+    await getManagedUsers(search);
 
   return (
     <div className="dashboard-page owner-users-page">
       <header className="dashboard-page-heading owner-users-heading">
         <div>
-          <p className="section-kicker">Owner tools</p>
+          <p className="section-kicker">Management tools</p>
           <h1>Users.</h1>
           <p>
             A careful view of the people behind each atlas, with only the
@@ -62,7 +65,7 @@ export default async function OwnerUsersPage({
           </p>
         </div>
         <span className="owner-access-badge">
-          <ShieldCheckIcon aria-hidden="true" /> Owner only
+          <ShieldCheckIcon aria-hidden="true" /> {currentRole} access
         </span>
       </header>
 
@@ -84,8 +87,15 @@ export default async function OwnerUsersPage({
         <article>
           <ShieldCheckIcon aria-hidden="true" />
           <span>
+            <strong>{counts.admins}</strong>
+            Administrators
+          </span>
+        </article>
+        <article>
+          <ShieldCheckIcon aria-hidden="true" />
+          <span>
             <strong>{counts.owners}</strong>
-            Company owners
+            Protected owner
           </span>
         </article>
       </section>
@@ -133,7 +143,16 @@ export default async function OwnerUsersPage({
             <tbody>
               {users.map((user) => {
                 const isCurrentUser = user.id === currentUserId;
-                const nextRole = user.role === 'owner' ? 'user' : 'owner';
+                const isProtectedOwner = user.role === 'owner';
+                const canChangeRole =
+                  currentRole === 'owner' &&
+                  !isCurrentUser &&
+                  !isProtectedOwner;
+                const canRevokeSessions =
+                  !isCurrentUser &&
+                  !isProtectedOwner &&
+                  (currentRole === 'owner' || user.role === 'user');
+                const nextRole = user.role === 'admin' ? 'user' : 'admin';
 
                 return (
                   <tr key={user.id}>
@@ -163,38 +182,54 @@ export default async function OwnerUsersPage({
                       </span>
                     </td>
                     <td>
-                      {isCurrentUser ? (
+                      {isProtectedOwner ? (
+                        <span className="owner-current-user">
+                          Protected owner
+                        </span>
+                      ) : isCurrentUser ? (
                         <span className="owner-current-user">
                           Current account
                         </span>
+                      ) : !canChangeRole && !canRevokeSessions ? (
+                        <span className="owner-current-user">
+                          Owner managed
+                        </span>
                       ) : (
                         <div className="owner-user-actions">
-                          <form action={setManagedUserRole}>
-                            <input
-                              type="hidden"
-                              name="targetUserId"
-                              value={user.id}
-                            />
-                            <input type="hidden" name="role" value={nextRole} />
-                            <OwnerActionButton
-                              tone={nextRole === 'owner' ? 'strong' : 'quiet'}
-                              confirmMessage={`Change ${user.email} to ${nextRole}? This will sign the account out everywhere.`}
-                            >
-                              Make {nextRole}
-                            </OwnerActionButton>
-                          </form>
-                          <form action={revokeManagedUserSessions}>
-                            <input
-                              type="hidden"
-                              name="targetUserId"
-                              value={user.id}
-                            />
-                            <OwnerActionButton
-                              confirmMessage={`Sign ${user.email} out on every device?`}
-                            >
-                              Revoke sessions
-                            </OwnerActionButton>
-                          </form>
+                          {canChangeRole ? (
+                            <form action={setManagedUserRole}>
+                              <input
+                                type="hidden"
+                                name="targetUserId"
+                                value={user.id}
+                              />
+                              <input
+                                type="hidden"
+                                name="role"
+                                value={nextRole}
+                              />
+                              <OwnerActionButton
+                                tone={nextRole === 'admin' ? 'strong' : 'quiet'}
+                                confirmMessage={`Change ${user.email} to ${nextRole}? This will sign the account out everywhere.`}
+                              >
+                                Make {nextRole}
+                              </OwnerActionButton>
+                            </form>
+                          ) : null}
+                          {canRevokeSessions ? (
+                            <form action={revokeManagedUserSessions}>
+                              <input
+                                type="hidden"
+                                name="targetUserId"
+                                value={user.id}
+                              />
+                              <OwnerActionButton
+                                confirmMessage={`Sign ${user.email} out on every device?`}
+                              >
+                                Revoke sessions
+                              </OwnerActionButton>
+                            </form>
+                          ) : null}
                         </div>
                       )}
                     </td>

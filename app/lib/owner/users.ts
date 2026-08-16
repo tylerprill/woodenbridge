@@ -2,7 +2,7 @@ import 'server-only';
 
 import { sql } from '@vercel/postgres';
 
-import { requireOwnerSession } from '@/app/lib/auth/session';
+import { requireRole } from '@/app/lib/auth/session';
 import type { AppRole } from '@/app/lib/auth/roles';
 
 type OwnerUserRow = {
@@ -17,6 +17,7 @@ type OwnerUserRow = {
 type OwnerUserCounts = {
   total: number;
   verified: number;
+  admins: number;
   owners: number;
 };
 
@@ -29,7 +30,7 @@ export type ManagedUser = {
 };
 
 export async function getManagedUsers(searchInput = '') {
-  const session = await requireOwnerSession();
+  const session = await requireRole('admin');
   const search = searchInput.trim().slice(0, 100);
   const pattern = `%${search}%`;
 
@@ -53,6 +54,7 @@ export async function getManagedUsers(searchInput = '') {
       SELECT
         COUNT(*)::integer AS total,
         COUNT(*) FILTER (WHERE email_verified_at IS NOT NULL)::integer AS verified,
+        COUNT(*) FILTER (WHERE role = 'admin')::integer AS admins,
         COUNT(*) FILTER (WHERE role = 'owner')::integer AS owners
       FROM users
     `,
@@ -61,11 +63,13 @@ export async function getManagedUsers(searchInput = '') {
   const counts = countsResult.rows[0] ?? {
     total: 0,
     verified: 0,
+    admins: 0,
     owners: 0,
   };
 
   return {
     currentUserId: session.user.id,
+    currentRole: session.role,
     counts,
     users: usersResult.rows.map<ManagedUser>((user) => ({
       id: user.id,

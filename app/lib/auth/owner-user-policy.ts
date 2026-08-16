@@ -1,27 +1,47 @@
 import type { AppRole } from './roles';
 
 export type RoleChangeBlock =
-  'self-protected' | 'last-owner-protected' | undefined;
+  'self-protected' | 'protected-owner' | 'owner-required' | undefined;
 
 export function getRoleChangeBlock({
   actorUserId,
+  actorRole,
   targetUserId,
   currentRole,
   nextRole,
-  ownerCount,
 }: {
   actorUserId: string;
+  actorRole: AppRole;
   targetUserId: string;
   currentRole: AppRole;
   nextRole: AppRole;
-  ownerCount: number;
 }): RoleChangeBlock {
-  if (actorUserId === targetUserId && nextRole !== 'owner') {
-    return 'self-protected';
-  }
+  if (currentRole === 'owner') return 'protected-owner';
+  if (actorUserId === targetUserId) return 'self-protected';
+  if (actorRole !== 'owner') return 'owner-required';
+  if (nextRole === 'owner') return 'protected-owner';
 
-  if (currentRole === 'owner' && nextRole === 'user' && ownerCount <= 1) {
-    return 'last-owner-protected';
+  return undefined;
+}
+
+export type SessionRevocationBlock =
+  'self-protected' | 'protected-owner' | 'admin-peer-protected' | undefined;
+
+export function getSessionRevocationBlock({
+  actorUserId,
+  actorRole,
+  targetUserId,
+  targetRole,
+}: {
+  actorUserId: string;
+  actorRole: AppRole;
+  targetUserId: string;
+  targetRole: AppRole;
+}): SessionRevocationBlock {
+  if (targetRole === 'owner') return 'protected-owner';
+  if (actorUserId === targetUserId) return 'self-protected';
+  if (actorRole === 'admin' && targetRole === 'admin') {
+    return 'admin-peer-protected';
   }
 
   return undefined;

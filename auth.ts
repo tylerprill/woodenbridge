@@ -18,7 +18,7 @@ import {
 import { getClientIpHash, hashRateLimitKey } from '@/app/lib/auth/security';
 import { recordSecurityEvent } from '@/app/lib/auth/security-events';
 import { upgradeUserPasswordHash } from '@/app/lib/data';
-import type { AppRole } from '@/app/lib/auth/roles';
+import { isAppRole, type AppRole } from '@/app/lib/auth/roles';
 
 type AuthUserRow = {
   id: string;
@@ -115,7 +115,7 @@ export const { auth, signIn, signOut } = NextAuth({
       session.user.id = token.sub ?? '';
       session.emailVerified = token.emailVerified === true;
       session.sessionValid = token.sessionValid === true;
-      session.role = token.role === 'owner' ? 'owner' : 'user';
+      session.role = isAppRole(token.role) ? token.role : 'user';
       return session;
     },
   },
