@@ -6,7 +6,7 @@ import {
   LockClosedIcon,
   UserIcon,
 } from '@heroicons/react/24/outline';
-import { useActionState, useState } from 'react';
+import { useActionState, useEffect, useState } from 'react';
 import { useFormStatus } from 'react-dom';
 
 import { createUser } from '@/app/lib/actions';
@@ -31,19 +31,30 @@ function SubmitButton() {
   );
 }
 
-export default function SignUpForm() {
-  const [state, dispatch] = useActionState<SignUpState, FormData>(
-    createUser,
-    undefined,
+function SignUpFieldsForm({
+  action,
+  state,
+}: {
+  action: (formData: FormData) => void;
+  state: SignUpState;
+}) {
+  const [fields, setFields] = useState(
+    state?.fields ?? {
+      first_name: '',
+      last_name: '',
+      email: '',
+    },
   );
-  const [fields, setFields] = useState({
-    first_name: '',
-    last_name: '',
-    email: '',
-  });
+
+  useEffect(() => {
+    if (!state) return;
+
+    const frame = requestAnimationFrame(() => setFields({ ...state.fields }));
+    return () => cancelAnimationFrame(frame);
+  }, [state]);
 
   return (
-    <form key={state?.submission ?? 0} className="auth-form" action={dispatch}>
+    <form className="auth-form" action={action}>
       <div className="auth-field-row">
         <div className="auth-field">
           <label htmlFor="first_name">First name</label>
@@ -98,7 +109,7 @@ export default function SignUpForm() {
             id="email"
             name="email"
             type="email"
-            autoComplete="email"
+            autoComplete="username"
             placeholder="you@example.com"
             value={fields.email}
             onChange={(event) =>
@@ -159,4 +170,13 @@ export default function SignUpForm() {
       <SubmitButton />
     </form>
   );
+}
+
+export default function SignUpForm() {
+  const [state, dispatch] = useActionState<SignUpState, FormData>(
+    createUser,
+    undefined,
+  );
+
+  return <SignUpFieldsForm action={dispatch} state={state} />;
 }
