@@ -2516,6 +2516,15 @@ body {
   color: rgba(76, 106, 91, 0.56);
 }
 
+.owner-user-search input:focus,
+.owner-user-search input:focus-visible {
+  border-color: transparent;
+  outline: none;
+  box-shadow: none;
+  --tw-ring-offset-shadow: 0 0 #0000;
+  --tw-ring-shadow: 0 0 #0000;
+}
+
 .owner-user-search:focus-within {
   border-color: var(--forest-600);
   background: white;
