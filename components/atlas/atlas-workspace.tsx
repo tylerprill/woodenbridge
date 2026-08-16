@@ -9,6 +9,7 @@ import {
   XMarkIcon,
 } from '@heroicons/react/24/outline';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useRouter } from 'next/navigation';
 
 import {
   createAtlasDraftAction,
@@ -22,7 +23,10 @@ import type {
   AtlasView,
   JourneyState,
 } from '@/app/lib/atlas/definitions';
-import { getAtlasPlaceContextLabel } from '@/app/lib/atlas/place';
+import {
+  getAtlasPlaceContextLabel,
+  withAtlasPlaceContext,
+} from '@/app/lib/atlas/place';
 import AtlasMap from './atlas-map-loader';
 import { MemoryDrawer } from './memory-drawer';
 import { MemoryTray } from './memory-tray';
@@ -36,11 +40,22 @@ type AtlasWorkspaceProps = {
   initialSelectedId?: string | null;
 };
 
+function viewsAreEquivalent(first: AtlasView, second: AtlasView) {
+  return (
+    Math.abs(first.latitude - second.latitude) < 0.00001 &&
+    Math.abs(first.longitude - second.longitude) < 0.00001 &&
+    Math.abs(first.zoom - second.zoom) < 0.01 &&
+    Math.abs(first.bearing - second.bearing) < 0.1 &&
+    Math.abs(first.pitch - second.pitch) < 0.1
+  );
+}
+
 export function AtlasWorkspace({
   displayName,
   initialData,
   initialSelectedId = null,
 }: AtlasWorkspaceProps) {
+  const router = useRouter();
   const [entries, setEntries] = useState(initialData.entries);
   const [selectedId, setSelectedId] = useState<string | null>(
     initialSelectedId,
@@ -57,14 +72,28 @@ export function AtlasWorkspace({
     nonce: initialSelectedId ? 1 : 0,
   });
   const [notice, setNotice] = useState('');
+  const [drawerDirty, setDrawerDirty] = useState(false);
   const [mediaLoadingId, setMediaLoadingId] = useState<string | null>(null);
   const [placeResolvingId, setPlaceResolvingId] = useState<string | null>(null);
   const viewTimerRef = useRef<number | null>(null);
   const latestViewRef = useRef<AtlasView>(initialData.view);
+  const lastSavedViewRef = useRef<AtlasView>(initialData.view);
+  const viewSaveQueueRef = useRef<Promise<void>>(Promise.resolve());
+  const entriesRef = useRef(initialData.entries);
   const searchInputRef = useRef<HTMLInputElement>(null);
   const resolvingPlaceIdsRef = useRef(new Set<string>());
   const loadedMediaIdsRef = useRef(new Set<string>());
   const loadingMediaIdsRef = useRef(new Set<string>());
+
+  const closeSelectedEntry = useCallback(() => {
+    setDrawerDirty(false);
+    setSelectedId(null);
+    if (initialSelectedId) router.replace('/dashboard', { scroll: false });
+  }, [initialSelectedId, router]);
+
+  useEffect(() => {
+    entriesRef.current = entries;
+  }, [entries]);
 
   const visibleEntries = useMemo(() => {
     const search = query.trim().toLowerCase();
@@ -136,50 +165,49 @@ export function AtlasWorkspace({
     }
   }, []);
 
-  const enrichPlace = useCallback(
-    (id: string) => {
-      const entry = entries.find((candidate) => candidate.id === id);
-      if (
-        !entry ||
-        entry.placeGeocodedAt ||
-        resolvingPlaceIdsRef.current.has(id)
-      ) {
-        return;
-      }
+  const enrichPlace = useCallback((id: string) => {
+    const entry = entriesRef.current.find((candidate) => candidate.id === id);
+    if (
+      !entry ||
+      entry.placeGeocodedAt ||
+      resolvingPlaceIdsRef.current.has(id)
+    ) {
+      return;
+    }
 
-      resolvingPlaceIdsRef.current.add(id);
-      setPlaceResolvingId(id);
-      void resolveAtlasPlaceAction(id)
-        .then((resolution) => {
-          if (!resolution.ok) {
-            setNotice(resolution.message);
-            return;
-          }
-          setEntries((current) =>
-            current.map((currentEntry) =>
-              currentEntry.id === resolution.data.entryId
-                ? {
-                    ...currentEntry,
-                    ...resolution.data.place,
-                  }
-                : currentEntry,
-            ),
-          );
-        })
-        .catch((error) => {
-          console.warn('Atlas place enrichment could not finish:', error);
-          setNotice('We could not identify this place yet. Name it yourself.');
-        })
-        .finally(() => {
-          resolvingPlaceIdsRef.current.delete(id);
-          setPlaceResolvingId((current) => (current === id ? null : current));
-        });
-    },
-    [entries],
-  );
+    resolvingPlaceIdsRef.current.add(id);
+    setPlaceResolvingId(id);
+    void resolveAtlasPlaceAction(id)
+      .then((resolution) => {
+        if (!resolution.ok) {
+          setNotice(resolution.message);
+          return;
+        }
+        setEntries((current) =>
+          current.map((currentEntry) =>
+            currentEntry.id === resolution.data.entryId
+              ? withAtlasPlaceContext(currentEntry, resolution.data.place)
+              : currentEntry,
+          ),
+        );
+      })
+      .catch((error) => {
+        console.warn('Atlas place enrichment could not finish:', error);
+        setNotice('We could not identify this place yet. Name it yourself.');
+      })
+      .finally(() => {
+        resolvingPlaceIdsRef.current.delete(id);
+        setPlaceResolvingId((current) => (current === id ? null : current));
+      });
+  }, []);
 
   const selectEntry = useCallback(
     (id: string) => {
+      if (drawerDirty && selectedId && selectedId !== id) {
+        setNotice('Save or discard your changes before opening another place.');
+        return;
+      }
+
       setSelectedId(id);
       setPlacementMode(false);
       setTrayOpen(false);
@@ -187,7 +215,7 @@ export function AtlasWorkspace({
       enrichPlace(id);
       void loadEntryMedia(id);
     },
-    [enrichPlace, loadEntryMedia],
+    [drawerDirty, enrichPlace, loadEntryMedia, selectedId],
   );
 
   useEffect(() => {
@@ -280,10 +308,7 @@ export function AtlasWorkspace({
             setEntries((current) =>
               current.map((entry) =>
                 entry.id === resolution.data.entryId
-                  ? {
-                      ...entry,
-                      ...resolution.data.place,
-                    }
+                  ? withAtlasPlaceContext(entry, resolution.data.place)
                   : entry,
               ),
             );
@@ -316,7 +341,17 @@ export function AtlasWorkspace({
     latestViewRef.current = view;
     if (viewTimerRef.current) window.clearTimeout(viewTimerRef.current);
     viewTimerRef.current = window.setTimeout(() => {
-      void saveAtlasViewAction(latestViewRef.current);
+      viewSaveQueueRef.current = viewSaveQueueRef.current
+        .then(async () => {
+          const latestView = latestViewRef.current;
+          if (viewsAreEquivalent(lastSavedViewRef.current, latestView)) return;
+
+          const result = await saveAtlasViewAction(latestView);
+          if (result.ok) lastSavedViewRef.current = latestView;
+        })
+        .catch((error) => {
+          console.warn('Atlas view could not be remembered:', error);
+        });
     }, 1400);
   }, []);
 
@@ -331,6 +366,11 @@ export function AtlasWorkspace({
     const handleKeyDown = (event: KeyboardEvent) => {
       if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === 'k') {
         event.preventDefault();
+        if (selectedId) {
+          setNotice('Close the memory editor before searching your atlas.');
+          return;
+        }
+        setTrayOpen(false);
         searchInputRef.current?.focus();
         return;
       }
@@ -340,14 +380,19 @@ export function AtlasWorkspace({
           searchInputRef.current?.blur();
           setQuery('');
           setActiveSearchIndex(-1);
-        } else if (selectedId) setSelectedId(null);
-        else if (trayOpen) setTrayOpen(false);
+        } else if (selectedId) {
+          if (drawerDirty) {
+            setNotice('Save or discard your changes before closing.');
+          } else {
+            closeSelectedEntry();
+          }
+        } else if (trayOpen) setTrayOpen(false);
         else setPlacementMode(false);
       }
     };
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [selectedId, trayOpen]);
+  }, [closeSelectedEntry, drawerDirty, selectedId, trayOpen]);
 
   useEffect(() => {
     if (!notice) return;
@@ -359,10 +404,12 @@ export function AtlasWorkspace({
     <div
       className={`${styles.workspace} atlas-workspace-root`}
       data-placement={placementMode ? 'true' : 'false'}
+      data-editor-open={selectedEntry ? 'true' : 'false'}
     >
       <AtlasMap
         entries={visibleEntries}
         initialView={initialData.view}
+        interactionLocked={Boolean(selectedEntry)}
         selectedId={selectedId}
         placementMode={placementMode}
         focusRequest={focusRequest}
@@ -372,7 +419,10 @@ export function AtlasWorkspace({
         onViewChange={rememberView}
       />
 
-      <header className={styles.atlasHeader}>
+      <header
+        className={styles.atlasHeader}
+        inert={selectedEntry ? true : undefined}
+      >
         <div className={styles.atlasIdentity}>
           <p className={styles.eyebrow}>Private field atlas</p>
           <h1>{displayName}&rsquo;s world</h1>
@@ -419,6 +469,7 @@ export function AtlasWorkspace({
                 ? `atlas-search-option-${searchResults[activeSearchIndex].id}`
                 : undefined
             }
+            onFocus={() => setTrayOpen(false)}
             onChange={(event) => {
               setQuery(event.target.value);
               setActiveSearchIndex(-1);
@@ -509,7 +560,12 @@ export function AtlasWorkspace({
         </div>
       </header>
 
-      <div className={styles.toolDock} role="toolbar" aria-label="Atlas tools">
+      <div
+        className={styles.toolDock}
+        role="toolbar"
+        aria-label="Atlas tools"
+        inert={selectedEntry ? true : undefined}
+      >
         <button
           type="button"
           className={styles.addButton}
@@ -519,6 +575,9 @@ export function AtlasWorkspace({
             setPlacementMode((current) => !current);
             setSelectedId(null);
             setTrayOpen(false);
+            setQuery('');
+            setActiveSearchIndex(-1);
+            searchInputRef.current?.blur();
           }}
         >
           {placementMode ? (
@@ -534,8 +593,11 @@ export function AtlasWorkspace({
           onClick={() => {
             setTrayOpen((current) => !current);
             setSelectedId(null);
+            setQuery('');
+            setActiveSearchIndex(-1);
+            searchInputRef.current?.blur();
           }}
-          aria-label="Open memory list"
+          aria-label={trayOpen ? 'Close memory list' : 'Open memory list'}
           aria-expanded={trayOpen}
         >
           <Bars3BottomLeftIcon aria-hidden="true" />
@@ -547,7 +609,7 @@ export function AtlasWorkspace({
           aria-label="Fit all memories on map"
         >
           <ArrowsPointingOutIcon aria-hidden="true" />
-          <span>View all</span>
+          <span>Fit pins</span>
         </button>
       </div>
 
@@ -555,6 +617,7 @@ export function AtlasWorkspace({
         className={styles.filterDock}
         role="group"
         aria-label="Filter memories"
+        inert={selectedEntry ? true : undefined}
       >
         {(
           [
@@ -592,7 +655,7 @@ export function AtlasWorkspace({
               {placementBusy ? 'Placing your pin…' : 'Choose a place'}
             </strong>
             <p>
-              Move through the atlas, then click exactly where the memory
+              Move through the atlas, then tap or click exactly where the memory
               belongs.
             </p>
           </div>
@@ -627,6 +690,7 @@ export function AtlasWorkspace({
       {trayOpen ? (
         <MemoryTray
           entries={visibleEntries}
+          hasAnyEntries={entries.length > 0}
           onClose={() => setTrayOpen(false)}
           onSelect={selectEntry}
         />
@@ -636,7 +700,8 @@ export function AtlasWorkspace({
         <MemoryDrawer
           key={selectedEntry.id}
           entry={selectedEntry}
-          onClose={() => setSelectedId(null)}
+          onClose={closeSelectedEntry}
+          onDirtyChange={setDrawerDirty}
           onUpdate={(updated) => {
             loadedMediaIdsRef.current.add(updated.id);
             setEntries((current) =>
@@ -646,9 +711,10 @@ export function AtlasWorkspace({
             );
           }}
           onArchive={(id) => {
+            setDrawerDirty(false);
             loadedMediaIdsRef.current.delete(id);
             setEntries((current) => current.filter((entry) => entry.id !== id));
-            setSelectedId(null);
+            closeSelectedEntry();
             setNotice('Memory removed from your atlas.');
           }}
           mediaLoading={mediaLoadingId === selectedEntry.id}

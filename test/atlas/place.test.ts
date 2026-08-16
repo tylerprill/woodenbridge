@@ -2,6 +2,7 @@ import {
   formatAtlasDate,
   getAtlasPlaceContextLabel,
   getAtlasPlaceInputLabel,
+  withAtlasPlaceContext,
 } from '@/app/lib/atlas/place';
 
 const entry = {
@@ -11,6 +12,47 @@ const entry = {
   placeRegion: 'Kyoto Prefecture',
   placeCountry: 'Japan',
 } as const;
+
+describe('withAtlasPlaceContext', () => {
+  it('maps a freshly resolved region into the Atlas entry immediately', () => {
+    const enriched = withAtlasPlaceContext(
+      {
+        id: 'memory-1',
+        title: '',
+        description: '',
+        placeLabel: '',
+        placeName: null,
+        placeLocality: null,
+        placeRegion: null,
+        placeCountry: null,
+        placeCountryCode: null,
+        placeGeocoder: null,
+        placeGeocodedAt: null,
+        visitedOn: null,
+        recordState: 'draft',
+        journeyState: 'visited',
+        latitude: 43.42,
+        longitude: -82.83,
+        version: 1,
+        createdAt: '2026-08-16T00:00:00.000Z',
+        updatedAt: '2026-08-16T00:00:00.000Z',
+        media: [],
+      },
+      {
+        placeName: 'Sandusky',
+        locality: 'Sandusky',
+        region: 'Michigan',
+        country: 'United States',
+        countryCode: 'US',
+        geocoder: 'nominatim',
+        geocodedAt: '2026-08-16T00:00:00.000Z',
+      },
+    );
+
+    expect(enriched.placeRegion).toBe('Michigan');
+    expect(getAtlasPlaceInputLabel(enriched)).toBe('Sandusky, Michigan');
+  });
+});
 
 describe('getAtlasPlaceContextLabel', () => {
   it('prefers a user-authored label', () => {

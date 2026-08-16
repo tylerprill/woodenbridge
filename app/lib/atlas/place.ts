@@ -10,6 +10,22 @@ export type AtlasPlaceContext = {
   geocodedAt: string;
 };
 
+export function withAtlasPlaceContext(
+  entry: AtlasEntry,
+  place: AtlasPlaceContext,
+): AtlasEntry {
+  return {
+    ...entry,
+    placeName: place.placeName,
+    placeLocality: place.locality,
+    placeRegion: place.region,
+    placeCountry: place.country,
+    placeCountryCode: place.countryCode,
+    placeGeocoder: place.geocoder,
+    placeGeocodedAt: place.geocodedAt,
+  };
+}
+
 type AtlasPlaceFields = Pick<
   AtlasEntry,
   'placeLabel' | 'placeName' | 'placeLocality' | 'placeRegion' | 'placeCountry'

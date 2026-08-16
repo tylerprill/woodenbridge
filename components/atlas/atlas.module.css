@@ -166,25 +166,21 @@
 }
 
 .mapTooltip strong {
-  overflow: hidden;
   margin-top: 0.28rem;
   font-family: Georgia, 'Times New Roman', serif;
   font-size: 1.05rem;
   font-weight: 400;
   letter-spacing: -0.025em;
   line-height: 1.15;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+  overflow-wrap: anywhere;
 }
 
 .mapTooltip p {
-  overflow: hidden;
   margin-top: 0.24rem;
   color: var(--forest-600);
   font-size: 0.68rem;
   line-height: 1.35;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+  overflow-wrap: anywhere;
 }
 
 .mapTooltip small {
@@ -286,6 +282,14 @@
   height: 0.2rem;
   border-radius: 50%;
   background: var(--timber);
+}
+
+.workspace[data-editor-open='true'] .atlasIdentity,
+.workspace[data-editor-open='true'] .searchWrap,
+.workspace[data-editor-open='true'] .toolDock,
+.workspace[data-editor-open='true'] .filterDock {
+  opacity: 0.42;
+  pointer-events: none;
 }
 
 .searchWrap {
@@ -462,6 +466,7 @@
   gap: 0.22rem;
   transform: translateY(-42%);
   backdrop-filter: blur(22px) saturate(1.1);
+  transition: opacity 180ms ease;
 }
 
 .toolDock button {
@@ -522,6 +527,7 @@
   box-shadow: 0 0.8rem 2.3rem rgba(16, 35, 29, 0.12);
   transform: translateX(-50%);
   backdrop-filter: blur(22px);
+  transition: opacity 180ms ease;
 }
 
 .filterDock button {
@@ -1278,13 +1284,13 @@
 }
 
 .memoryTray {
-  top: 50%;
+  top: 10rem;
   left: 6.6rem;
   display: grid;
   grid-template-rows: auto minmax(0, 1fr);
   width: min(24rem, calc(100% - 8rem));
-  max-height: min(36rem, calc(100% - 10rem));
-  transform: translateY(-46%);
+  max-height: min(36rem, calc(100% - 15rem));
+  transform: none;
   animation-name: tray-enter;
 }
 
@@ -1345,19 +1351,19 @@
 
 .memoryRowCopy small {
   display: flex;
-  align-items: center;
-  overflow: hidden;
+  align-items: flex-start;
   margin-top: 0.2rem;
   color: var(--forest-600);
   font-size: 0.62rem;
-  text-overflow: ellipsis;
-  white-space: nowrap;
   gap: 0.26rem;
+  line-height: 1.4;
+  overflow-wrap: anywhere;
 }
 
 .memoryRowCopy small svg {
   width: 0.65rem;
   flex: 0 0 auto;
+  margin-top: 0.08rem;
 }
 
 .memoryRowCopy em {
@@ -1601,11 +1607,11 @@
 @keyframes tray-enter {
   from {
     opacity: 0;
-    transform: translate(-1rem, -46%) scale(0.985);
+    transform: translateX(-1rem) scale(0.985);
   }
   to {
     opacity: 1;
-    transform: translate(0, -46%) scale(1);
+    transform: translateX(0) scale(1);
   }
 }
 
@@ -1700,8 +1706,9 @@
     right: 0;
     left: 0;
     display: grid;
+    grid-column: 1 / -1;
     grid-template-columns: auto minmax(0, 1fr) auto;
-    width: 100%;
+    width: auto;
     border-radius: 999px;
   }
 
@@ -1877,7 +1884,7 @@
 
 @media (max-width: 430px) {
   .atlasSummary span:last-child,
-  .atlasSummary i {
+  .atlasSummary i:last-of-type {
     display: none;
   }
 

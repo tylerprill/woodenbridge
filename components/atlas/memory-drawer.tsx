@@ -35,6 +35,7 @@ import { MemoryPhotos } from './memory-photos';
 type MemoryDrawerProps = {
   entry: AtlasEntry;
   onClose: () => void;
+  onDirtyChange: (dirty: boolean) => void;
   onUpdate: (entry: AtlasEntry) => void;
   onArchive: (id: string) => void;
   mediaLoading: boolean;
@@ -59,6 +60,7 @@ function formFromEntry(entry: AtlasEntry): FormState {
 export function MemoryDrawer({
   entry,
   onClose,
+  onDirtyChange,
   onUpdate,
   onArchive,
   mediaLoading,
@@ -71,6 +73,7 @@ export function MemoryDrawer({
   >('idle');
   const [message, setMessage] = useState('');
   const [archiveArmed, setArchiveArmed] = useState(false);
+  const [discardArmed, setDiscardArmed] = useState(false);
   const [placeTouched, setPlaceTouched] = useState(false);
   const titleRef = useRef<HTMLInputElement>(null);
   const headingRef = useRef<HTMLHeadingElement>(null);
@@ -91,6 +94,10 @@ export function MemoryDrawer({
     mediaRef.current = entry.media;
   }, [entry.media]);
 
+  useEffect(() => {
+    onDirtyChange(dirty);
+  }, [dirty, onDirtyChange]);
+
   const setField = <K extends keyof FormState>(
     field: K,
     value: FormState[K],
@@ -98,6 +105,7 @@ export function MemoryDrawer({
     editRevisionRef.current += 1;
     setForm((current) => ({ ...current, [field]: value }));
     setDirty(true);
+    setDiscardArmed(false);
     setSaveState('idle');
     setMessage('');
   };
@@ -129,6 +137,7 @@ export function MemoryDrawer({
     savingRef.current = true;
     const savingRevision = editRevisionRef.current;
     setDirty(false);
+    setDiscardArmed(false);
     setSaveState('saving');
     setMessage('');
 
@@ -180,6 +189,29 @@ export function MemoryDrawer({
     setMessage(result.message);
   };
 
+  const requestClose = () => {
+    if (!dirty) {
+      onClose();
+      return;
+    }
+
+    setDiscardArmed(true);
+    setMessage(
+      'You have unsaved changes. Save them, or confirm discard below.',
+    );
+  };
+
+  const discard = () => {
+    if (!discardArmed) {
+      setDiscardArmed(true);
+      setMessage('Select confirm discard to close without saving.');
+      return;
+    }
+
+    onDirtyChange(false);
+    onClose();
+  };
+
   return (
     <aside
       className={styles.memoryDrawer}
@@ -225,8 +257,8 @@ export function MemoryDrawer({
         <button
           type="button"
           className={styles.iconButton}
-          onClick={onClose}
-          aria-label="Close memory"
+          onClick={requestClose}
+          aria-label={dirty ? 'Review unsaved changes' : 'Close memory'}
         >
           <XMarkIcon aria-hidden="true" />
         </button>
@@ -370,16 +402,29 @@ export function MemoryDrawer({
       </div>
 
       <footer className={styles.drawerFooter}>
-        <button
-          type="button"
-          className={styles.archiveButton}
-          data-armed={archiveArmed ? 'true' : 'false'}
-          onClick={() => void archive()}
-          disabled={saveState === 'saving'}
-        >
-          <ArchiveBoxIcon aria-hidden="true" />
-          {archiveArmed ? 'Remove this memory?' : 'Remove'}
-        </button>
+        {dirty ? (
+          <button
+            type="button"
+            className={styles.archiveButton}
+            data-armed={discardArmed ? 'true' : 'false'}
+            onClick={discard}
+            disabled={saveState === 'saving'}
+          >
+            <XMarkIcon aria-hidden="true" />
+            {discardArmed ? 'Confirm discard' : 'Discard changes'}
+          </button>
+        ) : (
+          <button
+            type="button"
+            className={styles.archiveButton}
+            data-armed={archiveArmed ? 'true' : 'false'}
+            onClick={() => void archive()}
+            disabled={saveState === 'saving'}
+          >
+            <ArchiveBoxIcon aria-hidden="true" />
+            {archiveArmed ? 'Remove this memory?' : 'Remove'}
+          </button>
+        )}
         <button
           type="button"
           className={styles.saveButton}

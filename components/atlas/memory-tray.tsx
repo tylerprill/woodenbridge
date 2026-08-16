@@ -15,11 +15,17 @@ import styles from './atlas.module.css';
 
 type MemoryTrayProps = {
   entries: AtlasEntry[];
+  hasAnyEntries: boolean;
   onClose: () => void;
   onSelect: (id: string) => void;
 };
 
-export function MemoryTray({ entries, onClose, onSelect }: MemoryTrayProps) {
+export function MemoryTray({
+  entries,
+  hasAnyEntries,
+  onClose,
+  onSelect,
+}: MemoryTrayProps) {
   return (
     <section className={styles.memoryTray} aria-labelledby="memory-tray-title">
       <header>
@@ -66,8 +72,16 @@ export function MemoryTray({ entries, onClose, onSelect }: MemoryTrayProps) {
         ) : (
           <div className={styles.emptyTray}>
             <span aria-hidden="true" />
-            <strong>No memories here yet.</strong>
-            <p>Place your first pin and begin the record.</p>
+            <strong>
+              {hasAnyEntries
+                ? 'No places match this view.'
+                : 'No memories yet.'}
+            </strong>
+            <p>
+              {hasAnyEntries
+                ? 'Try another filter or search term.'
+                : 'Place your first pin and begin the record.'}
+            </p>
           </div>
         )}
       </div>

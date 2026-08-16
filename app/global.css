@@ -2736,8 +2736,12 @@ body {
 }
 
 .keepsake-card-description {
+  display: -webkit-box;
   min-height: 3.6rem;
   margin-top: 0.65rem;
+  overflow: hidden;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 3;
   color: var(--forest-600);
   font-size: 0.7rem;
   line-height: 1.65;
@@ -3014,9 +3018,11 @@ body {
 }
 
 .keepsake-card-copy-feature .keepsake-card-description {
+  display: block;
   max-width: 38rem;
   min-height: 0;
   margin-top: 1.2rem;
+  overflow: visible;
   font-size: 0.95rem;
   line-height: 1.8;
 }

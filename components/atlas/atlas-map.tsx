@@ -47,6 +47,7 @@ type AtlasTooltip =
 type AtlasMapProps = {
   entries: AtlasEntry[];
   initialView: AtlasView;
+  interactionLocked: boolean;
   selectedId: string | null;
   placementMode: boolean;
   focusRequest: FocusRequest;
@@ -109,6 +110,7 @@ function fitEntries(map: MapLibreMap, entries: AtlasEntry[]) {
 export default function AtlasMap({
   entries,
   initialView,
+  interactionLocked,
   selectedId,
   placementMode,
   focusRequest,
@@ -441,6 +443,7 @@ export default function AtlasMap({
     <div
       className={styles.mapFrame}
       data-placement={placementMode ? 'true' : 'false'}
+      inert={interactionLocked ? true : undefined}
       onPointerMove={handlePointerMove}
       onPointerLeave={(event) => {
         event.currentTarget.style.setProperty('--atlas-light-opacity', '0');

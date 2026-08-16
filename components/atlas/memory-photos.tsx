@@ -65,10 +65,20 @@ export function MemoryPhotos({
   const [message, setMessage] = useState('');
   const [removeArmed, setRemoveArmed] = useState<string | null>(null);
 
-  const uploadPhoto = async (file: File) => {
-    const validationMessage = fileError(file);
-    if (validationMessage) {
-      setMessage(validationMessage);
+  const uploadPhotos = async (files: File[]) => {
+    const availableSlots = ATLAS_MEDIA_MAX_FILES - media.length;
+    if (files.length > availableSlots) {
+      setMessage(
+        `This memory has room for ${availableSlots} more ${availableSlots === 1 ? 'photo' : 'photos'}.`,
+      );
+      if (inputRef.current) inputRef.current.value = '';
+      return;
+    }
+
+    const invalidFile = files.find((file) => fileError(file));
+    if (invalidFile) {
+      setMessage(`${invalidFile.name}: ${fileError(invalidFile)}`);
+      if (inputRef.current) inputRef.current.value = '';
       return;
     }
 
@@ -77,34 +87,45 @@ export function MemoryPhotos({
     setMessage('');
 
     try {
-      const dimensions = await readImageDimensions(file);
-      const pathname = createAtlasMediaPath(
-        entryId,
-        crypto.randomUUID(),
-        file.type as (typeof ATLAS_MEDIA_ALLOWED_TYPES)[number],
-      );
-      const blob = await upload(pathname, file, {
-        access: 'private',
-        handleUploadUrl: '/api/atlas/media/upload',
-        clientPayload: JSON.stringify({ entryId }),
-        multipart: true,
-        onUploadProgress: ({ percentage }) =>
-          setProgress(Math.round(percentage)),
-      });
-      const result = await registerAtlasMediaAction({
-        entryId,
-        pathname: blob.pathname,
-        width: dimensions.width,
-        height: dimensions.height,
-        altText: title.trim() || placeLabel.trim() || placeName?.trim() || '',
-      });
+      let nextMedia = [...media];
 
-      if (!result.ok) {
-        setMessage(result.message);
-        return;
+      for (let index = 0; index < files.length; index += 1) {
+        const file = files[index];
+        const dimensions = await readImageDimensions(file);
+        const pathname = createAtlasMediaPath(
+          entryId,
+          crypto.randomUUID(),
+          file.type as (typeof ATLAS_MEDIA_ALLOWED_TYPES)[number],
+        );
+        const blob = await upload(pathname, file, {
+          access: 'private',
+          handleUploadUrl: '/api/atlas/media/upload',
+          clientPayload: JSON.stringify({ entryId }),
+          multipart: true,
+          onUploadProgress: ({ percentage }) =>
+            setProgress(
+              Math.round(((index + percentage / 100) / files.length) * 100),
+            ),
+        });
+        const result = await registerAtlasMediaAction({
+          entryId,
+          pathname: blob.pathname,
+          width: dimensions.width,
+          height: dimensions.height,
+          altText: title.trim() || placeLabel.trim() || placeName?.trim() || '',
+        });
+
+        if (!result.ok) {
+          setMessage(
+            `${index ? `${index} ${index === 1 ? 'photo was' : 'photos were'} added. ` : ''}${result.message}`,
+          );
+          return;
+        }
+
+        nextMedia = [...nextMedia, result.data];
+        onChange(nextMedia);
       }
 
-      onChange([...media, result.data]);
       setProgress(100);
     } catch (error) {
       console.error('Atlas photo upload failed:', error);
@@ -161,15 +182,16 @@ export function MemoryPhotos({
               ? `${progress}%`
               : atLimit
                 ? 'Full'
-                : 'Add photo'}
+                : 'Add photos'}
           <input
             ref={inputRef}
             type="file"
+            multiple
             accept={ATLAS_MEDIA_ALLOWED_TYPES.join(',')}
             disabled={loading || uploading || atLimit}
             onChange={(event) => {
-              const file = event.target.files?.[0];
-              if (file) void uploadPhoto(file);
+              const files = Array.from(event.target.files ?? []);
+              if (files.length) void uploadPhotos(files);
             }}
           />
         </label>
