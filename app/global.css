@@ -405,8 +405,8 @@ body {
   width: min(100% - 3rem, 86rem);
   min-height: calc(100svh - 6rem);
   margin-inline: auto;
-  padding-block: clamp(4rem, 8vw, 7.5rem);
-  gap: clamp(3rem, 7vw, 8rem);
+  padding-block: clamp(3.5rem, 5vw, 5rem);
+  gap: clamp(2.75rem, 6vw, 6rem);
 }
 
 .hero-copy {
@@ -417,7 +417,7 @@ body {
   display: inline-flex;
   align-items: center;
   gap: 0.55rem;
-  margin-bottom: 1.8rem;
+  margin-bottom: 1.5rem;
   color: var(--forest-600);
   font-size: 0.7rem;
   font-weight: 800;
@@ -432,7 +432,7 @@ body {
 .hero-copy h1 {
   max-width: 10ch;
   font-family: Georgia, 'Times New Roman', serif;
-  font-size: clamp(3.8rem, 7vw, 7.4rem);
+  font-size: clamp(3.8rem, 6.5vw, 6.8rem);
   font-weight: 400;
   letter-spacing: -0.066em;
   line-height: 0.88;
@@ -447,17 +447,17 @@ body {
 
 .hero-intro {
   max-width: 34rem;
-  margin-top: 2rem;
+  margin-top: 1.65rem;
   color: var(--forest-800);
   font-size: clamp(1rem, 1.5vw, 1.18rem);
-  line-height: 1.75;
+  line-height: 1.7;
 }
 
 .hero-actions {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
-  margin-top: 2.25rem;
+  margin-top: 1.85rem;
   gap: 0.9rem;
 }
 
@@ -515,7 +515,7 @@ body {
 .hero-highlights {
   display: flex;
   flex-wrap: wrap;
-  margin-top: 3.2rem;
+  margin-top: 2.5rem;
   gap: 0.8rem 1.7rem;
   color: var(--forest-600);
   font-size: 0.68rem;
@@ -735,7 +735,7 @@ body {
 }
 
 .featured-section {
-  padding-block: clamp(6rem, 11vw, 10rem);
+  padding-block: clamp(5rem, 7vw, 7rem);
   border-top: 1px solid rgba(16, 35, 29, 0.13);
 }
 
@@ -744,7 +744,7 @@ body {
   width: min(100%, 56rem);
   align-items: center;
   flex-direction: column;
-  margin-bottom: clamp(2.5rem, 5vw, 4.5rem);
+  margin-bottom: clamp(2.75rem, 4vw, 4rem);
   margin-inline: auto;
   text-align: center;
 }
@@ -769,7 +769,7 @@ body {
 
 .section-heading h2 {
   max-width: 14ch;
-  margin-top: 1.15rem;
+  margin-top: 1.25rem;
   font-size: clamp(2.7rem, 5vw, 5rem);
   line-height: 0.98;
 }
@@ -780,7 +780,7 @@ body {
 
 .section-heading > span {
   max-width: 34rem;
-  margin-top: 1.35rem;
+  margin-top: 1.2rem;
   color: var(--forest-600);
   font-size: 0.9rem;
   line-height: 1.7;
@@ -1167,14 +1167,14 @@ body {
 .journal-section {
   display: grid;
   grid-template-columns: minmax(0, 0.9fr) minmax(26rem, 1.1fr);
-  padding-block: clamp(6rem, 10vw, 9rem);
+  padding-block: clamp(5rem, 7vw, 7rem);
   border-top: 1px solid rgba(16, 35, 29, 0.13);
-  gap: clamp(4rem, 9vw, 9rem);
+  gap: clamp(3.5rem, 7vw, 7rem);
 }
 
 .journal-intro h2 {
   max-width: 11ch;
-  margin-top: 2rem;
+  margin-top: 1.5rem;
   font-size: clamp(3rem, 5vw, 5.4rem);
   line-height: 0.95;
 }
@@ -1187,7 +1187,7 @@ body {
 
 .journal-intro > p:last-child {
   max-width: 33rem;
-  margin-top: 2rem;
+  margin-top: 1.5rem;
   color: var(--forest-600);
   font-size: 0.96rem;
   line-height: 1.8;
@@ -1201,7 +1201,7 @@ body {
   display: grid;
   grid-template-columns: 2rem 3.2rem 1fr;
   align-items: start;
-  padding-block: 1.9rem;
+  padding-block: 1.75rem;
   border-bottom: 1px solid rgba(16, 35, 29, 0.16);
   gap: 1rem;
 }
@@ -1244,12 +1244,12 @@ body {
 
 .collection-callout {
   display: flex;
-  min-height: 34rem;
+  min-height: 32rem;
   align-items: center;
   flex-direction: column;
   justify-content: center;
   overflow: hidden;
-  padding: clamp(4rem, 8vw, 7rem) 1.5rem;
+  padding: clamp(4rem, 7vw, 6rem) 1.5rem;
   border-radius: clamp(1.7rem, 4vw, 3.5rem);
   background: var(--forest-950);
   box-shadow: 0 2.6rem 5rem rgba(16, 35, 29, 0.2);
@@ -1268,7 +1268,7 @@ body {
   position: relative;
   z-index: 1;
   max-width: 16ch;
-  margin-top: 1.7rem;
+  margin-top: 1.5rem;
   font-size: clamp(2.8rem, 5.2vw, 5.7rem);
   line-height: 0.98;
 }
@@ -1277,7 +1277,7 @@ body {
   position: relative;
   z-index: 1;
   max-width: 37rem;
-  margin-top: 1.7rem;
+  margin-top: 1.4rem;
   color: rgba(245, 242, 233, 0.65);
   font-size: 0.94rem;
   line-height: 1.75;
@@ -1290,7 +1290,7 @@ body {
   min-height: 3.35rem;
   align-items: center;
   gap: 0.8rem;
-  margin-top: 2.2rem;
+  margin-top: 2rem;
   padding-inline: 1.45rem;
   border-radius: 999px;
   background: var(--paper-light);
@@ -1341,7 +1341,7 @@ body {
   display: grid;
   grid-template-columns: 1fr auto 1fr;
   align-items: center;
-  padding-block: 3.2rem;
+  padding-block: 2.75rem;
   color: var(--forest-600);
   font-size: 0.72rem;
 }
@@ -3096,7 +3096,7 @@ input[type='number']::-webkit-outer-spin-button {
 
   .bridge-grid {
     grid-template-columns: 1fr;
-    gap: 3.5rem;
+    gap: 3rem;
   }
 
   .bridge-card-art {
@@ -3315,7 +3315,7 @@ input[type='number']::-webkit-outer-spin-button {
 
   .hero-section {
     min-height: auto;
-    padding-block: 3.8rem 5rem;
+    padding-block: 3.25rem 4.5rem;
   }
 
   .hero-copy h1 {
@@ -3355,7 +3355,7 @@ input[type='number']::-webkit-outer-spin-button {
 
   .featured-section,
   .journal-section {
-    padding-block: 5.5rem;
+    padding-block: 4.5rem;
   }
 
   .bridge-card-art {
@@ -3373,13 +3373,13 @@ input[type='number']::-webkit-outer-spin-button {
   }
 
   .collection-callout {
-    min-height: 32rem;
+    min-height: 30rem;
   }
 
   .home-footer {
     grid-template-columns: 1fr;
     justify-items: center;
-    gap: 1.4rem;
+    gap: 1.25rem;
     text-align: center;
   }
 
