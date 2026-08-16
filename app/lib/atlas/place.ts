@@ -24,6 +24,13 @@ function uniqueParts(parts: Array<string | null | undefined>) {
   );
 }
 
+function distinctPair(first: string | null, second: string | null) {
+  if (!first || !second || first.toLowerCase() === second.toLowerCase()) {
+    return null;
+  }
+  return `${first}, ${second}`;
+}
+
 export function getAtlasPlaceLabel(entry: AtlasPlaceFields) {
   return (
     entry.placeLabel.trim() ||
@@ -42,10 +49,17 @@ export function getAtlasPlaceContextLabel(entry: AtlasPlaceFields) {
   const country = entry.placeCountry?.trim() || null;
   const placeName = entry.placeName?.trim() || null;
 
-  if (locality && region) return `${locality}, ${region}`;
-  if (locality && country) return `${locality}, ${country}`;
-  if (placeName && region) return `${placeName}, ${region}`;
-  if (placeName && country) return `${placeName}, ${country}`;
+  const localityRegion = distinctPair(locality, region);
+  if (localityRegion) return localityRegion;
+
+  const localityCountry = distinctPair(locality, country);
+  if (localityCountry) return localityCountry;
+
+  const placeNameRegion = distinctPair(placeName, region);
+  if (placeNameRegion) return placeNameRegion;
+
+  const placeNameCountry = distinctPair(placeName, country);
+  if (placeNameCountry) return placeNameCountry;
 
   const parts = uniqueParts([locality, placeName, region, country]);
   return parts.join(', ') || 'Place awaiting detail';

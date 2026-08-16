@@ -229,6 +229,7 @@ export function MemoryDrawer({
             <MapPinIcon aria-hidden="true" /> Place
           </span>
           <input
+            id="memory-place"
             name="place"
             value={placeValue}
             maxLength={ATLAS_PLACE_MAX_LENGTH}
@@ -236,13 +237,18 @@ export function MemoryDrawer({
             autoComplete="off"
             autoCapitalize="words"
             spellCheck={false}
+            aria-describedby={detectedPlace ? 'memory-place-hint' : undefined}
             onChange={(event) => {
               setPlaceTouched(true);
               setField('placeLabel', event.target.value);
             }}
           />
           {detectedPlace ? (
-            <small className={styles.inputHint}>
+            <small
+              id="memory-place-hint"
+              className={styles.inputHint}
+              aria-live="polite"
+            >
               {entry.placeLabel.trim() || placeTouched
                 ? `Atlas context: ${detectedPlace}`
                 : 'Autofilled from your pin · Edit to rename'}

@@ -31,6 +31,15 @@ describe('getAtlasPlaceContextLabel', () => {
     ).toBe('Kyoto, Japan');
   });
 
+  it('avoids repeating the same locality and region', () => {
+    expect(
+      getAtlasPlaceContextLabel({
+        ...entry,
+        placeRegion: 'Kyoto',
+      }),
+    ).toBe('Kyoto, Japan');
+  });
+
   it('uses the recognized place name when locality is unavailable', () => {
     expect(
       getAtlasPlaceContextLabel({
