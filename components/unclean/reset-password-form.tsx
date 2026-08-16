@@ -9,7 +9,7 @@ import {
   type PasswordResetState,
 } from '@/app/lib/actions/password-reset';
 import {
-  MAX_PASSWORD_BYTES,
+  MAX_PASSWORD_CHARACTERS,
   MIN_PASSWORD_LENGTH,
 } from '@/app/lib/auth/password';
 
@@ -42,7 +42,7 @@ export default function ResetPasswordForm({ token }: { token: string }) {
         <div className="auth-label-row">
           <label htmlFor="new-password">New password</label>
           <span id="reset-password-requirements">
-            {MIN_PASSWORD_LENGTH}+ characters
+            {MIN_PASSWORD_LENGTH}–{MAX_PASSWORD_CHARACTERS} characters
           </span>
         </div>
         <div className="auth-input-wrap">
@@ -55,7 +55,6 @@ export default function ResetPasswordForm({ token }: { token: string }) {
             placeholder="Create a strong password"
             aria-describedby="reset-password-requirements"
             minLength={MIN_PASSWORD_LENGTH}
-            maxLength={MAX_PASSWORD_BYTES}
             required
           />
         </div>
@@ -72,7 +71,6 @@ export default function ResetPasswordForm({ token }: { token: string }) {
             autoComplete="new-password"
             placeholder="Repeat your new password"
             minLength={MIN_PASSWORD_LENGTH}
-            maxLength={MAX_PASSWORD_BYTES}
             required
           />
         </div>

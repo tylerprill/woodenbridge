@@ -3,9 +3,21 @@ import Credentials from 'next-auth/providers/credentials';
 import { authConfig } from './auth.config';
 import { z } from 'zod';
 import { sql } from '@vercel/postgres';
-import bcrypt from 'bcryptjs';
 
 import { loginPasswordSchema, normalizeEmail } from '@/app/lib/auth/password';
+import {
+  completeLoginAttempt,
+  reserveLoginAttempt,
+} from '@/app/lib/auth/auth-rate-limit';
+import {
+  DUMMY_PASSWORD_HASH,
+  hashPassword,
+  isLegacyPasswordHash,
+  verifyPassword,
+} from '@/app/lib/auth/password-hash';
+import { getClientIpHash, hashRateLimitKey } from '@/app/lib/auth/security';
+import { recordSecurityEvent } from '@/app/lib/auth/security-events';
+import { upgradeUserPasswordHash } from '@/app/lib/data';
 
 type AuthUserRow = {
   id: string;
@@ -52,10 +64,12 @@ async function getSessionState(userId: string) {
       LIMIT 1
     `;
 
-    return result.rows[0];
+    return result.rows[0]
+      ? { status: 'found' as const, row: result.rows[0] }
+      : { status: 'missing' as const };
   } catch (error) {
     console.error('Session validation failed:', error);
-    return undefined;
+    return { status: 'error' as const };
   }
 }
 
@@ -70,15 +84,24 @@ export const { auth, signIn, signOut } = NextAuth({
     async jwt({ token, user }) {
       if (user) {
         token.sessionVersion = user.sessionVersion;
+        token.emailVerified = user.emailVerified;
       }
 
-      const sessionState = token.sub
-        ? await getSessionState(token.sub)
-        : undefined;
-      token.emailVerified = Boolean(sessionState?.email_verified_at);
+      if (!token.sub) return null;
+
+      const sessionState = await getSessionState(token.sub);
+
+      if (sessionState.status === 'missing') return null;
+
+      if (sessionState.status === 'error') {
+        token.sessionValid = false;
+        return token;
+      }
+
+      token.emailVerified = Boolean(sessionState.row.email_verified_at);
       token.sessionValid =
         typeof token.sessionVersion === 'number' &&
-        sessionState?.session_version === token.sessionVersion &&
+        sessionState.row.session_version === token.sessionVersion &&
         token.emailVerified;
 
       return token;
@@ -95,18 +118,46 @@ export const { auth, signIn, signOut } = NextAuth({
       async authorize(credentials) {
         const parsedCredentials = z
           .object({
-            email: z.string().trim().email().transform(normalizeEmail),
+            email: z.string().trim().max(254).email().transform(normalizeEmail),
             password: loginPasswordSchema,
           })
           .safeParse(credentials);
 
         if (parsedCredentials.success) {
           const { email, password } = parsedCredentials.data;
-          const user = await getUser(email);
-          if (!user) return null;
-          const passwordsMatch = await bcrypt.compare(password, user.password);
+          const emailHash = hashRateLimitKey(`email:${email}`);
+          const ipHash = await getClientIpHash();
+          const attemptId = await reserveLoginAttempt(emailHash, ipHash);
 
-          if (passwordsMatch) {
+          if (!attemptId) {
+            recordSecurityEvent('login.rate_limited', 'limited');
+            return null;
+          }
+
+          const user = await getUser(email);
+          const passwordHash = user?.password ?? DUMMY_PASSWORD_HASH;
+          const passwordsMatch = await verifyPassword(passwordHash, password);
+          const successful = Boolean(user && passwordsMatch);
+
+          await completeLoginAttempt({ attemptId, emailHash, successful });
+          recordSecurityEvent(
+            'login.attempt',
+            successful ? 'success' : 'failure',
+          );
+
+          if (user && passwordsMatch) {
+            if (isLegacyPasswordHash(user.password)) {
+              try {
+                await upgradeUserPasswordHash(
+                  user.id,
+                  user.password,
+                  await hashPassword(password),
+                );
+              } catch (error) {
+                console.error('Password hash migration failed:', error);
+              }
+            }
+
             return {
               id: user.id,
               email: user.email,

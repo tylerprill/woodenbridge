@@ -1,8 +1,6 @@
 import type { Metadata } from 'next';
-import { redirect } from 'next/navigation';
-
-import { auth } from '@/auth';
 import { getAccountDisplayName } from '@/app/lib/auth/account-display';
+import { requireVerifiedSession } from '@/app/lib/auth/session';
 import SideNav from '@/components/unclean/dashboard/sidenav';
 
 export const metadata: Metadata = {
@@ -15,11 +13,7 @@ export const dynamic = 'force-dynamic';
 export default async function DashboardLayout({
   children,
 }: Readonly<{ children: React.ReactNode }>) {
-  const session = await auth();
-
-  if (!session?.user || !session.sessionValid) {
-    redirect('/login');
-  }
+  const session = await requireVerifiedSession();
 
   return (
     <div className="dashboard-shell">

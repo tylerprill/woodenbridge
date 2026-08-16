@@ -1,5 +1,4 @@
 import { sql } from '@vercel/postgres';
-import bcrypt from 'bcryptjs';
 import { NewUser, User } from './definitions';
 import { normalizeEmail } from './auth/password';
 
@@ -18,17 +17,15 @@ export async function getUser(email: string) {
   }
 }
 
-export async function addUser(user: NewUser) {
+export async function addUser(user: NewUser, passwordHash: string) {
   try {
-    const hashedPassword = await bcrypt.hash(user.password, 12);
-
     const result = await sql<Pick<User, 'id'>>`
       INSERT INTO users (first_name, last_name, email, password)
       VALUES (
         ${user.first_name},
         ${user.last_name},
         ${normalizeEmail(user.email)},
-        ${hashedPassword}
+        ${passwordHash}
       )
       ON CONFLICT (email) DO NOTHING
       RETURNING id
@@ -39,4 +36,16 @@ export async function addUser(user: NewUser) {
     console.error('Failed to add user:', error);
     throw new Error('Failed to add user.');
   }
+}
+
+export async function upgradeUserPasswordHash(
+  userId: string,
+  previousHash: string,
+  nextHash: string,
+) {
+  await sql`
+    UPDATE users
+    SET password = ${nextHash}
+    WHERE id = ${userId} AND password = ${previousHash}
+  `;
 }

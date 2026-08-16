@@ -2,6 +2,7 @@
 
 import { signIn } from '@/auth';
 import { AuthError } from 'next-auth';
+import { redirect } from 'next/navigation';
 import { after } from 'next/server';
 
 import { z } from 'zod';
@@ -14,17 +15,19 @@ import {
 import { setEmailVerificationChallengeCookie } from './auth/email-verification-cookie';
 import { issueEmailVerification } from './auth/email-verification-flow';
 import { newPasswordSchema, normalizeEmail } from './auth/password';
-import { getClientIpHash } from './auth/security';
+import { getClientIpHash, hashRateLimitKey } from './auth/security';
+import {
+  deleteExpiredAuthRateLimitData,
+  recordAccountCreationRequest,
+} from './auth/auth-rate-limit';
+import { getNewPasswordRejection } from './auth/compromised-password';
+import { hashPassword } from './auth/password-hash';
+import { recordSecurityEvent } from './auth/security-events';
 
 const AUTHENTICATED_HOME = '/dashboard';
 
 function redirectToAuthenticatedHome(formData: FormData) {
   formData.set('redirectTo', AUTHENTICATED_HOME);
-  return formData;
-}
-
-function redirectToEmailVerification(formData: FormData) {
-  formData.set('redirectTo', '/verify-email?sent=1');
   return formData;
 }
 
@@ -44,6 +47,12 @@ export async function authenticate(
       }
     }
     throw error;
+  } finally {
+    after(async () => {
+      await deleteExpiredAuthRateLimitData().catch((error) => {
+        console.error('Authentication rate-limit cleanup failed:', error);
+      });
+    });
   }
 }
 
@@ -60,11 +69,20 @@ export async function createUser(
 
   const parsedCredentials = z
     .object({
-      first_name: z.string().trim().min(1, 'Enter your first name.'),
-      last_name: z.string().trim().min(1, 'Enter your last name.'),
+      first_name: z
+        .string()
+        .trim()
+        .min(1, 'Enter your first name.')
+        .max(100, 'Use no more than 100 characters for your first name.'),
+      last_name: z
+        .string()
+        .trim()
+        .min(1, 'Enter your last name.')
+        .max(100, 'Use no more than 100 characters for your last name.'),
       email: z
         .string()
         .trim()
+        .max(254, 'Enter a valid email address.')
         .email('Enter a valid email address.')
         .transform(normalizeEmail),
       password: newPasswordSchema,
@@ -76,45 +94,70 @@ export async function createUser(
   }
 
   const user = parsedCredentials.data as NewUser;
-  const existingUser = await getUser(user.email);
-
-  if (existingUser) {
-    return 'An account already exists for this email address.';
-  }
-
-  formData.set('first_name', user.first_name);
-  formData.set('last_name', user.last_name);
-  formData.set('email', user.email);
-
-  const createdUser = await addUser(user);
-
-  if (!createdUser) {
-    return 'An account already exists for this email address.';
-  }
-
+  const emailHash = hashRateLimitKey(`email:${user.email}`);
+  const ipHash = await getClientIpHash();
   let challengeId = createDecoyVerificationChallengeId();
+  let allowed = false;
 
   try {
+    allowed = await recordAccountCreationRequest(emailHash, ipHash);
+  } catch (error) {
+    console.error('Signup rate-limit check failed:', error);
+  }
+
+  if (!allowed) {
+    recordSecurityEvent('signup.rate_limited', 'limited');
+    await setEmailVerificationChallengeCookie(challengeId);
+    redirect('/verify-email?sent=1');
+  }
+
+  const passwordRejection = await getNewPasswordRejection(user.password, {
+    email: user.email,
+    firstName: user.first_name,
+    lastName: user.last_name,
+  });
+
+  if (passwordRejection) {
+    return passwordRejection;
+  }
+
+  try {
+    const passwordHash = await hashPassword(user.password);
+    const createdUser = await addUser(user, passwordHash);
+    const verificationUser = createdUser
+      ? {
+          id: createdUser.id,
+          email: user.email,
+          first_name: user.first_name,
+          email_verified_at: null,
+        }
+      : await getUser(user.email);
+
     challengeId = await issueEmailVerification({
       email: user.email,
-      ipHash: await getClientIpHash(),
-      user: {
-        id: createdUser.id,
-        email: user.email,
-        first_name: user.first_name,
-        email_verified_at: null,
-      },
+      ipHash,
+      user: verificationUser,
+    });
+    recordSecurityEvent('signup.attempt', 'success', {
+      accountCreated: Boolean(createdUser),
     });
   } catch (error) {
-    console.error('Initial email verification delivery failed:', error);
+    console.error('Account creation failed:', error);
+    recordSecurityEvent('signup.attempt', 'failure');
+    return 'We could not create your account. Please try again.';
   }
 
   await setEmailVerificationChallengeCookie(challengeId);
   after(async () => {
-    await deleteExpiredEmailVerificationData().catch((error) => {
-      console.error('Email verification cleanup failed:', error);
-    });
+    await Promise.all([
+      deleteExpiredEmailVerificationData().catch((error) => {
+        console.error('Email verification cleanup failed:', error);
+      }),
+      deleteExpiredAuthRateLimitData().catch((error) => {
+        console.error('Authentication rate-limit cleanup failed:', error);
+      }),
+    ]);
   });
 
-  await signIn('credentials', redirectToEmailVerification(formData));
+  redirect('/verify-email?sent=1');
 }

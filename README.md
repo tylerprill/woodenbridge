@@ -23,9 +23,10 @@ logout design is documented in the
 [authentication README](docs/auth/README.md), including Mermaid flow and state
 diagrams, route behavior, security controls, and a manual test checklist.
 
-Authentication migrations create the email-verification and password-recovery
-tables, along with the durable `email_verified_at` and `session_version` user
-fields. Apply them before starting the app:
+Authentication migrations create the email-verification, password-recovery,
+login-limit, and signup-limit tables, along with the durable
+`email_verified_at` and `session_version` user fields. Apply them before starting
+the app:
 
 ```bash
 npm run migrate:auth

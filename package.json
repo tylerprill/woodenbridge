@@ -15,11 +15,15 @@
     "prettier:check": "prettier --check --ignore-unknown .",
     "seed": "node -r dotenv/config ./scripts/seed.js",
     "start": "next start",
-    "start80": "next start -p 80"
+    "start80": "next start -p 80",
+    "test": "jest",
+    "test:ci": "jest --runInBand",
+    "typecheck": "tsc --noEmit"
   },
   "dependencies": {
     "@headlessui/react": "2.2.10",
     "@heroicons/react": "2.2.0",
+    "@node-rs/argon2": "2.1.0",
     "@tailwindcss/forms": "^0.5.7",
     "@vercel/postgres": "0.10.0",
     "autoprefixer": "10.5.4",

@@ -3,7 +3,6 @@
 import { redirect } from 'next/navigation';
 import { after } from 'next/server';
 
-import bcrypt from 'bcryptjs';
 import { z } from 'zod';
 
 import {
@@ -22,6 +21,9 @@ import {
 } from '@/app/lib/auth/reset-password';
 import { newPasswordSchema, normalizeEmail } from '@/app/lib/auth/password';
 import { getClientIpHash, hashRateLimitKey } from '@/app/lib/auth/security';
+import { getNewPasswordRejection } from '@/app/lib/auth/compromised-password';
+import { hashPassword } from '@/app/lib/auth/password-hash';
+import { recordSecurityEvent } from '@/app/lib/auth/security-events';
 
 const GENERIC_RECOVERY_MESSAGE =
   'If an account exists for that address, a password reset link is on its way. It will expire in 30 minutes.';
@@ -129,16 +131,24 @@ export async function resetPassword(
     const allowed = await recordPasswordResetAttempt(tokenHash, ipHash);
 
     if (!allowed) {
+      recordSecurityEvent('password.reset', 'limited');
       return {
         status: 'error',
         message: 'This reset link is invalid or expired. Request a new one.',
       };
     }
 
-    const hashedPassword = await bcrypt.hash(password, 12);
+    const passwordRejection = await getNewPasswordRejection(password);
+
+    if (passwordRejection) {
+      return { status: 'error', message: passwordRejection };
+    }
+
+    const hashedPassword = await hashPassword(password);
     const user = await consumePasswordResetToken(token, hashedPassword);
 
     if (!user) {
+      recordSecurityEvent('password.reset', 'failure');
       return {
         status: 'error',
         message: 'This reset link is invalid or expired. Request a new one.',
@@ -154,6 +164,7 @@ export async function resetPassword(
     } catch (error) {
       console.error('Password change confirmation email failed:', error);
     }
+    recordSecurityEvent('password.reset', 'success');
   } catch (error) {
     console.error('Password reset failed:', error);
     return {

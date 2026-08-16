@@ -27,7 +27,9 @@ export function hashEmailVerificationCode(challengeId: string, code: string) {
 
 export async function getClientIpHash() {
   const requestHeaders = await headers();
-  const forwardedFor = requestHeaders.get('x-forwarded-for');
+  const forwardedFor =
+    requestHeaders.get('x-vercel-forwarded-for') ??
+    requestHeaders.get('x-forwarded-for');
   const clientIp =
     forwardedFor?.split(',')[0]?.trim() ||
     requestHeaders.get('x-real-ip') ||

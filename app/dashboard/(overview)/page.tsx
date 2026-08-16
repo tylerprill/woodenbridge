@@ -7,8 +7,8 @@ import {
 } from '@heroicons/react/24/outline';
 import Link from 'next/link';
 
-import { auth } from '@/auth';
 import { getAccountDisplayName } from '@/app/lib/auth/account-display';
+import { requireVerifiedSession } from '@/app/lib/auth/session';
 import { BridgeScene } from '@/components/clean/bridge-scene';
 import { savedBridges } from '@/components/dashboard/bridge-data';
 
@@ -19,8 +19,8 @@ const stats = [
 ];
 
 export default async function DashboardPage() {
-  const session = await auth();
-  const displayName = getAccountDisplayName(session?.user);
+  const session = await requireVerifiedSession();
+  const displayName = getAccountDisplayName(session.user);
 
   return (
     <div className="dashboard-page">

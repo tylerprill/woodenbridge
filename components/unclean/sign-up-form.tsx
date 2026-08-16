@@ -11,7 +11,7 @@ import { useFormStatus } from 'react-dom';
 
 import { createUser } from '@/app/lib/actions';
 import {
-  MAX_PASSWORD_BYTES,
+  MAX_PASSWORD_CHARACTERS,
   MIN_PASSWORD_LENGTH,
 } from '@/app/lib/auth/password';
 
@@ -86,7 +86,7 @@ export default function SignUpForm() {
         <div className="auth-label-row">
           <label htmlFor="password">Password</label>
           <span id="password-requirements">
-            {MIN_PASSWORD_LENGTH}+ characters
+            {MIN_PASSWORD_LENGTH}–{MAX_PASSWORD_CHARACTERS} characters
           </span>
         </div>
         <div className="auth-input-wrap">
@@ -99,7 +99,6 @@ export default function SignUpForm() {
             placeholder="Create a password"
             aria-describedby="password-requirements"
             minLength={MIN_PASSWORD_LENGTH}
-            maxLength={MAX_PASSWORD_BYTES}
             required
           />
         </div>

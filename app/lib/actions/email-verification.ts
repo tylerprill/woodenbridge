@@ -22,6 +22,7 @@ import { issueEmailVerification } from '@/app/lib/auth/email-verification-flow';
 import { normalizeEmail } from '@/app/lib/auth/password';
 import { sendWelcomeEmail } from '@/app/lib/auth/recovery-email';
 import { getClientIpHash } from '@/app/lib/auth/security';
+import { recordSecurityEvent } from '@/app/lib/auth/security-events';
 
 const GENERIC_VERIFICATION_MESSAGE =
   'If that address has an unverified account, a new code is on its way.';
@@ -147,6 +148,10 @@ export async function submitEmailVerificationCode(
     const result = await verifyEmailCode(challengeId, parsedCode.data, ipHash);
 
     if (result.status !== 'verified') {
+      recordSecurityEvent(
+        'verification.attempt',
+        result.status === 'limited' ? 'limited' : 'failure',
+      );
       return {
         status: 'error',
         message:
@@ -158,6 +163,7 @@ export async function submitEmailVerificationCode(
 
     await clearEmailVerificationChallengeCookie();
     verifiedUser = result.user;
+    recordSecurityEvent('verification.attempt', 'success');
   } catch (error) {
     console.error('Email verification failed:', error);
     return {

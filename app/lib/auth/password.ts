@@ -1,24 +1,36 @@
 import { z } from 'zod';
 
 export const MIN_PASSWORD_LENGTH = 15;
-export const MAX_PASSWORD_BYTES = 72;
+export const MAX_PASSWORD_CHARACTERS = 128;
+export const MAX_PASSWORD_BYTES = MAX_PASSWORD_CHARACTERS * 4;
+
+export function getPasswordCharacterCount(password: string) {
+  return Array.from(password.normalize('NFC')).length;
+}
+
+function hasAllowedPasswordSize(password: string) {
+  const characterCount = getPasswordCharacterCount(password);
+  return (
+    characterCount >= MIN_PASSWORD_LENGTH &&
+    characterCount <= MAX_PASSWORD_CHARACTERS &&
+    new TextEncoder().encode(password).byteLength <= MAX_PASSWORD_BYTES
+  );
+}
 
 export const newPasswordSchema = z
   .string()
-  .min(
-    MIN_PASSWORD_LENGTH,
-    `Use at least ${MIN_PASSWORD_LENGTH} characters for your password.`,
-  )
   .refine(
-    (password) => Buffer.byteLength(password, 'utf8') <= MAX_PASSWORD_BYTES,
-    `Use a password no longer than ${MAX_PASSWORD_BYTES} bytes.`,
+    hasAllowedPasswordSize,
+    `Use between ${MIN_PASSWORD_LENGTH} and ${MAX_PASSWORD_CHARACTERS} characters for your password.`,
   );
 
 export const loginPasswordSchema = z
   .string()
   .min(1)
   .refine(
-    (password) => Buffer.byteLength(password, 'utf8') <= MAX_PASSWORD_BYTES,
+    (password) =>
+      getPasswordCharacterCount(password) <= MAX_PASSWORD_CHARACTERS &&
+      new TextEncoder().encode(password).byteLength <= MAX_PASSWORD_BYTES,
   );
 
 export function normalizeEmail(email: string) {

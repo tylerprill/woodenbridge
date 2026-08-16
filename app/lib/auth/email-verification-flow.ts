@@ -1,5 +1,7 @@
 import 'server-only';
 
+import { after } from 'next/server';
+
 import {
   createDecoyVerificationChallengeId,
   createEmailVerificationChallenge,
@@ -30,17 +32,19 @@ export async function issueEmailVerification({
 
   const { challengeId, code } = await createEmailVerificationChallenge(user.id);
 
-  try {
-    await sendEmailVerificationEmail({
-      to: user.email,
-      firstName: user.first_name,
-      code,
-      challengeId,
-    });
-  } catch (error) {
-    await invalidateEmailVerificationChallenge(challengeId);
-    throw error;
-  }
+  after(async () => {
+    try {
+      await sendEmailVerificationEmail({
+        to: user.email,
+        firstName: user.first_name,
+        code,
+        challengeId,
+      });
+    } catch (error) {
+      await invalidateEmailVerificationChallenge(challengeId);
+      console.error('Email verification delivery failed:', error);
+    }
+  });
 
   return challengeId;
 }
