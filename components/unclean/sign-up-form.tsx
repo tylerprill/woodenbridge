@@ -6,7 +6,7 @@ import {
   LockClosedIcon,
   UserIcon,
 } from '@heroicons/react/24/outline';
-import { useActionState } from 'react';
+import { useActionState, useState } from 'react';
 import { useFormStatus } from 'react-dom';
 
 import { createUser } from '@/app/lib/actions';
@@ -14,6 +14,7 @@ import {
   MAX_PASSWORD_CHARACTERS,
   MIN_PASSWORD_LENGTH,
 } from '@/app/lib/auth/password';
+import type { SignUpState } from '@/app/lib/auth/sign-up';
 
 function SubmitButton() {
   const { pending } = useFormStatus();
@@ -31,10 +32,18 @@ function SubmitButton() {
 }
 
 export default function SignUpForm() {
-  const [errorMessage, dispatch] = useActionState(createUser, undefined);
+  const [state, dispatch] = useActionState<SignUpState, FormData>(
+    createUser,
+    undefined,
+  );
+  const [fields, setFields] = useState({
+    first_name: '',
+    last_name: '',
+    email: '',
+  });
 
   return (
-    <form className="auth-form" action={dispatch}>
+    <form key={state?.submission ?? 0} className="auth-form" action={dispatch}>
       <div className="auth-field-row">
         <div className="auth-field">
           <label htmlFor="first_name">First name</label>
@@ -46,6 +55,13 @@ export default function SignUpForm() {
               type="text"
               autoComplete="given-name"
               placeholder="First name"
+              value={fields.first_name}
+              onChange={(event) =>
+                setFields((current) => ({
+                  ...current,
+                  first_name: event.target.value,
+                }))
+              }
               required
             />
           </div>
@@ -61,6 +77,13 @@ export default function SignUpForm() {
               type="text"
               autoComplete="family-name"
               placeholder="Last name"
+              value={fields.last_name}
+              onChange={(event) =>
+                setFields((current) => ({
+                  ...current,
+                  last_name: event.target.value,
+                }))
+              }
               required
             />
           </div>
@@ -77,6 +100,13 @@ export default function SignUpForm() {
             type="email"
             autoComplete="email"
             placeholder="you@example.com"
+            value={fields.email}
+            onChange={(event) =>
+              setFields((current) => ({
+                ...current,
+                email: event.target.value,
+              }))
+            }
             required
           />
         </div>
@@ -120,9 +150,9 @@ export default function SignUpForm() {
         </div>
       </div>
 
-      {errorMessage ? (
+      {state ? (
         <p id="sign-up-error" className="auth-error" role="alert">
-          {errorMessage}
+          {state.message}
         </p>
       ) : null}
 

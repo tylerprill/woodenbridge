@@ -5,7 +5,6 @@ import { AuthError } from 'next-auth';
 import { redirect } from 'next/navigation';
 import { after } from 'next/server';
 
-import { z } from 'zod';
 import { getUser, addUser } from './data';
 import { NewUser } from './definitions';
 import {
@@ -14,7 +13,6 @@ import {
 } from './auth/email-verification';
 import { setEmailVerificationChallengeCookie } from './auth/email-verification-cookie';
 import { issueEmailVerification } from './auth/email-verification-flow';
-import { newPasswordSchema, normalizeEmail } from './auth/password';
 import { getClientIpHash, hashRateLimitKey } from './auth/security';
 import {
   deleteExpiredAuthRateLimitData,
@@ -23,6 +21,12 @@ import {
 import { getNewPasswordRejection } from './auth/compromised-password';
 import { hashPassword } from './auth/password-hash';
 import { recordSecurityEvent } from './auth/security-events';
+import {
+  createSignUpErrorState,
+  getSignUpInput,
+  signUpSchema,
+  type SignUpState,
+} from './auth/sign-up';
 
 const AUTHENTICATED_HOME = '/dashboard';
 
@@ -57,46 +61,18 @@ export async function authenticate(
 }
 
 export async function createUser(
-  prevState: string | undefined,
+  prevState: SignUpState,
   formData: FormData,
-) {
-  const potentialUser = {
-    first_name: String(formData.get('first_name') ?? ''),
-    last_name: String(formData.get('last_name') ?? ''),
-    email: String(formData.get('email') ?? ''),
-    password: String(formData.get('password') ?? ''),
-    confirmPassword: String(formData.get('confirmPassword') ?? ''),
-  };
-
-  const parsedCredentials = z
-    .object({
-      first_name: z
-        .string()
-        .trim()
-        .min(1, 'Enter your first name.')
-        .max(100, 'Use no more than 100 characters for your first name.'),
-      last_name: z
-        .string()
-        .trim()
-        .min(1, 'Enter your last name.')
-        .max(100, 'Use no more than 100 characters for your last name.'),
-      email: z
-        .string()
-        .trim()
-        .max(254, 'Enter a valid email address.')
-        .email('Enter a valid email address.')
-        .transform(normalizeEmail),
-      password: newPasswordSchema,
-      confirmPassword: z.string(),
-    })
-    .refine((values) => values.password === values.confirmPassword, {
-      path: ['confirmPassword'],
-      message: 'The passwords do not match.',
-    })
-    .safeParse(potentialUser);
+): Promise<SignUpState> {
+  const potentialUser = getSignUpInput(formData);
+  const parsedCredentials = signUpSchema.safeParse(potentialUser);
 
   if (!parsedCredentials.success) {
-    return parsedCredentials.error.issues[0]?.message ?? 'Check your details.';
+    return createSignUpErrorState(
+      prevState,
+      potentialUser,
+      parsedCredentials.error.issues[0]?.message ?? 'Check your details.',
+    );
   }
 
   const user: NewUser = {
@@ -129,7 +105,7 @@ export async function createUser(
   });
 
   if (passwordRejection) {
-    return passwordRejection;
+    return createSignUpErrorState(prevState, potentialUser, passwordRejection);
   }
 
   try {
@@ -155,7 +131,11 @@ export async function createUser(
   } catch (error) {
     console.error('Account creation failed:', error);
     recordSecurityEvent('signup.attempt', 'failure');
-    return 'We could not create your account. Please try again.';
+    return createSignUpErrorState(
+      prevState,
+      potentialUser,
+      'We could not create your account. Please try again.',
+    );
   }
 
   await setEmailVerificationChallengeCookie(challengeId);
