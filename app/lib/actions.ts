@@ -65,6 +65,7 @@ export async function createUser(
     last_name: String(formData.get('last_name') ?? ''),
     email: String(formData.get('email') ?? ''),
     password: String(formData.get('password') ?? ''),
+    confirmPassword: String(formData.get('confirmPassword') ?? ''),
   };
 
   const parsedCredentials = z
@@ -86,6 +87,11 @@ export async function createUser(
         .email('Enter a valid email address.')
         .transform(normalizeEmail),
       password: newPasswordSchema,
+      confirmPassword: z.string(),
+    })
+    .refine((values) => values.password === values.confirmPassword, {
+      path: ['confirmPassword'],
+      message: 'The passwords do not match.',
     })
     .safeParse(potentialUser);
 
@@ -93,7 +99,12 @@ export async function createUser(
     return parsedCredentials.error.issues[0]?.message ?? 'Check your details.';
   }
 
-  const user = parsedCredentials.data as NewUser;
+  const user: NewUser = {
+    first_name: parsedCredentials.data.first_name,
+    last_name: parsedCredentials.data.last_name,
+    email: parsedCredentials.data.email,
+    password: parsedCredentials.data.password,
+  };
   const emailHash = hashRateLimitKey(`email:${user.email}`);
   const ipHash = await getClientIpHash();
   let challengeId = createDecoyVerificationChallengeId();

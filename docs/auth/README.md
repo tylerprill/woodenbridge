@@ -228,6 +228,8 @@ no longer validate as before.
 Use a unique email address for each clean signup test.
 
 - Create an account and confirm the browser lands on `/verify-email?sent=1`.
+- Enter mismatched signup passwords and confirm account creation is rejected
+  before verification begins.
 - Confirm no authenticated session exists before the email is verified.
 - Enter an incorrect code and confirm the account remains unverified.
 - Enter the emailed code and confirm the browser lands on

@@ -104,6 +104,22 @@ export default function SignUpForm() {
         </div>
       </div>
 
+      <div className="auth-field">
+        <label htmlFor="confirm-password">Confirm password</label>
+        <div className="auth-input-wrap">
+          <LockClosedIcon aria-hidden="true" />
+          <input
+            id="confirm-password"
+            name="confirmPassword"
+            type="password"
+            autoComplete="new-password"
+            placeholder="Repeat your password"
+            minLength={MIN_PASSWORD_LENGTH}
+            required
+          />
+        </div>
+      </div>
+
       {errorMessage ? (
         <p id="sign-up-error" className="auth-error" role="alert">
           {errorMessage}
