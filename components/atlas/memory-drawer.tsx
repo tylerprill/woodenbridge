@@ -23,6 +23,7 @@ import {
   ATLAS_PLACE_MAX_LENGTH,
   ATLAS_TITLE_MAX_LENGTH,
 } from '@/app/lib/atlas/validation';
+import { getAtlasPlaceContextLabel } from '@/app/lib/atlas/place';
 import styles from './atlas.module.css';
 import { MemoryPhotos } from './memory-photos';
 
@@ -61,6 +62,7 @@ export function MemoryDrawer({
   >('idle');
   const [message, setMessage] = useState('');
   const [archiveArmed, setArchiveArmed] = useState(false);
+  const [placeTouched, setPlaceTouched] = useState(false);
   const titleRef = useRef<HTMLInputElement>(null);
   const versionRef = useRef(entry.version);
   const savingRef = useRef(false);
@@ -111,6 +113,10 @@ export function MemoryDrawer({
     setSaveState('error');
     setMessage(result.message);
   }, [entry.id, entry.media, form, onUpdate]);
+
+  const placeValue = placeTouched
+    ? form.placeLabel
+    : form.placeLabel || entry.placeLabel || entry.placeName || '';
 
   useEffect(() => {
     if (!dirty || !form.title.trim()) return;
@@ -183,7 +189,7 @@ export function MemoryDrawer({
             name="title"
             value={form.title}
             maxLength={ATLAS_TITLE_MAX_LENGTH}
-            placeholder="What will you call this place?"
+            placeholder="Name this memory"
             autoComplete="off"
             autoCapitalize="words"
             enterKeyHint="next"
@@ -221,14 +227,22 @@ export function MemoryDrawer({
           </span>
           <input
             name="place"
-            value={form.placeLabel}
+            value={placeValue}
             maxLength={ATLAS_PLACE_MAX_LENGTH}
             placeholder="City, region, or landmark"
             autoComplete="off"
             autoCapitalize="words"
             spellCheck={false}
-            onChange={(event) => setField('placeLabel', event.target.value)}
+            onChange={(event) => {
+              setPlaceTouched(true);
+              setField('placeLabel', event.target.value);
+            }}
           />
+          {entry.placeName ? (
+            <small className={styles.inputHint}>
+              Atlas found: {getAtlasPlaceContextLabel(entry)}
+            </small>
+          ) : null}
         </label>
 
         <label className={styles.inputField}>
@@ -266,7 +280,8 @@ export function MemoryDrawer({
         <MemoryPhotos
           entryId={entry.id}
           title={form.title}
-          placeLabel={form.placeLabel}
+          placeLabel={placeValue}
+          placeName={entry.placeName}
           media={entry.media}
           onChange={(media) => onUpdate({ ...entry, media })}
         />

@@ -9,6 +9,13 @@ export type AtlasEntry = {
   title: string;
   description: string;
   placeLabel: string;
+  placeName: string | null;
+  placeLocality: string | null;
+  placeRegion: string | null;
+  placeCountry: string | null;
+  placeCountryCode: string | null;
+  placeGeocoder: string | null;
+  placeGeocodedAt: string | null;
   visitedOn: string | null;
   recordState: AtlasRecordState;
   journeyState: JourneyState;

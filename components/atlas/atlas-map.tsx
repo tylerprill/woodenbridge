@@ -10,6 +10,7 @@ import maplibregl, {
 } from 'maplibre-gl';
 
 import type { AtlasEntry, AtlasView } from '@/app/lib/atlas/definitions';
+import { getAtlasPlaceContextLabel } from '@/app/lib/atlas/place';
 import {
   ATLAS_CLUSTER_LAYER,
   ATLAS_PIN_LAYER,
@@ -250,7 +251,7 @@ export default function AtlasMap({
       return {
         x: Math.min(Math.max(event.point.x, 132), Math.max(width - 132, 132)),
         y: event.point.y,
-        position: event.point.y < 145 ? ('below' as const) : ('above' as const),
+        position: event.point.y < 225 ? ('below' as const) : ('above' as const),
       };
     };
 
@@ -448,7 +449,7 @@ export default function AtlasMap({
                   : 'Journey ahead'}
               </span>
               <strong>{tooltipEntry.title || 'Untitled place'}</strong>
-              <p>{tooltipEntry.placeLabel || 'Pinned place'}</p>
+              <p>{getAtlasPlaceContextLabel(tooltipEntry)}</p>
               <small>Open memory</small>
             </>
           ) : null}

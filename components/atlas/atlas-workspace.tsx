@@ -12,6 +12,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
 import {
   createAtlasDraftAction,
+  resolveAtlasPlaceAction,
   saveAtlasViewAction,
 } from '@/app/lib/actions/atlas';
 import type {
@@ -20,6 +21,7 @@ import type {
   AtlasView,
   JourneyState,
 } from '@/app/lib/atlas/definitions';
+import { getAtlasPlaceContextLabel } from '@/app/lib/atlas/place';
 import AtlasMap from './atlas-map-loader';
 import { MemoryDrawer } from './memory-drawer';
 import { MemoryTray } from './memory-tray';
@@ -57,6 +59,7 @@ export function AtlasWorkspace({
   const viewTimerRef = useRef<number | null>(null);
   const latestViewRef = useRef<AtlasView>(initialData.view);
   const searchInputRef = useRef<HTMLInputElement>(null);
+  const resolvingPlaceIdsRef = useRef(new Set<string>());
 
   const visibleEntries = useMemo(() => {
     const search = query.trim().toLowerCase();
@@ -66,6 +69,10 @@ export function AtlasWorkspace({
         !search ||
         entry.title.toLowerCase().includes(search) ||
         entry.placeLabel.toLowerCase().includes(search) ||
+        entry.placeName?.toLowerCase().includes(search) ||
+        entry.placeLocality?.toLowerCase().includes(search) ||
+        entry.placeRegion?.toLowerCase().includes(search) ||
+        entry.placeCountry?.toLowerCase().includes(search) ||
         entry.description.toLowerCase().includes(search);
       return matchesFilter && matchesSearch;
     });
@@ -83,12 +90,51 @@ export function AtlasWorkspace({
       entry.recordState === 'saved' && entry.journeyState === 'want_to_visit',
   ).length;
 
-  const selectEntry = useCallback((id: string) => {
-    setSelectedId(id);
-    setPlacementMode(false);
-    setTrayOpen(false);
-    setFocusRequest((current) => ({ id, nonce: current.nonce + 1 }));
-  }, []);
+  const enrichPlace = useCallback(
+    (id: string) => {
+      const entry = entries.find((candidate) => candidate.id === id);
+      if (
+        !entry ||
+        entry.placeGeocodedAt ||
+        resolvingPlaceIdsRef.current.has(id)
+      ) {
+        return;
+      }
+
+      resolvingPlaceIdsRef.current.add(id);
+      void resolveAtlasPlaceAction(id)
+        .then((resolution) => {
+          if (!resolution.ok) return;
+          setEntries((current) =>
+            current.map((currentEntry) =>
+              currentEntry.id === resolution.data.entryId
+                ? {
+                    ...currentEntry,
+                    ...resolution.data.place,
+                  }
+                : currentEntry,
+            ),
+          );
+        })
+        .finally(() => resolvingPlaceIdsRef.current.delete(id));
+    },
+    [entries],
+  );
+
+  const selectEntry = useCallback(
+    (id: string) => {
+      setSelectedId(id);
+      setPlacementMode(false);
+      setTrayOpen(false);
+      setFocusRequest((current) => ({ id, nonce: current.nonce + 1 }));
+      enrichPlace(id);
+    },
+    [enrichPlace],
+  );
+
+  useEffect(() => {
+    if (initialSelectedId) enrichPlace(initialSelectedId);
+  }, [enrichPlace, initialSelectedId]);
 
   const placeEntry = useCallback(
     async ({
@@ -108,6 +154,13 @@ export function AtlasWorkspace({
         title: '',
         description: '',
         placeLabel: '',
+        placeName: null,
+        placeLocality: null,
+        placeRegion: null,
+        placeCountry: null,
+        placeCountryCode: null,
+        placeGeocoder: null,
+        placeGeocodedAt: null,
         visitedOn: null,
         recordState: 'draft',
         journeyState: 'visited',
@@ -148,6 +201,20 @@ export function AtlasWorkspace({
       }));
       setPlacementMode(false);
       setNotice('Pin placed. Add the detail you want to remember.');
+
+      void resolveAtlasPlaceAction(result.data.id).then((resolution) => {
+        if (!resolution.ok) return;
+        setEntries((current) =>
+          current.map((entry) =>
+            entry.id === resolution.data.entryId
+              ? {
+                  ...entry,
+                  ...resolution.data.place,
+                }
+              : entry,
+          ),
+        );
+      });
     },
     [placementBusy],
   );
@@ -324,7 +391,7 @@ export function AtlasWorkspace({
                     <MapPinIcon aria-hidden="true" />
                     <span>
                       <strong>{entry.title || 'Untitled place'}</strong>
-                      <small>{entry.placeLabel || 'Pinned place'}</small>
+                      <small>{getAtlasPlaceContextLabel(entry)}</small>
                     </span>
                   </button>
                 ))}

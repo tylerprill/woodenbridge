@@ -12,6 +12,8 @@ import type {
   AtlasEntryUpdateInput,
   AtlasViewInput,
 } from '@/app/lib/atlas/definitions';
+import { reverseGeocodeAtlasPlace } from '@/app/lib/atlas/geocoding';
+import type { AtlasPlaceContext } from '@/app/lib/atlas/place';
 import { type AtlasEntryRow, toAtlasEntry } from '@/app/lib/atlas/rows';
 import { getAtlasBlobToken } from '@/app/lib/atlas/media-storage';
 import {
@@ -26,6 +28,13 @@ const ENTRY_COLUMNS = `
   title,
   description,
   place_label,
+  place_name,
+  place_locality,
+  place_region,
+  place_country,
+  place_country_code,
+  place_geocoder,
+  place_geocoded_at,
   visited_on,
   record_state,
   journey_state,
@@ -168,6 +177,7 @@ export async function updateAtlasEntryAction(
 
     revalidatePath('/dashboard');
     revalidatePath('/dashboard/users');
+    revalidatePath('/dashboard/journal');
     return { ok: true, data: toAtlasEntry(result.rows[0]) };
   } catch (error) {
     console.error('Atlas entry update failed:', error);
@@ -175,6 +185,121 @@ export async function updateAtlasEntryAction(
   } finally {
     client.release();
   }
+}
+
+export async function resolveAtlasPlaceAction(
+  entryId: string,
+): Promise<AtlasActionResult<{ entryId: string; place: AtlasPlaceContext }>> {
+  const session = await requireVerifiedSession();
+  const parsed = atlasEntryIdSchema.safeParse(entryId);
+
+  if (!parsed.success) {
+    return { ok: false, error: 'invalid', message: 'Invalid memory.' };
+  }
+
+  const existing = await sql<{
+    id: string;
+    latitude: number | string;
+    longitude: number | string;
+    place_name: string | null;
+    place_locality: string | null;
+    place_region: string | null;
+    place_country: string | null;
+    place_country_code: string | null;
+    place_geocoder: string | null;
+    place_geocoded_at: Date | string | null;
+  }>`
+    SELECT
+      id,
+      ST_Y(location::geometry)::float8 AS latitude,
+      ST_X(location::geometry)::float8 AS longitude,
+      place_name,
+      place_locality,
+      place_region,
+      place_country,
+      place_country_code,
+      place_geocoder,
+      place_geocoded_at
+    FROM atlas_entries
+    WHERE id = ${parsed.data}
+      AND user_id = ${session.user.id}
+      AND deleted_at IS NULL
+    LIMIT 1
+  `;
+
+  const row = existing.rows[0];
+  if (!row) {
+    return {
+      ok: false,
+      error: 'not-found',
+      message: 'That memory no longer exists.',
+    };
+  }
+
+  if (row.place_name && row.place_geocoder && row.place_geocoded_at) {
+    return {
+      ok: true,
+      data: {
+        entryId: row.id,
+        place: {
+          placeName: row.place_name,
+          locality: row.place_locality,
+          region: row.place_region,
+          country: row.place_country,
+          countryCode: row.place_country_code?.trim() || null,
+          geocoder: row.place_geocoder,
+          geocodedAt:
+            row.place_geocoded_at instanceof Date
+              ? row.place_geocoded_at.toISOString()
+              : new Date(row.place_geocoded_at).toISOString(),
+        },
+      },
+    };
+  }
+
+  const place = await reverseGeocodeAtlasPlace({
+    latitude: Number(row.latitude),
+    longitude: Number(row.longitude),
+  });
+
+  if (!place) {
+    return {
+      ok: false,
+      error: 'failed',
+      message:
+        'We could not identify this place yet. You can name it yourself.',
+    };
+  }
+
+  const updated = await sql<{ id: string }>`
+    UPDATE atlas_entries
+    SET
+      place_name = ${place.placeName},
+      place_locality = ${place.locality},
+      place_region = ${place.region},
+      place_country = ${place.country},
+      place_country_code = ${place.countryCode},
+      place_geocoder = ${place.geocoder},
+      place_geocoded_at = ${place.geocodedAt}::timestamptz,
+      updated_at = NOW()
+    WHERE id = ${parsed.data}
+      AND user_id = ${session.user.id}
+      AND deleted_at IS NULL
+    RETURNING id
+  `;
+
+  if (!updated.rows[0]) {
+    return {
+      ok: false,
+      error: 'not-found',
+      message: 'That memory no longer exists.',
+    };
+  }
+
+  revalidatePath('/dashboard');
+  revalidatePath('/dashboard/users');
+  revalidatePath('/dashboard/journal');
+  return { ok: true, data: { entryId: updated.rows[0].id, place } };
 }
 
 export async function archiveAtlasEntryAction(

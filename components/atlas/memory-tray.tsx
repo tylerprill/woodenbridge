@@ -7,6 +7,10 @@ import {
 } from '@heroicons/react/24/outline';
 
 import type { AtlasEntry } from '@/app/lib/atlas/definitions';
+import {
+  formatAtlasDate,
+  getAtlasPlaceContextLabel,
+} from '@/app/lib/atlas/place';
 import styles from './atlas.module.css';
 
 type MemoryTrayProps = {
@@ -14,16 +18,6 @@ type MemoryTrayProps = {
   onClose: () => void;
   onSelect: (id: string) => void;
 };
-
-function formatDate(entry: AtlasEntry) {
-  if (!entry.visitedOn)
-    return entry.journeyState === 'visited' ? 'Date open' : 'Future journey';
-  return new Intl.DateTimeFormat('en', {
-    month: 'short',
-    day: 'numeric',
-    year: 'numeric',
-  }).format(new Date(`${entry.visitedOn}T12:00:00`));
-}
 
 export function MemoryTray({ entries, onClose, onSelect }: MemoryTrayProps) {
   return (
@@ -58,10 +52,9 @@ export function MemoryTray({ entries, onClose, onSelect }: MemoryTrayProps) {
                 <strong>{entry.title || 'Untitled place'}</strong>
                 <small>
                   <MapPinIcon aria-hidden="true" />
-                  {entry.placeLabel ||
-                    `${entry.latitude.toFixed(2)}, ${entry.longitude.toFixed(2)}`}
+                  {getAtlasPlaceContextLabel(entry)}
                 </small>
-                <em>{formatDate(entry)}</em>
+                <em>{formatAtlasDate(entry)}</em>
               </span>
               <ArrowUpRightIcon aria-hidden="true" />
             </button>

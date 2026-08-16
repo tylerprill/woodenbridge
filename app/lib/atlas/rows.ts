@@ -13,6 +13,13 @@ export type AtlasEntryRow = {
   title: string;
   description: string;
   place_label: string | null;
+  place_name: string | null;
+  place_locality: string | null;
+  place_region: string | null;
+  place_country: string | null;
+  place_country_code: string | null;
+  place_geocoder: string | null;
+  place_geocoded_at: Date | string | null;
   visited_on: Date | string | null;
   record_state: AtlasRecordState;
   journey_state: JourneyState;
@@ -55,6 +62,10 @@ function toIsoString(value: Date | string) {
     : new Date(value).toISOString();
 }
 
+function toNullableIsoString(value: Date | string | null) {
+  return value ? toIsoString(value) : null;
+}
+
 export function toAtlasEntry(
   row: AtlasEntryRow,
   media: AtlasMedia[] = [],
@@ -64,6 +75,13 @@ export function toAtlasEntry(
     title: row.title,
     description: row.description,
     placeLabel: row.place_label ?? '',
+    placeName: row.place_name ?? null,
+    placeLocality: row.place_locality ?? null,
+    placeRegion: row.place_region ?? null,
+    placeCountry: row.place_country ?? null,
+    placeCountryCode: row.place_country_code?.trim() || null,
+    placeGeocoder: row.place_geocoder ?? null,
+    placeGeocodedAt: toNullableIsoString(row.place_geocoded_at),
     visitedOn: toDateString(row.visited_on),
     recordState: row.record_state,
     journeyState: row.journey_state,

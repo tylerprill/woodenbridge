@@ -2,6 +2,10 @@ import { BookmarkIcon, MapPinIcon } from '@heroicons/react/24/outline';
 import Link from 'next/link';
 
 import { getAtlasData } from '@/app/lib/atlas/data';
+import {
+  formatAtlasDate,
+  getAtlasPlaceContextLabel,
+} from '@/app/lib/atlas/place';
 import { MemoryArtwork } from '@/components/atlas/memory-artwork';
 
 const tones = ['cedar', 'alpine', 'ember'] as const;
@@ -53,17 +57,17 @@ export default async function CollectionPage() {
               <div className="collection-card-copy">
                 <p className="bridge-location">
                   <MapPinIcon aria-hidden="true" />
-                  {entry.placeLabel || 'Pinned place'}
+                  {getAtlasPlaceContextLabel(entry)}
                 </p>
                 <h2>{entry.title}</h2>
                 <p>
                   {entry.description || 'A place held quietly in your atlas.'}
                 </p>
                 <div className="collection-card-note">
-                  <span>Coordinates</span>
-                  <p>
-                    {entry.latitude.toFixed(4)}, {entry.longitude.toFixed(4)}
-                  </p>
+                  <span>
+                    {entry.journeyState === 'visited' ? 'Visited' : 'Planned'}
+                  </span>
+                  <p>{formatAtlasDate(entry)}</p>
                 </div>
                 <span className="dashboard-status">
                   {entry.journeyState === 'visited' ? 'Remembered' : 'Ahead'}

@@ -8,6 +8,7 @@ import {
 import Link from 'next/link';
 
 import { getAtlasData } from '@/app/lib/atlas/data';
+import { getAtlasPlaceContextLabel } from '@/app/lib/atlas/place';
 import { MemoryArtwork } from '@/components/atlas/memory-artwork';
 
 const tones = ['cedar', 'alpine', 'ember'] as const;
@@ -85,7 +86,7 @@ export default async function JournalPage() {
                   <h3>{entry.title}</h3>
                   <p>
                     <MapPinIcon aria-hidden="true" />
-                    {entry.placeLabel || 'Pinned place'}
+                    {getAtlasPlaceContextLabel(entry)}
                   </p>
                 </div>
                 <span className="dashboard-status">

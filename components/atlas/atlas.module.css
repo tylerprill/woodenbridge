@@ -64,7 +64,7 @@
 
 .mapTooltip {
   position: absolute;
-  z-index: 6;
+  z-index: 10;
   display: grid;
   width: max-content;
   min-width: 11.5rem;
@@ -867,6 +867,13 @@
   padding-inline: 0.85rem;
 }
 
+.inputHint {
+  margin-top: 0.38rem;
+  color: rgba(76, 106, 91, 0.68);
+  font-size: 0.62rem;
+  line-height: 1.35;
+}
+
 .descriptionField textarea {
   min-height: 8.5rem;
   resize: vertical;
@@ -1295,6 +1302,12 @@
   border-radius: 50%;
   background: var(--timber-light);
   box-shadow: 0 0 0 4px rgba(231, 176, 129, 0.12);
+}
+
+@media (min-width: 761px) {
+  .workspace:has(.memoryDrawer) .toast {
+    right: min(27rem, calc(100% - 1.2rem));
+  }
 }
 
 .privacyNote {
@@ -1726,6 +1739,11 @@
   .drawerFooter {
     align-items: stretch;
     flex-direction: column-reverse;
+  }
+
+  .photoHeading {
+    align-items: flex-start;
+    flex-direction: column;
   }
 
   .archiveButton,

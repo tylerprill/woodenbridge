@@ -27,6 +27,7 @@ type MemoryPhotosProps = {
   entryId: string;
   title: string;
   placeLabel: string;
+  placeName: string | null;
   media: AtlasMedia[];
   onChange: (media: AtlasMedia[]) => void;
 };
@@ -52,6 +53,7 @@ export function MemoryPhotos({
   entryId,
   title,
   placeLabel,
+  placeName,
   media,
   onChange,
 }: MemoryPhotosProps) {
@@ -92,7 +94,7 @@ export function MemoryPhotos({
         pathname: blob.pathname,
         width: dimensions.width,
         height: dimensions.height,
-        altText: title.trim() || placeLabel.trim(),
+        altText: title.trim() || placeLabel.trim() || placeName?.trim() || '',
       });
 
       if (!result.ok) {
