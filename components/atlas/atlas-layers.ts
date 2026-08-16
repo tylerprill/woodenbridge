@@ -6,7 +6,6 @@ import type {
 } from 'maplibre-gl';
 
 import type { AtlasEntry } from '@/app/lib/atlas/definitions';
-import { getAtlasPlaceContextLabel } from '@/app/lib/atlas/place';
 
 export const ATLAS_SOURCE_ID = 'field-atlas-memories';
 export const ATLAS_CLUSTER_LAYER = 'field-atlas-clusters';
@@ -30,7 +29,6 @@ export function entriesToGeoJson(
       properties: {
         id: entry.id,
         title: entry.title || 'Untitled place',
-        placeLabel: getAtlasPlaceContextLabel(entry),
         recordState: entry.recordState,
         journeyState: entry.journeyState,
       },

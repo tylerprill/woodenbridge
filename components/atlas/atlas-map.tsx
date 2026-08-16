@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import maplibregl, {
   LngLatBounds,
   type GeoJSONSource,
@@ -54,6 +54,22 @@ type AtlasMapProps = {
 };
 
 const DEFAULT_STYLE = 'https://tiles.openfreemap.org/styles/positron';
+
+// Keep place metadata out of the MapLibre update key. The React tooltip and
+// drawer consume that metadata directly, so enrichment does not need to
+// rebuild the map source or move the camera.
+function mapDataKey(entries: AtlasEntry[]) {
+  return JSON.stringify(
+    entries.map((entry) => [
+      entry.id,
+      entry.latitude,
+      entry.longitude,
+      entry.title,
+      entry.recordState,
+      entry.journeyState,
+    ]),
+  );
+}
 
 function fitEntries(map: MapLibreMap, entries: AtlasEntry[]) {
   if (!entries.length) {
@@ -111,6 +127,8 @@ export default function AtlasMap({
   const [mapLoaded, setMapLoaded] = useState(false);
   const [mapError, setMapError] = useState(false);
   const [tooltip, setTooltip] = useState<AtlasTooltip | null>(null);
+  const mapDataKeyValue = useMemo(() => mapDataKey(entries), [entries]);
+  const renderedMapDataKeyRef = useRef<string | null>(null);
 
   useEffect(() => {
     entriesRef.current = entries;
@@ -173,6 +191,7 @@ export default function AtlasMap({
         'atmosphere-blend': 0.82,
       });
       addAtlasLayers(map, entriesRef.current);
+      renderedMapDataKeyRef.current = mapDataKey(entriesRef.current);
       setMapLoaded(true);
       setMapError(false);
     };
@@ -328,8 +347,11 @@ export default function AtlasMap({
   useEffect(() => {
     const map = mapRef.current;
     if (!map || !mapLoaded) return;
+    if (renderedMapDataKeyRef.current === mapDataKeyValue) return;
+
     updateAtlasSource(map, entries);
-  }, [entries, mapLoaded]);
+    renderedMapDataKeyRef.current = mapDataKeyValue;
+  }, [entries, mapDataKeyValue, mapLoaded]);
 
   useEffect(() => {
     const map = mapRef.current;
@@ -349,7 +371,7 @@ export default function AtlasMap({
         { selected: true },
       );
     }
-  }, [selectedId, mapLoaded, entries]);
+  }, [selectedId, mapDataKeyValue, mapLoaded]);
 
   useEffect(() => {
     const map = mapRef.current;
@@ -369,7 +391,9 @@ export default function AtlasMap({
   useEffect(() => {
     const map = mapRef.current;
     if (!map || !mapLoaded || !focusRequest.id) return;
-    const entry = entries.find((candidate) => candidate.id === focusRequest.id);
+    const entry = entriesRef.current.find(
+      (candidate) => candidate.id === focusRequest.id,
+    );
     if (!entry) return;
 
     map.easeTo({
@@ -379,13 +403,13 @@ export default function AtlasMap({
       duration: 950,
       essential: true,
     });
-  }, [focusRequest, entries, mapLoaded]);
+  }, [focusRequest, mapLoaded]);
 
   useEffect(() => {
     const map = mapRef.current;
     if (!map || !mapLoaded || fitRequest === 0) return;
-    fitEntries(map, entries);
-  }, [fitRequest, entries, mapLoaded]);
+    fitEntries(map, entriesRef.current);
+  }, [fitRequest, mapLoaded]);
 
   const handlePointerMove = (event: React.PointerEvent<HTMLDivElement>) => {
     if (event.pointerType === 'touch' || pointerFrameRef.current) return;

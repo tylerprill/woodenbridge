@@ -114,9 +114,12 @@ export function MemoryDrawer({
     setMessage(result.message);
   }, [entry.id, entry.media, form, onUpdate]);
 
+  const detectedPlace = entry.placeName
+    ? getAtlasPlaceContextLabel({ ...entry, placeLabel: '' })
+    : '';
   const placeValue = placeTouched
     ? form.placeLabel
-    : form.placeLabel || entry.placeLabel || entry.placeName || '';
+    : form.placeLabel || entry.placeLabel || detectedPlace;
 
   useEffect(() => {
     if (!dirty || !form.title.trim()) return;
@@ -238,9 +241,11 @@ export function MemoryDrawer({
               setField('placeLabel', event.target.value);
             }}
           />
-          {entry.placeName ? (
+          {detectedPlace ? (
             <small className={styles.inputHint}>
-              Atlas found: {getAtlasPlaceContextLabel(entry)}
+              {entry.placeLabel.trim() || placeTouched
+                ? `Atlas context: ${detectedPlace}`
+                : 'Autofilled from your pin · Edit to rename'}
             </small>
           ) : null}
         </label>
