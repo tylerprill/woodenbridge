@@ -2,8 +2,9 @@
 
 import {
   BookmarkIcon,
+  BookOpenIcon,
+  GlobeAltIcon,
   MapIcon,
-  Squares2X2Icon,
   UsersIcon,
 } from '@heroicons/react/24/outline';
 import clsx from 'clsx';
@@ -13,8 +14,9 @@ import { usePathname } from 'next/navigation';
 import { hasRequiredRole, type AppRole } from '@/app/lib/auth/roles';
 
 const links = [
-  { name: 'Overview', href: '/dashboard', icon: Squares2X2Icon },
+  { name: 'Atlas', href: '/dashboard', icon: GlobeAltIcon },
   { name: 'My places', href: '/dashboard/users', icon: BookmarkIcon },
+  { name: 'Journal', href: '/dashboard/journal', icon: BookOpenIcon },
   { name: 'Explore', href: '/', icon: MapIcon },
 ];
 

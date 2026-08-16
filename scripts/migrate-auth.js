@@ -18,7 +18,7 @@ async function main() {
       console.log(`Applied ${migrationFile}.`);
     }
 
-    console.log('Authentication migrations applied successfully.');
+    console.log('Database migrations applied successfully.');
   } finally {
     client.release();
     await db.end();
@@ -26,6 +26,6 @@ async function main() {
 }
 
 main().catch((error) => {
-  console.error('Authentication migration failed:', error.message);
+  console.error('Database migration failed:', error.message);
   process.exitCode = 1;
 });
