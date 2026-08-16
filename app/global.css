@@ -2509,10 +2509,22 @@ body {
 .owner-user-search button {
   align-self: stretch;
   padding-inline: 0.9rem;
-  background: var(--forest-950);
+  border: 1px solid var(--forest-950);
+  background-color: var(--forest-950);
   color: var(--paper-light);
   font-size: 0.62rem;
   font-weight: 800;
+  transition:
+    background-color 180ms ease,
+    box-shadow 180ms ease;
+}
+
+.owner-users-panel .owner-user-search button:hover,
+.owner-users-panel .owner-user-search button:focus-visible {
+  border-color: var(--forest-950);
+  background-color: var(--forest-950);
+  box-shadow: inset 0 0 0 2px rgba(231, 176, 129, 0.38);
+  color: var(--paper-light);
 }
 
 .owner-users-notice {
@@ -2649,7 +2661,9 @@ body {
   transition:
     border-color 180ms ease,
     background 180ms ease,
-    color 180ms ease;
+    box-shadow 180ms ease,
+    color 180ms ease,
+    transform 180ms ease;
 }
 
 .owner-user-action:hover,
@@ -2660,15 +2674,17 @@ body {
 
 .owner-user-action-strong {
   border-color: var(--forest-950);
-  background: var(--forest-950);
+  background-color: var(--forest-950);
   color: var(--paper-light);
 }
 
-.owner-user-action-strong:hover,
-.owner-user-action-strong:focus-visible {
-  border-color: var(--forest-700);
-  background: var(--forest-700);
+.owner-users-table .owner-user-action.owner-user-action-strong:hover,
+.owner-users-table .owner-user-action.owner-user-action-strong:focus-visible {
+  border-color: var(--forest-950);
+  background-color: var(--forest-950);
+  box-shadow: inset 0 0 0 2px rgba(231, 176, 129, 0.38);
   color: var(--paper-light);
+  transform: translateY(-1px);
 }
 
 .owner-user-action:disabled {
