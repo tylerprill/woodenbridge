@@ -15,6 +15,7 @@ import {
   resolveAtlasPlaceAction,
   saveAtlasViewAction,
 } from '@/app/lib/actions/atlas';
+import { getAtlasEntryMediaAction } from '@/app/lib/actions/atlas-media';
 import type {
   AtlasData,
   AtlasEntry,
@@ -27,7 +28,7 @@ import { MemoryDrawer } from './memory-drawer';
 import { MemoryTray } from './memory-tray';
 import styles from './atlas.module.css';
 
-type AtlasFilter = 'all' | JourneyState;
+type AtlasFilter = 'all' | 'draft' | JourneyState;
 
 type AtlasWorkspaceProps = {
   displayName: string;
@@ -56,15 +57,23 @@ export function AtlasWorkspace({
     nonce: initialSelectedId ? 1 : 0,
   });
   const [notice, setNotice] = useState('');
+  const [mediaLoadingId, setMediaLoadingId] = useState<string | null>(null);
+  const [placeResolvingId, setPlaceResolvingId] = useState<string | null>(null);
   const viewTimerRef = useRef<number | null>(null);
   const latestViewRef = useRef<AtlasView>(initialData.view);
   const searchInputRef = useRef<HTMLInputElement>(null);
   const resolvingPlaceIdsRef = useRef(new Set<string>());
+  const loadedMediaIdsRef = useRef(new Set<string>());
+  const loadingMediaIdsRef = useRef(new Set<string>());
 
   const visibleEntries = useMemo(() => {
     const search = query.trim().toLowerCase();
     return entries.filter((entry) => {
-      const matchesFilter = filter === 'all' || entry.journeyState === filter;
+      const matchesFilter =
+        filter === 'all' ||
+        (filter === 'draft'
+          ? entry.recordState === 'draft'
+          : entry.recordState === 'saved' && entry.journeyState === filter);
       const matchesSearch =
         !search ||
         entry.title.toLowerCase().includes(search) ||
@@ -81,14 +90,51 @@ export function AtlasWorkspace({
 
   const selectedEntry =
     entries.find((entry) => entry.id === selectedId) ?? null;
-  const visitedCount = entries.filter(
-    (entry) =>
-      entry.recordState === 'saved' && entry.journeyState === 'visited',
-  ).length;
-  const futureCount = entries.filter(
-    (entry) =>
-      entry.recordState === 'saved' && entry.journeyState === 'want_to_visit',
-  ).length;
+  const counts = useMemo(
+    () =>
+      entries.reduce(
+        (current, entry) => {
+          if (entry.recordState === 'draft') current.drafts += 1;
+          else if (entry.journeyState === 'visited') current.visited += 1;
+          else current.future += 1;
+          return current;
+        },
+        { visited: 0, future: 0, drafts: 0 },
+      ),
+    [entries],
+  );
+
+  const loadEntryMedia = useCallback(async (id: string) => {
+    if (
+      loadedMediaIdsRef.current.has(id) ||
+      loadingMediaIdsRef.current.has(id)
+    ) {
+      return;
+    }
+
+    loadingMediaIdsRef.current.add(id);
+    setMediaLoadingId(id);
+    try {
+      const result = await getAtlasEntryMediaAction(id);
+      if (!result.ok) {
+        setNotice(result.message);
+        return;
+      }
+
+      loadedMediaIdsRef.current.add(id);
+      setEntries((current) =>
+        current.map((entry) =>
+          entry.id === id ? { ...entry, media: result.data } : entry,
+        ),
+      );
+    } catch (error) {
+      console.error('Atlas photographs could not be opened:', error);
+      setNotice('The photographs could not be opened. Please try again.');
+    } finally {
+      loadingMediaIdsRef.current.delete(id);
+      setMediaLoadingId((current) => (current === id ? null : current));
+    }
+  }, []);
 
   const enrichPlace = useCallback(
     (id: string) => {
@@ -102,9 +148,13 @@ export function AtlasWorkspace({
       }
 
       resolvingPlaceIdsRef.current.add(id);
+      setPlaceResolvingId(id);
       void resolveAtlasPlaceAction(id)
         .then((resolution) => {
-          if (!resolution.ok) return;
+          if (!resolution.ok) {
+            setNotice(resolution.message);
+            return;
+          }
           setEntries((current) =>
             current.map((currentEntry) =>
               currentEntry.id === resolution.data.entryId
@@ -116,7 +166,14 @@ export function AtlasWorkspace({
             ),
           );
         })
-        .finally(() => resolvingPlaceIdsRef.current.delete(id));
+        .catch((error) => {
+          console.warn('Atlas place enrichment could not finish:', error);
+          setNotice('We could not identify this place yet. Name it yourself.');
+        })
+        .finally(() => {
+          resolvingPlaceIdsRef.current.delete(id);
+          setPlaceResolvingId((current) => (current === id ? null : current));
+        });
     },
     [entries],
   );
@@ -128,13 +185,23 @@ export function AtlasWorkspace({
       setTrayOpen(false);
       setFocusRequest((current) => ({ id, nonce: current.nonce + 1 }));
       enrichPlace(id);
+      void loadEntryMedia(id);
     },
-    [enrichPlace],
+    [enrichPlace, loadEntryMedia],
   );
 
   useEffect(() => {
-    if (initialSelectedId) enrichPlace(initialSelectedId);
-  }, [enrichPlace, initialSelectedId]);
+    if (!initialSelectedId) return;
+    let active = true;
+    queueMicrotask(() => {
+      if (!active) return;
+      enrichPlace(initialSelectedId);
+      void loadEntryMedia(initialSelectedId);
+    });
+    return () => {
+      active = false;
+    };
+  }, [enrichPlace, initialSelectedId, loadEntryMedia]);
 
   const placeEntry = useCallback(
     async ({
@@ -175,46 +242,72 @@ export function AtlasWorkspace({
       setEntries((current) => [optimisticEntry, ...current]);
       setNotice('Pin placed. Preparing your field note…');
 
-      const result = await createAtlasDraftAction({
-        clientRequestId,
-        latitude,
-        longitude,
-      });
+      try {
+        const result = await createAtlasDraftAction({
+          clientRequestId,
+          latitude,
+          longitude,
+        });
 
-      setPlacementBusy(false);
-      if (!result.ok) {
+        if (!result.ok) {
+          setEntries((current) =>
+            current.filter((entry) => entry.id !== optimisticId),
+          );
+          setNotice(result.message);
+          return;
+        }
+
+        loadedMediaIdsRef.current.add(result.data.id);
+        setEntries((current) => [
+          result.data,
+          ...current.filter((entry) => entry.id !== optimisticId),
+        ]);
+        setSelectedId(result.data.id);
+        setFocusRequest((current) => ({
+          id: result.data.id,
+          nonce: current.nonce + 1,
+        }));
+        setPlacementMode(false);
+        setNotice('Pin placed. Add the detail you want to remember.');
+
+        setPlaceResolvingId(result.data.id);
+        void resolveAtlasPlaceAction(result.data.id)
+          .then((resolution) => {
+            if (!resolution.ok) {
+              setNotice(resolution.message);
+              return;
+            }
+            setEntries((current) =>
+              current.map((entry) =>
+                entry.id === resolution.data.entryId
+                  ? {
+                      ...entry,
+                      ...resolution.data.place,
+                    }
+                  : entry,
+              ),
+            );
+          })
+          .catch((error) => {
+            console.warn('Atlas place enrichment could not finish:', error);
+            setNotice(
+              'We could not identify this place yet. Name it yourself.',
+            );
+          })
+          .finally(() =>
+            setPlaceResolvingId((current) =>
+              current === result.data.id ? null : current,
+            ),
+          );
+      } catch (error) {
+        console.error('Atlas pin placement failed:', error);
         setEntries((current) =>
           current.filter((entry) => entry.id !== optimisticId),
         );
-        setNotice(result.message);
-        return;
+        setNotice('The atlas could not place that pin. Please try again.');
+      } finally {
+        setPlacementBusy(false);
       }
-
-      setEntries((current) => [
-        result.data,
-        ...current.filter((entry) => entry.id !== optimisticId),
-      ]);
-      setSelectedId(result.data.id);
-      setFocusRequest((current) => ({
-        id: result.data.id,
-        nonce: current.nonce + 1,
-      }));
-      setPlacementMode(false);
-      setNotice('Pin placed. Add the detail you want to remember.');
-
-      void resolveAtlasPlaceAction(result.data.id).then((resolution) => {
-        if (!resolution.ok) return;
-        setEntries((current) =>
-          current.map((entry) =>
-            entry.id === resolution.data.entryId
-              ? {
-                  ...entry,
-                  ...resolution.data.place,
-                }
-              : entry,
-          ),
-        );
-      });
     },
     [placementBusy],
   );
@@ -263,7 +356,10 @@ export function AtlasWorkspace({
   }, [notice]);
 
   return (
-    <div className={`${styles.workspace} atlas-workspace-root`}>
+    <div
+      className={`${styles.workspace} atlas-workspace-root`}
+      data-placement={placementMode ? 'true' : 'false'}
+    >
       <AtlasMap
         entries={visibleEntries}
         initialView={initialData.view}
@@ -281,9 +377,17 @@ export function AtlasWorkspace({
           <p className={styles.eyebrow}>Private field atlas</p>
           <h1>{displayName}&rsquo;s world</h1>
           <div className={styles.atlasSummary} aria-label="Atlas summary">
-            <span>{visitedCount} remembered</span>
+            <span>{counts.visited} remembered</span>
+            {counts.drafts ? (
+              <>
+                <i aria-hidden="true" />
+                <span>
+                  {counts.drafts} {counts.drafts === 1 ? 'draft' : 'drafts'}
+                </span>
+              </>
+            ) : null}
             <i aria-hidden="true" />
-            <span>{futureCount} ahead</span>
+            <span>{counts.future} ahead</span>
           </div>
         </div>
 
@@ -332,13 +436,14 @@ export function AtlasWorkspace({
                 setActiveSearchIndex((current) =>
                   current <= 0 ? searchResults.length - 1 : current - 1,
                 );
-              } else if (
-                event.key === 'Enter' &&
-                activeSearchIndex >= 0 &&
-                activeSearchIndex < searchResults.length
-              ) {
+              } else if (event.key === 'Enter') {
                 event.preventDefault();
-                selectEntry(searchResults[activeSearchIndex].id);
+                const entry =
+                  activeSearchIndex >= 0 &&
+                  activeSearchIndex < searchResults.length
+                    ? searchResults[activeSearchIndex]
+                    : searchResults[0];
+                selectEntry(entry.id);
                 setQuery('');
                 setActiveSearchIndex(-1);
               }
@@ -391,7 +496,10 @@ export function AtlasWorkspace({
                     <MapPinIcon aria-hidden="true" />
                     <span>
                       <strong>{entry.title || 'Untitled place'}</strong>
-                      <small>{getAtlasPlaceContextLabel(entry)}</small>
+                      <small>
+                        {entry.recordState === 'draft' ? 'Draft · ' : null}
+                        {getAtlasPlaceContextLabel(entry)}
+                      </small>
                     </span>
                   </button>
                 ))}
@@ -453,6 +561,7 @@ export function AtlasWorkspace({
             ['all', 'All places'],
             ['visited', 'Remembered'],
             ['want_to_visit', 'Ahead'],
+            ['draft', 'Drafts'],
           ] as [AtlasFilter, string][]
         ).map(([value, label]) => (
           <button
@@ -472,9 +581,13 @@ export function AtlasWorkspace({
       </div>
 
       {placementMode ? (
-        <div className={styles.placementPrompt} role="status">
+        <div
+          className={styles.placementPrompt}
+          role="region"
+          aria-label="Place a memory"
+        >
           <span className={styles.pinPulse} aria-hidden="true" />
-          <div>
+          <div role="status" aria-live="polite">
             <strong>
               {placementBusy ? 'Placing your pin…' : 'Choose a place'}
             </strong>
@@ -483,6 +596,13 @@ export function AtlasWorkspace({
               belongs.
             </p>
           </div>
+          <button
+            type="button"
+            disabled={placementBusy}
+            onClick={() => void placeEntry(latestViewRef.current)}
+          >
+            Use map center
+          </button>
         </div>
       ) : null}
 
@@ -518,6 +638,7 @@ export function AtlasWorkspace({
           entry={selectedEntry}
           onClose={() => setSelectedId(null)}
           onUpdate={(updated) => {
+            loadedMediaIdsRef.current.add(updated.id);
             setEntries((current) =>
               current.map((entry) =>
                 entry.id === updated.id ? updated : entry,
@@ -525,10 +646,13 @@ export function AtlasWorkspace({
             );
           }}
           onArchive={(id) => {
+            loadedMediaIdsRef.current.delete(id);
             setEntries((current) => current.filter((entry) => entry.id !== id));
             setSelectedId(null);
             setNotice('Memory removed from your atlas.');
           }}
+          mediaLoading={mediaLoadingId === selectedEntry.id}
+          placeResolving={placeResolvingId === selectedEntry.id}
         />
       ) : null}
 

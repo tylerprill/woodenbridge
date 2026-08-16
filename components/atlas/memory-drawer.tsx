@@ -2,11 +2,13 @@
 
 import {
   ArchiveBoxIcon,
+  ArrowUpRightIcon,
   CalendarDaysIcon,
   CheckIcon,
   MapPinIcon,
   XMarkIcon,
 } from '@heroicons/react/24/outline';
+import Link from 'next/link';
 import { useCallback, useEffect, useRef, useState } from 'react';
 
 import {
@@ -32,6 +34,8 @@ type MemoryDrawerProps = {
   onClose: () => void;
   onUpdate: (entry: AtlasEntry) => void;
   onArchive: (id: string) => void;
+  mediaLoading: boolean;
+  placeResolving: boolean;
 };
 
 type FormState = Pick<
@@ -54,6 +58,8 @@ export function MemoryDrawer({
   onClose,
   onUpdate,
   onArchive,
+  mediaLoading,
+  placeResolving,
 }: MemoryDrawerProps) {
   const [form, setForm] = useState<FormState>(() => formFromEntry(entry));
   const [dirty, setDirty] = useState(false);
@@ -64,19 +70,29 @@ export function MemoryDrawer({
   const [archiveArmed, setArchiveArmed] = useState(false);
   const [placeTouched, setPlaceTouched] = useState(false);
   const titleRef = useRef<HTMLInputElement>(null);
+  const headingRef = useRef<HTMLHeadingElement>(null);
   const versionRef = useRef(entry.version);
+  const mediaRef = useRef(entry.media);
   const savingRef = useRef(false);
+  const editRevisionRef = useRef(0);
 
   useEffect(() => {
-    if (entry.recordState === 'draft') {
-      requestAnimationFrame(() => titleRef.current?.focus());
-    }
+    requestAnimationFrame(() =>
+      entry.recordState === 'draft'
+        ? titleRef.current?.focus()
+        : headingRef.current?.focus(),
+    );
   }, [entry.recordState]);
+
+  useEffect(() => {
+    mediaRef.current = entry.media;
+  }, [entry.media]);
 
   const setField = <K extends keyof FormState>(
     field: K,
     value: FormState[K],
   ) => {
+    editRevisionRef.current += 1;
     setForm((current) => ({ ...current, [field]: value }));
     setDirty(true);
     setSaveState('idle');
@@ -92,27 +108,39 @@ export function MemoryDrawer({
     }
 
     savingRef.current = true;
+    const savingRevision = editRevisionRef.current;
     setDirty(false);
     setSaveState('saving');
     setMessage('');
 
-    const result = await updateAtlasEntryAction({
-      id: entry.id,
-      version: versionRef.current,
-      ...form,
-    });
+    try {
+      const result = await updateAtlasEntryAction({
+        id: entry.id,
+        version: versionRef.current,
+        ...form,
+      });
 
-    savingRef.current = false;
-    if (result.ok) {
-      versionRef.current = result.data.version;
-      setSaveState('saved');
-      onUpdate({ ...result.data, media: entry.media });
-      return;
+      if (result.ok) {
+        versionRef.current = result.data.version;
+        setSaveState(
+          editRevisionRef.current === savingRevision ? 'saved' : 'idle',
+        );
+        onUpdate({ ...result.data, media: mediaRef.current });
+        return;
+      }
+
+      setDirty(true);
+      setSaveState('error');
+      setMessage(result.message);
+    } catch (error) {
+      console.error('Atlas memory save failed:', error);
+      setDirty(true);
+      setSaveState('error');
+      setMessage('The memory could not be saved. Please try again.');
+    } finally {
+      savingRef.current = false;
     }
-
-    setSaveState('error');
-    setMessage(result.message);
-  }, [entry.id, entry.media, form, onUpdate]);
+  }, [entry.id, form, onUpdate]);
 
   const detectedPlace = entry.placeName
     ? getAtlasPlaceContextLabel({ ...entry, placeLabel: '' })
@@ -154,7 +182,12 @@ export function MemoryDrawer({
     >
       <header className={styles.drawerHeader}>
         <div>
-          <h2 id="memory-drawer-heading" className="sr-only">
+          <h2
+            ref={headingRef}
+            id="memory-drawer-heading"
+            className="sr-only"
+            tabIndex={-1}
+          >
             {entry.recordState === 'draft' ? 'Create memory' : 'Edit memory'}
           </h2>
           <p id="memory-drawer-context" className="sr-only">
@@ -172,6 +205,15 @@ export function MemoryDrawer({
             ) : null}
             {saveState === 'idle' && dirty ? 'Unsaved changes' : null}
           </span>
+          {entry.recordState === 'saved' && !dirty && saveState !== 'saving' ? (
+            <Link
+              className={styles.drawerKeepsakeLink}
+              href={`/dashboard/card/${entry.id}`}
+            >
+              View keepsake
+              <ArrowUpRightIcon aria-hidden="true" />
+            </Link>
+          ) : null}
         </div>
         <button
           type="button"
@@ -237,21 +279,25 @@ export function MemoryDrawer({
             autoComplete="off"
             autoCapitalize="words"
             spellCheck={false}
-            aria-describedby={detectedPlace ? 'memory-place-hint' : undefined}
+            aria-describedby={
+              detectedPlace || placeResolving ? 'memory-place-hint' : undefined
+            }
             onChange={(event) => {
               setPlaceTouched(true);
               setField('placeLabel', event.target.value);
             }}
           />
-          {detectedPlace ? (
+          {detectedPlace || placeResolving ? (
             <small
               id="memory-place-hint"
               className={styles.inputHint}
               aria-live="polite"
             >
-              {entry.placeLabel.trim() || placeTouched
-                ? `Atlas context: ${detectedPlace}`
-                : 'Autofilled from your pin · Edit to rename'}
+              {placeResolving && !detectedPlace
+                ? 'Finding the city, region, and country…'
+                : entry.placeLabel.trim() || placeTouched
+                  ? `Atlas context: ${detectedPlace}`
+                  : 'Autofilled from your pin · Edit to rename'}
             </small>
           ) : null}
         </label>
@@ -294,6 +340,7 @@ export function MemoryDrawer({
           placeLabel={placeValue}
           placeName={entry.placeName}
           media={entry.media}
+          loading={mediaLoading}
           onChange={(media) => onUpdate({ ...entry, media })}
         />
 

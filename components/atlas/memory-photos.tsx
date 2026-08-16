@@ -29,6 +29,7 @@ type MemoryPhotosProps = {
   placeLabel: string;
   placeName: string | null;
   media: AtlasMedia[];
+  loading: boolean;
   onChange: (media: AtlasMedia[]) => void;
 };
 
@@ -55,6 +56,7 @@ export function MemoryPhotos({
   placeLabel,
   placeName,
   media,
+  loading,
   onChange,
 }: MemoryPhotosProps) {
   const inputRef = useRef<HTMLInputElement>(null);
@@ -141,22 +143,30 @@ export function MemoryPhotos({
             <PhotoIcon aria-hidden="true" /> Photographs
           </span>
           <p>
-            {media.length
-              ? `${media.length} of ${ATLAS_MEDIA_MAX_FILES} kept with this place`
-              : 'Add the image that brings this place back.'}
+            {loading
+              ? 'Opening the photographs kept with this place…'
+              : media.length
+                ? `${media.length} of ${ATLAS_MEDIA_MAX_FILES} kept with this place`
+                : 'Add the image that brings this place back.'}
           </p>
         </div>
         <label
           className={styles.photoUploadButton}
-          data-disabled={uploading || atLimit ? 'true' : 'false'}
+          data-disabled={loading || uploading || atLimit ? 'true' : 'false'}
         >
           <ArrowUpTrayIcon aria-hidden="true" />
-          {uploading ? `${progress}%` : atLimit ? 'Full' : 'Add photo'}
+          {loading
+            ? 'Opening…'
+            : uploading
+              ? `${progress}%`
+              : atLimit
+                ? 'Full'
+                : 'Add photo'}
           <input
             ref={inputRef}
             type="file"
             accept={ATLAS_MEDIA_ALLOWED_TYPES.join(',')}
-            disabled={uploading || atLimit}
+            disabled={loading || uploading || atLimit}
             onChange={(event) => {
               const file = event.target.files?.[0];
               if (file) void uploadPhoto(file);
@@ -178,13 +188,24 @@ export function MemoryPhotos({
         </div>
       ) : null}
 
-      {media.length ? (
+      {loading ? (
+        <div className={styles.photoLoading} role="status">
+          <span aria-hidden="true" />
+          Opening photographs…
+        </div>
+      ) : media.length ? (
         <div className={styles.photoGrid}>
           {media.map((photo) => (
             <figure className={styles.photoTile} key={photo.id}>
               <Image
                 src={photo.deliveryUrl}
-                alt={photo.altText}
+                alt={
+                  photo.altText.trim() ||
+                  title.trim() ||
+                  placeLabel.trim() ||
+                  placeName?.trim() ||
+                  'Atlas memory'
+                }
                 fill
                 sizes="(max-width: 768px) 40vw, 160px"
                 unoptimized

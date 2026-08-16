@@ -10,7 +10,10 @@ import maplibregl, {
 } from 'maplibre-gl';
 
 import type { AtlasEntry, AtlasView } from '@/app/lib/atlas/definitions';
-import { getAtlasPlaceContextLabel } from '@/app/lib/atlas/place';
+import {
+  formatAtlasDate,
+  getAtlasPlaceContextLabel,
+} from '@/app/lib/atlas/place';
 import {
   ATLAS_CLUSTER_LAYER,
   ATLAS_PIN_LAYER,
@@ -449,6 +452,11 @@ export default function AtlasMap({
       <div ref={containerRef} className={styles.mapCanvas} />
       <div className={styles.pointerLight} aria-hidden="true" />
       <div className={styles.mapGrain} aria-hidden="true" />
+      {placementMode ? (
+        <span className={styles.placementCenter} aria-hidden="true">
+          <i />
+        </span>
+      ) : null}
       {visibleTooltip && (visibleTooltip.kind === 'cluster' || tooltipEntry) ? (
         <div
           className={styles.mapTooltip}
@@ -468,13 +476,19 @@ export default function AtlasMap({
           ) : tooltipEntry ? (
             <>
               <span className={styles.mapTooltipKicker}>
-                {tooltipEntry.journeyState === 'visited'
-                  ? 'Remembered place'
-                  : 'Journey ahead'}
+                {tooltipEntry.recordState === 'draft'
+                  ? 'Unfinished draft'
+                  : tooltipEntry.journeyState === 'visited'
+                    ? 'Remembered place'
+                    : 'Journey ahead'}
               </span>
               <strong>{tooltipEntry.title || 'Untitled place'}</strong>
               <p>{getAtlasPlaceContextLabel(tooltipEntry)}</p>
-              <small>Open memory</small>
+              <small>
+                {tooltipEntry.recordState === 'draft'
+                  ? 'Open and finish memory'
+                  : `${formatAtlasDate(tooltipEntry)} · Open memory`}
+              </small>
             </>
           ) : null}
         </div>

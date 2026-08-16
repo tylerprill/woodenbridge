@@ -62,6 +62,51 @@
   pointer-events: none;
 }
 
+.placementCenter {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  z-index: 4;
+  display: grid;
+  width: 2.6rem;
+  height: 2.6rem;
+  place-items: center;
+  border: 1px solid rgba(251, 250, 245, 0.78);
+  border-radius: 50%;
+  background: rgba(16, 35, 29, 0.12);
+  box-shadow: 0 0.7rem 1.8rem rgba(16, 35, 29, 0.2);
+  transform: translate(-50%, -50%);
+  pointer-events: none;
+  backdrop-filter: blur(8px);
+}
+
+.placementCenter::before,
+.placementCenter::after {
+  position: absolute;
+  background: rgba(16, 35, 29, 0.52);
+  content: '';
+}
+
+.placementCenter::before {
+  width: 3.4rem;
+  height: 1px;
+}
+
+.placementCenter::after {
+  width: 1px;
+  height: 3.4rem;
+}
+
+.placementCenter i {
+  z-index: 1;
+  width: 0.48rem;
+  height: 0.48rem;
+  border: 2px solid var(--paper-light);
+  border-radius: 50%;
+  background: var(--timber);
+  box-shadow: 0 0 0 0.24rem rgba(182, 109, 66, 0.2);
+}
+
 .mapTooltip {
   position: absolute;
   z-index: 10;
@@ -260,7 +305,15 @@
   transition:
     border-color 160ms ease,
     box-shadow 160ms ease,
-    background 160ms ease;
+    background 160ms ease,
+    opacity 160ms ease,
+    transform 160ms ease;
+}
+
+.workspace[data-placement='true'] .searchWrap {
+  opacity: 0;
+  transform: translateY(-0.35rem);
+  pointer-events: none;
 }
 
 .searchWrap:focus-within {
@@ -522,13 +575,18 @@
   background: var(--moss-300);
 }
 
+.filterDock button:nth-child(4) > span {
+  border-color: rgba(16, 35, 29, 0.28);
+  background: var(--timber-light);
+}
+
 .placementPrompt {
   position: absolute;
   top: 1.25rem;
   right: 1.25rem;
   z-index: 9;
   display: flex;
-  width: min(24rem, calc(100% - 2.5rem));
+  width: min(30rem, calc(100% - 2.5rem));
   align-items: center;
   padding: 0.9rem 1rem;
   border: 1px solid rgba(231, 176, 129, 0.35);
@@ -538,6 +596,35 @@
   color: var(--paper-light);
   gap: 0.85rem;
   backdrop-filter: blur(20px);
+}
+
+.placementPrompt > div {
+  min-width: 0;
+  flex: 1 1 auto;
+}
+
+.placementPrompt > button {
+  min-height: 2.35rem;
+  flex: 0 0 auto;
+  padding-inline: 0.8rem;
+  border: 1px solid rgba(245, 242, 233, 0.2);
+  border-radius: 999px;
+  background: rgba(245, 242, 233, 0.1);
+  color: var(--paper-light);
+  font-size: 0.61rem;
+  font-weight: 800;
+  white-space: nowrap;
+}
+
+.placementPrompt > button:hover,
+.placementPrompt > button:focus-visible {
+  border-color: rgba(245, 242, 233, 0.45);
+  background: rgba(245, 242, 233, 0.18);
+}
+
+.placementPrompt > button:disabled {
+  cursor: wait;
+  opacity: 0.54;
 }
 
 .placementPrompt strong {
@@ -730,6 +817,25 @@
 
 .saveStatus svg {
   width: 0.7rem;
+}
+
+.drawerKeepsakeLink {
+  display: inline-flex;
+  align-items: center;
+  margin-top: 0.2rem;
+  color: var(--timber);
+  font-size: 0.62rem;
+  font-weight: 800;
+  gap: 0.32rem;
+}
+
+.drawerKeepsakeLink:hover,
+.drawerKeepsakeLink:focus-visible {
+  color: #8b5334;
+}
+
+.drawerKeepsakeLink svg {
+  width: 0.72rem;
 }
 
 .drawerBody {
@@ -1000,6 +1106,30 @@
   gap: 0.55rem;
 }
 
+.photoLoading {
+  display: flex;
+  min-height: 5.5rem;
+  align-items: center;
+  justify-content: center;
+  margin-top: 0.8rem;
+  border: 1px dashed rgba(16, 35, 29, 0.14);
+  border-radius: 0.82rem;
+  background: rgba(255, 255, 255, 0.3);
+  color: var(--forest-600);
+  font-size: 0.62rem;
+  font-weight: 700;
+  gap: 0.5rem;
+}
+
+.photoLoading > span {
+  width: 0.85rem;
+  height: 0.85rem;
+  border: 1px solid rgba(76, 106, 91, 0.22);
+  border-top-color: var(--timber);
+  border-radius: 50%;
+  animation: spin 800ms linear infinite;
+}
+
 .photoTile {
   position: relative;
   overflow: hidden;
@@ -1236,6 +1366,10 @@
   font-weight: 700;
   letter-spacing: 0.07em;
   text-transform: uppercase;
+}
+
+.memoryRowCopy em[data-draft='true'] {
+  color: #8b5334;
 }
 
 .memoryRow > svg {
@@ -1627,14 +1761,19 @@
     left: 0.75rem;
     justify-content: center;
     overflow-x: auto;
+    scrollbar-width: none;
     transform: none;
+  }
+
+  .filterDock::-webkit-scrollbar {
+    display: none;
   }
 
   .filterDock button {
     flex: 1 0 auto;
     min-height: 2.75rem;
     justify-content: center;
-    padding-inline: 0.7rem;
+    padding-inline: 0.5rem;
     font-size: 0.68rem;
   }
 
@@ -1662,6 +1801,13 @@
     bottom: 8.3rem;
     left: 0.75rem;
     width: auto;
+    align-items: flex-start;
+    flex-wrap: wrap;
+  }
+
+  .placementPrompt > button {
+    width: calc(100% - 2.6rem);
+    margin-left: 2.6rem;
   }
 
   .memoryDrawer {
@@ -1736,6 +1882,11 @@
     display: none;
   }
 
+  .filterDock button {
+    padding-inline: 0.4rem;
+    font-size: 0.62rem;
+  }
+
   .drawerFooter {
     align-items: stretch;
     flex-direction: column-reverse;
@@ -1752,6 +1903,12 @@
   }
 }
 
+@media (max-width: 360px) {
+  .filterDock button > span {
+    display: none;
+  }
+}
+
 @media (hover: none) {
   .mapTooltip {
     display: none;
@@ -1759,6 +1916,7 @@
 }
 
 @media (prefers-reduced-motion: reduce) {
+  .photoLoading > span,
   .pinPulse::after,
   .mapFallbackGlobe,
   .mapTooltip {

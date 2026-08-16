@@ -54,7 +54,11 @@ export function MemoryTray({ entries, onClose, onSelect }: MemoryTrayProps) {
                   <MapPinIcon aria-hidden="true" />
                   {getAtlasPlaceContextLabel(entry)}
                 </small>
-                <em>{formatAtlasDate(entry)}</em>
+                <em data-draft={entry.recordState === 'draft' ? 'true' : null}>
+                  {entry.recordState === 'draft'
+                    ? 'Draft · Finish this memory'
+                    : formatAtlasDate(entry)}
+                </em>
               </span>
               <ArrowUpRightIcon aria-hidden="true" />
             </button>

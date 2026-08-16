@@ -1,22 +1,34 @@
-import { BookmarkIcon, MapPinIcon } from '@heroicons/react/24/outline';
+import { BookmarkIcon } from '@heroicons/react/24/outline';
 import Link from 'next/link';
 
-import { getAtlasData } from '@/app/lib/atlas/data';
 import {
-  formatAtlasDate,
-  getAtlasPlaceContextLabel,
-} from '@/app/lib/atlas/place';
-import { MemoryArtwork } from '@/components/atlas/memory-artwork';
+  type AtlasCollectionFilter,
+  getAtlasCollectionData,
+} from '@/app/lib/atlas/data';
+import { KeepsakeCard } from '@/components/atlas/keepsake-card';
 
-const tones = ['cedar', 'alpine', 'ember'] as const;
+function collectionHref(filter: AtlasCollectionFilter, page = 1) {
+  const params = new URLSearchParams();
+  if (filter !== 'all') params.set('view', filter);
+  if (page > 1) params.set('page', String(page));
+  const query = params.toString();
+  return query ? `/dashboard/users?${query}` : '/dashboard/users';
+}
 
-export default async function CollectionPage() {
-  const { entries } = await getAtlasData();
-  const places = entries.filter((entry) => entry.recordState === 'saved');
-  const visited = places.filter(
-    (entry) => entry.journeyState === 'visited',
-  ).length;
-  const future = places.length - visited;
+export default async function CollectionPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ view?: string; page?: string }>;
+}) {
+  const query = await searchParams;
+  const filter: AtlasCollectionFilter =
+    query.view === 'visited' || query.view === 'ahead' ? query.view : 'all';
+  const requestedPage = Number.parseInt(query.page ?? '1', 10);
+  const data = await getAtlasCollectionData({
+    filter,
+    page: Number.isFinite(requestedPage) ? requestedPage : 1,
+  });
+  const places = data.entries;
 
   return (
     <div className="dashboard-page collection-page">
@@ -29,52 +41,62 @@ export default async function CollectionPage() {
         <div className="collection-count">
           <BookmarkIcon aria-hidden="true" />
           <span>
-            <strong>{String(places.length).padStart(2, '0')}</strong>
+            <strong>{String(data.counts.total).padStart(2, '0')}</strong>
             saved places
           </span>
         </div>
       </header>
 
-      <div className="collection-filter" aria-label="Collection summary">
-        <span>All places</span>
-        <span>{String(visited).padStart(2, '0')} remembered</span>
-        <span>{String(future).padStart(2, '0')} ahead</span>
-      </div>
+      <nav className="collection-filter" aria-label="Filter saved places">
+        <Link
+          href={collectionHref('all')}
+          data-active={filter === 'all' ? 'true' : 'false'}
+          aria-current={filter === 'all' ? 'page' : undefined}
+        >
+          All places
+        </Link>
+        <Link
+          href={collectionHref('visited')}
+          data-active={filter === 'visited' ? 'true' : 'false'}
+          aria-current={filter === 'visited' ? 'page' : undefined}
+        >
+          {String(data.counts.visited).padStart(2, '0')} remembered
+        </Link>
+        <Link
+          href={collectionHref('ahead')}
+          data-active={filter === 'ahead' ? 'true' : 'false'}
+          aria-current={filter === 'ahead' ? 'page' : undefined}
+        >
+          {String(data.counts.future).padStart(2, '0')} ahead
+        </Link>
+      </nav>
 
       {places.length ? (
         <section className="collection-grid" aria-label="Saved places">
           {places.map((entry, index) => (
-            <Link
-              className="collection-card"
+            <KeepsakeCard
               key={entry.id}
-              href={`/dashboard?memory=${entry.id}`}
-            >
-              <MemoryArtwork
-                entry={entry}
-                index={String(index + 1).padStart(2, '0')}
-                tone={tones[index % tones.length]}
-              />
-              <div className="collection-card-copy">
-                <p className="bridge-location">
-                  <MapPinIcon aria-hidden="true" />
-                  {getAtlasPlaceContextLabel(entry)}
-                </p>
-                <h2>{entry.title}</h2>
-                <p>
-                  {entry.description || 'A place held quietly in your atlas.'}
-                </p>
-                <div className="collection-card-note">
-                  <span>
-                    {entry.journeyState === 'visited' ? 'Visited' : 'Planned'}
-                  </span>
-                  <p>{formatAtlasDate(entry)}</p>
-                </div>
-                <span className="dashboard-status">
-                  {entry.journeyState === 'visited' ? 'Remembered' : 'Ahead'}
-                </span>
-              </div>
-            </Link>
+              entry={entry}
+              index={String(data.offset + index + 1).padStart(2, '0')}
+              variant="grid"
+              href={`/dashboard/card/${entry.id}`}
+            />
           ))}
+        </section>
+      ) : data.counts.total ? (
+        <section
+          className="collection-empty collection-filter-empty"
+          aria-labelledby="empty-filter-title"
+        >
+          <span aria-hidden="true" />
+          <p className="section-kicker">Nothing in this chapter yet</p>
+          <h2 id="empty-filter-title">
+            {filter === 'ahead'
+              ? 'No journeys are waiting in the wings.'
+              : 'No remembered places match this view.'}
+          </h2>
+          <p>Your other keepsakes are still right where you left them.</p>
+          <Link href="/dashboard/users">View all places</Link>
         </section>
       ) : (
         <section
@@ -90,6 +112,24 @@ export default async function CollectionPage() {
           <Link href="/dashboard">Open your atlas</Link>
         </section>
       )}
+
+      {places.length && data.totalPages > 1 ? (
+        <nav className="collection-pagination" aria-label="Collection pages">
+          {data.page > 1 ? (
+            <Link href={collectionHref(filter, data.page - 1)}>Previous</Link>
+          ) : (
+            <span aria-hidden="true" />
+          )}
+          <p>
+            Page {data.page} of {data.totalPages}
+          </p>
+          {data.page < data.totalPages ? (
+            <Link href={collectionHref(filter, data.page + 1)}>Next</Link>
+          ) : (
+            <span aria-hidden="true" />
+          )}
+        </nav>
+      ) : null}
     </div>
   );
 }

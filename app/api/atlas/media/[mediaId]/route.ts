@@ -5,6 +5,7 @@ import { getVerifiedSession } from '@/app/lib/auth/session';
 import { getAtlasBlobToken } from '@/app/lib/atlas/media-storage';
 
 export const runtime = 'nodejs';
+const PRIVATE_MEDIA_CACHE = 'private, max-age=300, stale-while-revalidate=3600';
 
 type MediaPathRow = {
   storage_path: string;
@@ -46,7 +47,7 @@ export async function GET(
         status: 304,
         headers: {
           ETag: blob.blob.etag,
-          'Cache-Control': 'private, no-cache',
+          'Cache-Control': PRIVATE_MEDIA_CACHE,
         },
       });
     }
@@ -56,7 +57,7 @@ export async function GET(
         'Content-Type': row.mime_type,
         'Content-Length': String(blob.blob.size),
         'Content-Disposition': 'inline',
-        'Cache-Control': 'private, no-cache',
+        'Cache-Control': PRIVATE_MEDIA_CACHE,
         ETag: blob.blob.etag,
         'X-Content-Type-Options': 'nosniff',
       },

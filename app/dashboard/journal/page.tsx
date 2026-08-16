@@ -3,28 +3,19 @@ import {
   BookmarkIcon,
   CheckCircleIcon,
   GlobeAltIcon,
-  MapPinIcon,
 } from '@heroicons/react/24/outline';
 import Link from 'next/link';
 
-import { getAtlasData } from '@/app/lib/atlas/data';
-import { getAtlasPlaceContextLabel } from '@/app/lib/atlas/place';
-import { MemoryArtwork } from '@/components/atlas/memory-artwork';
-
-const tones = ['cedar', 'alpine', 'ember'] as const;
+import { getAtlasJournalData } from '@/app/lib/atlas/data';
+import { KeepsakeCard } from '@/components/atlas/keepsake-card';
 
 export default async function JournalPage() {
-  const { entries } = await getAtlasData();
-  const saved = entries.filter((entry) => entry.recordState === 'saved');
-  const visited = saved.filter((entry) => entry.journeyState === 'visited');
-  const future = saved.filter(
-    (entry) => entry.journeyState === 'want_to_visit',
-  );
+  const { entries: saved, counts } = await getAtlasJournalData();
 
   const stats = [
-    { label: 'Memories kept', value: saved.length, icon: BookmarkIcon },
-    { label: 'Places explored', value: visited.length, icon: GlobeAltIcon },
-    { label: 'Journeys ahead', value: future.length, icon: CheckCircleIcon },
+    { label: 'Memories kept', value: counts.total, icon: BookmarkIcon },
+    { label: 'Places explored', value: counts.visited, icon: GlobeAltIcon },
+    { label: 'Journeys ahead', value: counts.future, icon: CheckCircleIcon },
   ];
 
   return (
@@ -72,27 +63,13 @@ export default async function JournalPage() {
         {saved.length ? (
           <div className="dashboard-bridge-list">
             {saved.slice(0, 6).map((entry, index) => (
-              <Link
-                className="dashboard-bridge-row journal-memory-row"
+              <KeepsakeCard
                 key={entry.id}
-                href={`/dashboard?memory=${entry.id}`}
-              >
-                <MemoryArtwork
-                  entry={entry}
-                  tone={tones[index % tones.length]}
-                />
-                <div>
-                  <span>{String(index + 1).padStart(2, '0')}</span>
-                  <h3>{entry.title}</h3>
-                  <p>
-                    <MapPinIcon aria-hidden="true" />
-                    {getAtlasPlaceContextLabel(entry)}
-                  </p>
-                </div>
-                <span className="dashboard-status">
-                  {entry.journeyState === 'visited' ? 'Remembered' : 'Ahead'}
-                </span>
-              </Link>
+                entry={entry}
+                index={String(index + 1).padStart(2, '0')}
+                variant="row"
+                href={`/dashboard/card/${entry.id}`}
+              />
             ))}
           </div>
         ) : (

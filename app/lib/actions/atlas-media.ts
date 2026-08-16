@@ -25,6 +25,43 @@ function failed(message = 'The photo could not be saved. Please try again.') {
   return { ok: false, error: 'failed', message } as const;
 }
 
+export async function getAtlasEntryMediaAction(
+  entryId: string,
+): Promise<AtlasActionResult<AtlasMedia[]>> {
+  const session = await requireVerifiedSession();
+  const parsed = atlasEntryIdSchema.safeParse(entryId);
+  if (!parsed.success) {
+    return { ok: false, error: 'invalid', message: 'Invalid memory.' };
+  }
+
+  try {
+    const media = await sql<AtlasMediaRow>`
+      SELECT
+        media.id,
+        media.entry_id,
+        media.mime_type,
+        media.width,
+        media.height,
+        media.byte_size,
+        media.alt_text,
+        media.sort_order,
+        media.created_at
+      FROM atlas_media AS media
+      INNER JOIN atlas_entries AS entry ON entry.id = media.entry_id
+      WHERE media.entry_id = ${parsed.data}
+        AND media.user_id = ${session.user.id}
+        AND entry.user_id = ${session.user.id}
+        AND entry.deleted_at IS NULL
+      ORDER BY media.sort_order, media.created_at
+    `;
+
+    return { ok: true, data: media.rows.map((row) => toAtlasMedia(row)) };
+  } catch (error) {
+    console.error('Atlas media lookup failed:', error);
+    return failed('The photographs could not be opened. Please try again.');
+  }
+}
+
 export async function registerAtlasMediaAction(
   input: AtlasMediaRegistrationInput,
 ): Promise<AtlasActionResult<AtlasMedia>> {
@@ -153,6 +190,7 @@ export async function registerAtlasMediaAction(
       revalidatePath('/dashboard');
       revalidatePath('/dashboard/users');
       revalidatePath('/dashboard/journal');
+      revalidatePath(`/dashboard/card/${mediaInput.entryId}`);
       return { ok: true, data: toAtlasMedia(inserted.rows[0]) };
     } catch (error) {
       await client.query('ROLLBACK').catch(() => undefined);
@@ -213,6 +251,7 @@ export async function deleteAtlasMediaAction(
     revalidatePath('/dashboard');
     revalidatePath('/dashboard/users');
     revalidatePath('/dashboard/journal');
+    revalidatePath(`/dashboard/card/${row.entry_id}`);
     return { ok: true, data: { id: row.id, entryId: row.entry_id } };
   } catch (error) {
     console.error('Atlas media deletion failed:', error);

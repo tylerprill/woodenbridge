@@ -178,6 +178,7 @@ export async function updateAtlasEntryAction(
     revalidatePath('/dashboard');
     revalidatePath('/dashboard/users');
     revalidatePath('/dashboard/journal');
+    revalidatePath(`/dashboard/card/${entry.id}`);
     return { ok: true, data: toAtlasEntry(result.rows[0]) };
   } catch (error) {
     console.error('Atlas entry update failed:', error);
@@ -299,6 +300,7 @@ export async function resolveAtlasPlaceAction(
   revalidatePath('/dashboard');
   revalidatePath('/dashboard/users');
   revalidatePath('/dashboard/journal');
+  revalidatePath(`/dashboard/card/${parsed.data}`);
   return { ok: true, data: { entryId: updated.rows[0].id, place } };
 }
 
@@ -375,6 +377,7 @@ export async function archiveAtlasEntryAction(
     revalidatePath('/dashboard');
     revalidatePath('/dashboard/users');
     revalidatePath('/dashboard/journal');
+    revalidatePath(`/dashboard/card/${parsed.data}`);
     return { ok: true, data: result.rows[0] };
   } catch (error) {
     await client.query('ROLLBACK').catch(() => undefined);
