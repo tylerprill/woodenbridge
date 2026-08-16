@@ -46,6 +46,7 @@ export function AtlasWorkspace({
   const [placementBusy, setPlacementBusy] = useState(false);
   const [filter, setFilter] = useState<AtlasFilter>('all');
   const [query, setQuery] = useState('');
+  const [activeSearchIndex, setActiveSearchIndex] = useState(-1);
   const [trayOpen, setTrayOpen] = useState(false);
   const [fitRequest, setFitRequest] = useState(0);
   const [focusRequest, setFocusRequest] = useState({
@@ -69,6 +70,7 @@ export function AtlasWorkspace({
       return matchesFilter && matchesSearch;
     });
   }, [entries, filter, query]);
+  const searchResults = visibleEntries.slice(0, 5);
 
   const selectedEntry =
     entries.find((entry) => entry.id === selectedId) ?? null;
@@ -177,6 +179,7 @@ export function AtlasWorkspace({
         if (document.activeElement === searchInputRef.current) {
           searchInputRef.current?.blur();
           setQuery('');
+          setActiveSearchIndex(-1);
         } else if (selectedId) setSelectedId(null);
         else if (trayOpen) setTrayOpen(false);
         else setPlacementMode(false);
@@ -219,6 +222,7 @@ export function AtlasWorkspace({
 
         <div
           className={styles.searchWrap}
+          data-expanded={query ? 'true' : 'false'}
           onClick={() => searchInputRef.current?.focus()}
         >
           <MagnifyingGlassIcon aria-hidden="true" />
@@ -229,15 +233,59 @@ export function AtlasWorkspace({
             ref={searchInputRef}
             id="atlas-search"
             type="search"
+            role="combobox"
             value={query}
             placeholder="Search your memories"
             autoComplete="off"
-            onChange={(event) => setQuery(event.target.value)}
+            enterKeyHint="search"
+            spellCheck={false}
+            aria-autocomplete="list"
+            aria-haspopup="listbox"
+            aria-controls="atlas-search-results"
+            aria-expanded={Boolean(query)}
+            aria-activedescendant={
+              activeSearchIndex >= 0 && activeSearchIndex < searchResults.length
+                ? `atlas-search-option-${searchResults[activeSearchIndex].id}`
+                : undefined
+            }
+            onChange={(event) => {
+              setQuery(event.target.value);
+              setActiveSearchIndex(-1);
+            }}
+            onKeyDown={(event) => {
+              if (!query || !searchResults.length) return;
+
+              if (event.key === 'ArrowDown') {
+                event.preventDefault();
+                setActiveSearchIndex((current) =>
+                  current >= searchResults.length - 1 ? 0 : current + 1,
+                );
+              } else if (event.key === 'ArrowUp') {
+                event.preventDefault();
+                setActiveSearchIndex((current) =>
+                  current <= 0 ? searchResults.length - 1 : current - 1,
+                );
+              } else if (
+                event.key === 'Enter' &&
+                activeSearchIndex >= 0 &&
+                activeSearchIndex < searchResults.length
+              ) {
+                event.preventDefault();
+                selectEntry(searchResults[activeSearchIndex].id);
+                setQuery('');
+                setActiveSearchIndex(-1);
+              }
+            }}
           />
           {query ? (
             <button
               type="button"
-              onClick={() => setQuery('')}
+              onClick={(event) => {
+                event.stopPropagation();
+                setQuery('');
+                setActiveSearchIndex(-1);
+                searchInputRef.current?.focus();
+              }}
               aria-label="Clear search"
             >
               <XMarkIcon aria-hidden="true" />
@@ -247,37 +295,51 @@ export function AtlasWorkspace({
           )}
           {query ? (
             <div className={styles.searchResults}>
-              <p>
+              <p role="status">
                 {visibleEntries.length
                   ? `${visibleEntries.length} ${visibleEntries.length === 1 ? 'place' : 'places'} found`
-                  : 'No memories found'}
+                  : 'No matching places'}
               </p>
-              {visibleEntries.slice(0, 5).map((entry) => (
-                <button
-                  type="button"
-                  key={entry.id}
-                  onClick={() => {
-                    selectEntry(entry.id);
-                    setQuery('');
-                  }}
-                >
-                  <MapPinIcon aria-hidden="true" />
-                  <span>
-                    <strong>{entry.title || 'Untitled place'}</strong>
-                    <small>{entry.placeLabel || 'Pinned place'}</small>
-                  </span>
-                </button>
-              ))}
+              <div
+                id="atlas-search-results"
+                className={styles.searchOptions}
+                role="listbox"
+                aria-label="Matching atlas places"
+              >
+                {searchResults.map((entry, index) => (
+                  <button
+                    type="button"
+                    key={entry.id}
+                    id={`atlas-search-option-${entry.id}`}
+                    role="option"
+                    aria-selected={activeSearchIndex === index}
+                    data-active={activeSearchIndex === index ? 'true' : 'false'}
+                    onMouseEnter={() => setActiveSearchIndex(index)}
+                    onClick={() => {
+                      selectEntry(entry.id);
+                      setQuery('');
+                      setActiveSearchIndex(-1);
+                    }}
+                  >
+                    <MapPinIcon aria-hidden="true" />
+                    <span>
+                      <strong>{entry.title || 'Untitled place'}</strong>
+                      <small>{entry.placeLabel || 'Pinned place'}</small>
+                    </span>
+                  </button>
+                ))}
+              </div>
             </div>
           ) : null}
         </div>
       </header>
 
-      <div className={styles.toolDock} aria-label="Atlas tools">
+      <div className={styles.toolDock} role="toolbar" aria-label="Atlas tools">
         <button
           type="button"
           className={styles.addButton}
           data-active={placementMode ? 'true' : 'false'}
+          aria-pressed={placementMode}
           onClick={() => {
             setPlacementMode((current) => !current);
             setSelectedId(null);
@@ -299,6 +361,7 @@ export function AtlasWorkspace({
             setSelectedId(null);
           }}
           aria-label="Open memory list"
+          aria-expanded={trayOpen}
         >
           <Bars3BottomLeftIcon aria-hidden="true" />
           <span>Memories</span>
@@ -313,7 +376,11 @@ export function AtlasWorkspace({
         </button>
       </div>
 
-      <div className={styles.filterDock} aria-label="Filter memories">
+      <div
+        className={styles.filterDock}
+        role="group"
+        aria-label="Filter memories"
+      >
         {(
           [
             ['all', 'All places'],
@@ -325,7 +392,11 @@ export function AtlasWorkspace({
             type="button"
             key={value}
             data-active={filter === value ? 'true' : 'false'}
-            onClick={() => setFilter(value)}
+            aria-pressed={filter === value}
+            onClick={() => {
+              setFilter(value);
+              setActiveSearchIndex(-1);
+            }}
           >
             <span aria-hidden="true" />
             {label}

@@ -29,6 +29,7 @@ export function entriesToGeoJson(
       properties: {
         id: entry.id,
         title: entry.title || 'Untitled place',
+        placeLabel: entry.placeLabel || 'Pinned place',
         recordState: entry.recordState,
         journeyState: entry.journeyState,
       },
@@ -72,11 +73,28 @@ export function addAtlasLayers(map: Map, entries: AtlasEntry[]) {
     source: ATLAS_SOURCE_ID,
     filter: ['has', 'point_count'],
     paint: {
-      'circle-radius': ['step', ['get', 'point_count'], 18, 10, 23, 40, 28],
-      'circle-color': '#10231d',
-      'circle-stroke-width': 2,
+      'circle-radius': [
+        '+',
+        ['step', ['get', 'point_count'], 18, 10, 23, 40, 28],
+        ['case', ['boolean', ['feature-state', 'hover'], false], 2, 0],
+      ],
+      'circle-color': [
+        'case',
+        ['boolean', ['feature-state', 'hover'], false],
+        '#244238',
+        '#10231d',
+      ],
+      'circle-stroke-width': [
+        'case',
+        ['boolean', ['feature-state', 'hover'], false],
+        3,
+        2,
+      ],
       'circle-stroke-color': 'rgba(251, 250, 245, 0.92)',
       'circle-opacity': 0.96,
+      'circle-radius-transition': { duration: 180, delay: 0 },
+      'circle-color-transition': { duration: 180, delay: 0 },
+      'circle-stroke-width-transition': { duration: 180, delay: 0 },
     },
   };
 
@@ -105,9 +123,9 @@ export function addAtlasLayers(map: Map, entries: AtlasEntry[]) {
       'circle-radius': [
         'case',
         ['boolean', ['feature-state', 'selected'], false],
-        22,
+        23,
         ['boolean', ['feature-state', 'hover'], false],
-        18,
+        19,
         13,
       ],
       'circle-color': [
@@ -125,6 +143,17 @@ export function addAtlasLayers(map: Map, entries: AtlasEntry[]) {
         0.1,
       ],
       'circle-blur': 0.35,
+      'circle-stroke-width': [
+        'case',
+        ['boolean', ['feature-state', 'selected'], false],
+        1.5,
+        ['boolean', ['feature-state', 'hover'], false],
+        1,
+        0,
+      ],
+      'circle-stroke-color': 'rgba(251, 250, 245, 0.88)',
+      'circle-radius-transition': { duration: 180, delay: 0 },
+      'circle-opacity-transition': { duration: 180, delay: 0 },
     },
   };
 
@@ -137,9 +166,9 @@ export function addAtlasLayers(map: Map, entries: AtlasEntry[]) {
       'circle-radius': [
         'case',
         ['boolean', ['feature-state', 'selected'], false],
-        9,
+        9.5,
         ['boolean', ['feature-state', 'hover'], false],
-        8,
+        8.5,
         6.5,
       ],
       'circle-color': [
@@ -158,6 +187,8 @@ export function addAtlasLayers(map: Map, entries: AtlasEntry[]) {
       ],
       'circle-stroke-color': '#fbfaf5',
       'circle-opacity': 1,
+      'circle-radius-transition': { duration: 160, delay: 0 },
+      'circle-stroke-width-transition': { duration: 160, delay: 0 },
     },
   };
 

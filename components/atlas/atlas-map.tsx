@@ -24,6 +24,22 @@ type FocusRequest = {
   nonce: number;
 };
 
+type AtlasTooltip =
+  | {
+      kind: 'entry';
+      entryId: string;
+      x: number;
+      y: number;
+      position: 'above' | 'below';
+    }
+  | {
+      kind: 'cluster';
+      count: number;
+      x: number;
+      y: number;
+      position: 'above' | 'below';
+    };
+
 type AtlasMapProps = {
   entries: AtlasEntry[];
   initialView: AtlasView;
@@ -89,9 +105,11 @@ export default function AtlasMap({
   const onPlaceRef = useRef(onPlace);
   const onViewChangeRef = useRef(onViewChange);
   const selectedRef = useRef<string | null>(null);
+  const hoveredFeatureRef = useRef<string | number | null>(null);
   const pointerFrameRef = useRef<number | null>(null);
   const [mapLoaded, setMapLoaded] = useState(false);
   const [mapError, setMapError] = useState(false);
+  const [tooltip, setTooltip] = useState<AtlasTooltip | null>(null);
 
   useEffect(() => {
     entriesRef.current = entries;
@@ -185,7 +203,10 @@ export default function AtlasMap({
     const handlePinClick = (event: MapLayerMouseEvent) => {
       if (placementRef.current) return;
       const id = event.features?.[0]?.properties?.id;
-      if (typeof id === 'string') onSelectRef.current(id);
+      if (typeof id === 'string') {
+        setTooltip(null);
+        onSelectRef.current(id);
+      }
     };
 
     const handleClusterClick = async (event: MapLayerMouseEvent) => {
@@ -200,6 +221,7 @@ export default function AtlasMap({
         GeoJSONSource | undefined;
 
       if (!source || typeof clusterId !== 'number' || !coordinates) return;
+      setTooltip(null);
       const zoom = await source.getClusterExpansionZoom(clusterId);
       map.easeTo({
         center: [coordinates[0], coordinates[1]],
@@ -209,13 +231,75 @@ export default function AtlasMap({
       });
     };
 
-    const setHover = (event: MapLayerMouseEvent, hover: boolean) => {
-      if (placementRef.current) return;
-      const id = event.features?.[0]?.id;
-      map.getCanvas().style.cursor = hover ? 'pointer' : '';
-      if (id != null) {
-        map.setFeatureState({ source: ATLAS_SOURCE_ID, id }, { hover });
+    const setHoveredFeature = (id: string | number | null) => {
+      if (hoveredFeatureRef.current != null) {
+        map.setFeatureState(
+          { source: ATLAS_SOURCE_ID, id: hoveredFeatureRef.current },
+          { hover: false },
+        );
       }
+
+      hoveredFeatureRef.current = id;
+      if (id != null) {
+        map.setFeatureState({ source: ATLAS_SOURCE_ID, id }, { hover: true });
+      }
+    };
+
+    const tooltipPosition = (event: MapLayerMouseEvent) => {
+      const width = containerRef.current?.clientWidth ?? 0;
+      return {
+        x: Math.min(Math.max(event.point.x, 132), Math.max(width - 132, 132)),
+        y: event.point.y,
+        position: event.point.y < 145 ? ('below' as const) : ('above' as const),
+      };
+    };
+
+    const showPinTooltip = (event: MapLayerMouseEvent) => {
+      if (placementRef.current) return;
+      const feature = event.features?.[0];
+      const entryId = feature?.properties?.id;
+      if (typeof entryId !== 'string') return;
+
+      setTooltip({ kind: 'entry', entryId, ...tooltipPosition(event) });
+    };
+
+    const handlePinEnter = (event: MapLayerMouseEvent) => {
+      if (placementRef.current) return;
+      map.getCanvas().style.cursor = 'pointer';
+      setHoveredFeature(event.features?.[0]?.id ?? null);
+      showPinTooltip(event);
+    };
+
+    const handlePinLeave = () => {
+      setHoveredFeature(null);
+      setTooltip(null);
+      map.getCanvas().style.cursor = placementRef.current ? 'crosshair' : '';
+    };
+
+    const showClusterTooltip = (event: MapLayerMouseEvent) => {
+      if (placementRef.current) return;
+      const feature = event.features?.[0];
+      const count = Number(feature?.properties?.point_count);
+      if (!Number.isFinite(count)) return;
+
+      setTooltip({ kind: 'cluster', count, ...tooltipPosition(event) });
+    };
+
+    const handleClusterEnter = (event: MapLayerMouseEvent) => {
+      if (placementRef.current) return;
+      map.getCanvas().style.cursor = 'pointer';
+      setHoveredFeature(
+        event.features?.[0]?.id ??
+          event.features?.[0]?.properties?.cluster_id ??
+          null,
+      );
+      showClusterTooltip(event);
+    };
+
+    const handleClusterLeave = () => {
+      setHoveredFeature(null);
+      setTooltip(null);
+      map.getCanvas().style.cursor = placementRef.current ? 'crosshair' : '';
     };
 
     map.on('load', handleLoad);
@@ -224,14 +308,13 @@ export default function AtlasMap({
     map.on('click', handleMapClick);
     map.on('click', ATLAS_PIN_LAYER, handlePinClick);
     map.on('click', ATLAS_CLUSTER_LAYER, handleClusterClick);
-    map.on('mouseenter', ATLAS_PIN_LAYER, (event) => setHover(event, true));
-    map.on('mouseleave', ATLAS_PIN_LAYER, (event) => setHover(event, false));
-    map.on('mouseenter', ATLAS_CLUSTER_LAYER, () => {
-      if (!placementRef.current) map.getCanvas().style.cursor = 'pointer';
-    });
-    map.on('mouseleave', ATLAS_CLUSTER_LAYER, () => {
-      map.getCanvas().style.cursor = placementRef.current ? 'crosshair' : '';
-    });
+    map.on('mouseenter', ATLAS_PIN_LAYER, handlePinEnter);
+    map.on('mousemove', ATLAS_PIN_LAYER, showPinTooltip);
+    map.on('mouseleave', ATLAS_PIN_LAYER, handlePinLeave);
+    map.on('mouseenter', ATLAS_CLUSTER_LAYER, handleClusterEnter);
+    map.on('mousemove', ATLAS_CLUSTER_LAYER, showClusterTooltip);
+    map.on('mouseleave', ATLAS_CLUSTER_LAYER, handleClusterLeave);
+    map.on('movestart', () => setTooltip(null));
 
     return () => {
       if (pointerFrameRef.current)
@@ -271,6 +354,15 @@ export default function AtlasMap({
     const map = mapRef.current;
     if (!map) return;
     map.getCanvas().style.cursor = placementMode ? 'crosshair' : '';
+    if (placementMode) {
+      if (hoveredFeatureRef.current != null) {
+        map.setFeatureState(
+          { source: ATLAS_SOURCE_ID, id: hoveredFeatureRef.current },
+          { hover: false },
+        );
+        hoveredFeatureRef.current = null;
+      }
+    }
   }, [placementMode]);
 
   useEffect(() => {
@@ -311,6 +403,12 @@ export default function AtlasMap({
     });
   };
 
+  const visibleTooltip = placementMode ? null : tooltip;
+  const tooltipEntry =
+    visibleTooltip?.kind === 'entry'
+      ? entries.find((entry) => entry.id === visibleTooltip.entryId)
+      : null;
+
   return (
     <div
       className={styles.mapFrame}
@@ -326,6 +424,36 @@ export default function AtlasMap({
       <div ref={containerRef} className={styles.mapCanvas} />
       <div className={styles.pointerLight} aria-hidden="true" />
       <div className={styles.mapGrain} aria-hidden="true" />
+      {visibleTooltip && (visibleTooltip.kind === 'cluster' || tooltipEntry) ? (
+        <div
+          className={styles.mapTooltip}
+          data-position={visibleTooltip.position}
+          role="tooltip"
+          style={{ left: visibleTooltip.x, top: visibleTooltip.y }}
+        >
+          {visibleTooltip.kind === 'cluster' ? (
+            <>
+              <span className={styles.mapTooltipKicker}>Atlas cluster</span>
+              <strong>
+                {visibleTooltip.count}{' '}
+                {visibleTooltip.count === 1 ? 'place' : 'places'} nearby
+              </strong>
+              <p>Click to move closer.</p>
+            </>
+          ) : tooltipEntry ? (
+            <>
+              <span className={styles.mapTooltipKicker}>
+                {tooltipEntry.journeyState === 'visited'
+                  ? 'Remembered place'
+                  : 'Journey ahead'}
+              </span>
+              <strong>{tooltipEntry.title || 'Untitled place'}</strong>
+              <p>{tooltipEntry.placeLabel || 'Pinned place'}</p>
+              <small>Open memory</small>
+            </>
+          ) : null}
+        </div>
+      ) : null}
       {!mapLoaded && !mapError ? (
         <div className={styles.mapLoading} role="status">
           <span />

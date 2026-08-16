@@ -140,11 +140,17 @@ export function MemoryDrawer({
     <aside
       className={styles.memoryDrawer}
       role="dialog"
-      aria-labelledby="memory-drawer-title"
-      aria-describedby="memory-drawer-description"
+      aria-labelledby="memory-drawer-heading"
+      aria-describedby="memory-drawer-context"
     >
       <header className={styles.drawerHeader}>
         <div>
+          <h2 id="memory-drawer-heading" className="sr-only">
+            {entry.recordState === 'draft' ? 'Create memory' : 'Edit memory'}
+          </h2>
+          <p id="memory-drawer-context" className="sr-only">
+            Add the place, date, field note, and photos you want to remember.
+          </p>
           <p className={styles.eyebrow}>
             {entry.recordState === 'draft' ? 'New memory' : 'Atlas memory'}
           </p>
@@ -173,16 +179,22 @@ export function MemoryDrawer({
           <span>Title</span>
           <input
             ref={titleRef}
-            id="memory-drawer-title"
+            id="memory-title"
+            name="title"
             value={form.title}
             maxLength={ATLAS_TITLE_MAX_LENGTH}
             placeholder="What will you call this place?"
+            autoComplete="off"
+            autoCapitalize="words"
+            enterKeyHint="next"
+            aria-invalid={saveState === 'error' && !form.title.trim()}
+            aria-describedby={message ? 'memory-drawer-message' : undefined}
             onChange={(event) => setField('title', event.target.value)}
           />
         </label>
 
-        <div className={styles.fieldGroup}>
-          <span className={styles.fieldLabel}>Journey</span>
+        <fieldset className={styles.fieldGroup}>
+          <legend className={styles.fieldLabel}>Journey</legend>
           <div className={styles.segmentedControl}>
             {(
               [
@@ -194,32 +206,39 @@ export function MemoryDrawer({
                 type="button"
                 key={value}
                 data-active={form.journeyState === value ? 'true' : 'false'}
+                aria-pressed={form.journeyState === value}
                 onClick={() => setField('journeyState', value)}
               >
                 {label}
               </button>
             ))}
           </div>
-        </div>
+        </fieldset>
 
         <label className={styles.inputField}>
           <span className={styles.fieldLabel}>
             <MapPinIcon aria-hidden="true" /> Place
           </span>
           <input
+            name="place"
             value={form.placeLabel}
             maxLength={ATLAS_PLACE_MAX_LENGTH}
             placeholder="City, region, or landmark"
+            autoComplete="off"
+            autoCapitalize="words"
+            spellCheck={false}
             onChange={(event) => setField('placeLabel', event.target.value)}
           />
         </label>
 
         <label className={styles.inputField}>
           <span className={styles.fieldLabel}>
-            <CalendarDaysIcon aria-hidden="true" /> Date
+            <CalendarDaysIcon aria-hidden="true" />
+            {form.journeyState === 'visited' ? 'Date visited' : 'Planned date'}
           </span>
           <input
             type="date"
+            name="visitedOn"
             value={form.visitedOn ?? ''}
             onChange={(event) =>
               setField('visitedOn', event.target.value || null)
@@ -230,10 +249,13 @@ export function MemoryDrawer({
         <label className={styles.descriptionField}>
           <span className={styles.fieldLabel}>Field note</span>
           <textarea
-            id="memory-drawer-description"
+            id="memory-description"
+            name="description"
             value={form.description}
             maxLength={ATLAS_DESCRIPTION_MAX_LENGTH}
             placeholder="The small detail you do not want to forget…"
+            autoCapitalize="sentences"
+            spellCheck
             onChange={(event) => setField('description', event.target.value)}
           />
           <small>
@@ -250,7 +272,11 @@ export function MemoryDrawer({
         />
 
         {message ? (
-          <p className={styles.drawerMessage} role="alert">
+          <p
+            id="memory-drawer-message"
+            className={styles.drawerMessage}
+            role="alert"
+          >
             {message}
           </p>
         ) : null}
