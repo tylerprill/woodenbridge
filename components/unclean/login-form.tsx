@@ -28,8 +28,10 @@ function SubmitButton() {
 
 export default function LoginForm({
   resetComplete = false,
+  verificationComplete = false,
 }: {
   resetComplete?: boolean;
+  verificationComplete?: boolean;
 }) {
   const [errorMessage, dispatch] = useActionState(authenticate, undefined);
 
@@ -38,6 +40,12 @@ export default function LoginForm({
       {resetComplete ? (
         <p className="auth-notice" role="status">
           Your password has been changed. Sign in with your new password.
+        </p>
+      ) : null}
+
+      {verificationComplete ? (
+        <p className="auth-notice" role="status">
+          Your email is verified. Sign in to open your atlas.
         </p>
       ) : null}
 
@@ -82,6 +90,11 @@ export default function LoginForm({
       ) : null}
 
       <SubmitButton />
+
+      <p className="auth-inline-help">
+        Waiting for a verification code?{' '}
+        <Link href="/verify-email">Verify your email</Link>
+      </p>
     </form>
   );
 }

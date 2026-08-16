@@ -8,10 +8,12 @@ import NavLinks from '@/components/unclean/dashboard/nav-links';
 
 type SideNavProps = {
   userEmail?: string | null;
+  userName?: string | null;
 };
 
-export default function SideNav({ userEmail }: SideNavProps) {
-  const initial = userEmail?.charAt(0).toUpperCase() ?? 'E';
+export default function SideNav({ userEmail, userName }: SideNavProps) {
+  const displayName = userName?.trim() || 'Explorer';
+  const initial = displayName.charAt(0).toUpperCase();
 
   return (
     <aside className="dashboard-sidebar">
@@ -30,7 +32,7 @@ export default function SideNav({ userEmail }: SideNavProps) {
             {initial}
           </span>
           <span className="dashboard-account-copy">
-            <strong>Explorer</strong>
+            <strong>{displayName}</strong>
             <small>{userEmail ?? 'Your account'}</small>
           </span>
           <button

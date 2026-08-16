@@ -14,12 +14,25 @@ type AuthUserRow = {
   email: string;
   password: string;
   session_version: number;
+  email_verified_at: Date | null;
 };
+
+type SessionStateRow = Pick<
+  AuthUserRow,
+  'session_version' | 'email_verified_at'
+>;
 
 async function getUser(email: string): Promise<AuthUserRow | undefined> {
   try {
     const user = await sql<AuthUserRow>`
-      SELECT id, first_name, last_name, email, password, session_version
+      SELECT
+        id,
+        first_name,
+        last_name,
+        email,
+        password,
+        session_version,
+        email_verified_at
       FROM users
       WHERE LOWER(email) = ${email}
       LIMIT 1
@@ -30,19 +43,19 @@ async function getUser(email: string): Promise<AuthUserRow | undefined> {
   }
 }
 
-async function sessionVersionIsCurrent(userId: string, sessionVersion: number) {
+async function getSessionState(userId: string) {
   try {
-    const result = await sql<{ session_version: number }>`
-      SELECT session_version
+    const result = await sql<SessionStateRow>`
+      SELECT session_version, email_verified_at
       FROM users
       WHERE id = ${userId}
       LIMIT 1
     `;
 
-    return result.rows[0]?.session_version === sessionVersion;
+    return result.rows[0];
   } catch (error) {
     console.error('Session validation failed:', error);
-    return false;
+    return undefined;
   }
 }
 
@@ -59,15 +72,20 @@ export const { auth, signIn, signOut } = NextAuth({
         token.sessionVersion = user.sessionVersion;
       }
 
+      const sessionState = token.sub
+        ? await getSessionState(token.sub)
+        : undefined;
+      token.emailVerified = Boolean(sessionState?.email_verified_at);
       token.sessionValid =
-        Boolean(token.sub) &&
         typeof token.sessionVersion === 'number' &&
-        (await sessionVersionIsCurrent(token.sub!, token.sessionVersion));
+        sessionState?.session_version === token.sessionVersion &&
+        token.emailVerified;
 
       return token;
     },
     session({ session, token }) {
       session.user.id = token.sub ?? '';
+      session.emailVerified = token.emailVerified === true;
       session.sessionValid = token.sessionValid === true;
       return session;
     },
@@ -94,6 +112,7 @@ export const { auth, signIn, signOut } = NextAuth({
               email: user.email,
               name: `${user.first_name} ${user.last_name}`.trim(),
               sessionVersion: user.session_version,
+              emailVerified: Boolean(user.email_verified_at),
             };
           }
         }

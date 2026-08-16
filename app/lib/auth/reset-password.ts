@@ -1,6 +1,8 @@
-import { createHash, createHmac, randomBytes } from 'node:crypto';
+import { createHash, randomBytes } from 'node:crypto';
 
 import { db, sql } from '@vercel/postgres';
+
+import { hashRateLimitKey } from '@/app/lib/auth/security';
 
 const RESET_TOKEN_TTL_MINUTES = 30;
 const RESET_TOKEN_PATTERN = /^[A-Za-z0-9_-]{43}$/;
@@ -15,22 +17,8 @@ type ResetTokenUser = RecoveryUser & {
   user_id: string;
 };
 
-function getHashingSecret() {
-  const secret = process.env.AUTH_SECRET;
-
-  if (!secret) {
-    throw new Error('AUTH_SECRET is required for password recovery.');
-  }
-
-  return secret;
-}
-
 export function hashResetToken(token: string) {
   return createHash('sha256').update(token).digest('hex');
-}
-
-export function hashRateLimitKey(value: string) {
-  return createHmac('sha256', getHashingSecret()).update(value).digest('hex');
 }
 
 function isValidTokenShape(token: string) {

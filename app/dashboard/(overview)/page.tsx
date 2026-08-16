@@ -8,22 +8,9 @@ import {
 import Link from 'next/link';
 
 import { auth } from '@/auth';
+import { getAccountDisplayName } from '@/app/lib/auth/account-display';
 import { BridgeScene } from '@/components/clean/bridge-scene';
 import { savedBridges } from '@/components/dashboard/bridge-data';
-
-function getDisplayName(email?: string | null) {
-  const accountName = email?.split('@')[0];
-
-  if (!accountName) {
-    return 'Explorer';
-  }
-
-  return accountName
-    .split(/[._-]/)
-    .filter(Boolean)
-    .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
-    .join(' ');
-}
 
 const stats = [
   { label: 'Saved crossings', value: '03', icon: BookmarkIcon },
@@ -33,7 +20,7 @@ const stats = [
 
 export default async function DashboardPage() {
   const session = await auth();
-  const displayName = getDisplayName(session?.user?.email);
+  const displayName = getAccountDisplayName(session?.user);
 
   return (
     <div className="dashboard-page">

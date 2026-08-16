@@ -1,6 +1,5 @@
 'use server';
 
-import { headers } from 'next/headers';
 import { redirect } from 'next/navigation';
 import { after } from 'next/server';
 
@@ -16,30 +15,19 @@ import {
   createPasswordResetToken,
   deleteExpiredPasswordResetData,
   findRecoveryUser,
-  hashRateLimitKey,
   hashResetToken,
   invalidatePasswordResetToken,
   recordPasswordResetAttempt,
   recordPasswordResetRequest,
 } from '@/app/lib/auth/reset-password';
 import { newPasswordSchema, normalizeEmail } from '@/app/lib/auth/password';
+import { getClientIpHash, hashRateLimitKey } from '@/app/lib/auth/security';
 
 const GENERIC_RECOVERY_MESSAGE =
   'If an account exists for that address, a password reset link is on its way. It will expire in 30 minutes.';
 
 export type PasswordResetState =
   { status: 'error' | 'success'; message: string } | undefined;
-
-async function getClientIpHash() {
-  const requestHeaders = await headers();
-  const forwardedFor = requestHeaders.get('x-forwarded-for');
-  const clientIp =
-    forwardedFor?.split(',')[0]?.trim() ||
-    requestHeaders.get('x-real-ip') ||
-    'unknown';
-
-  return hashRateLimitKey(`ip:${clientIp}`);
-}
 
 export async function requestPasswordReset(
   previousState: PasswordResetState,

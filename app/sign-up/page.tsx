@@ -13,7 +13,7 @@ export default function SignUpPage() {
   return (
     <AuthShell
       headingId="sign-up-title"
-      panelDescription="A few details and your personal field atlas is ready to begin."
+      panelDescription="Create your account, then confirm the short code we send to your email."
       panelEyebrow="Begin your atlas"
       panelTitle="Create your account"
       storyDescription="Save remarkable bridges, remember where you have wandered, and keep the next journey close."

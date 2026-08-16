@@ -1,4 +1,9 @@
+import { ArrowRightIcon } from '@heroicons/react/24/outline';
 import { BrandLockup } from '@/components/clean/brand-lockup';
+import {
+  getAccountDisplayName,
+  getAccountInitial,
+} from '@/app/lib/auth/account-display';
 import Link from 'next/link';
 
 const navigation = [
@@ -7,7 +12,16 @@ const navigation = [
   { label: 'About', href: '#about' },
 ];
 
-export function SiteHeader() {
+type SiteHeaderProps = {
+  user?: {
+    name?: string | null;
+    email?: string | null;
+  };
+};
+
+export function SiteHeader({ user }: SiteHeaderProps) {
+  const displayName = getAccountDisplayName(user);
+
   return (
     <header className="site-header">
       <BrandLockup />
@@ -20,10 +34,27 @@ export function SiteHeader() {
         ))}
       </nav>
 
-      <Link className="header-action" href="/login">
-        Sign in
-        <span aria-hidden="true">↗</span>
-      </Link>
+      {user ? (
+        <Link
+          className="header-account"
+          href="/dashboard"
+          aria-label={`Open ${displayName}'s dashboard`}
+        >
+          <span className="header-account-avatar" aria-hidden="true">
+            {getAccountInitial(user)}
+          </span>
+          <span className="header-account-copy">
+            <strong>{displayName}</strong>
+            <small>View your atlas</small>
+          </span>
+          <ArrowRightIcon aria-hidden="true" />
+        </Link>
+      ) : (
+        <Link className="header-action" href="/login">
+          Sign in
+          <span aria-hidden="true">↗</span>
+        </Link>
+      )}
     </header>
   );
 }

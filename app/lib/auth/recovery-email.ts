@@ -51,17 +51,16 @@ function escapeHtml(value: string) {
 
 async function deliverEmail(message: EmailMessage) {
   const useConsoleDelivery =
+    process.env.EMAIL_DELIVERY === 'console' ||
     process.env.PASSWORD_RESET_DELIVERY === 'console' ||
     (!process.env.RESEND_API_KEY && process.env.NODE_ENV !== 'production');
 
   if (useConsoleDelivery) {
     if (process.env.NODE_ENV === 'production') {
-      throw new Error(
-        'Console password reset delivery is disabled in production.',
-      );
+      throw new Error('Console email delivery is disabled in production.');
     }
 
-    console.info(`[password-recovery] ${message.text}`);
+    console.info(`[transactional-email] ${message.text}`);
     return;
   }
 
@@ -70,7 +69,7 @@ async function deliverEmail(message: EmailMessage) {
 
   if (!apiKey || !from) {
     throw new Error(
-      'RESEND_API_KEY and RESEND_FROM_EMAIL are required for password recovery.',
+      'RESEND_API_KEY and RESEND_FROM_EMAIL are required for transactional email.',
     );
   }
 
@@ -80,7 +79,7 @@ async function deliverEmail(message: EmailMessage) {
       Authorization: `Bearer ${apiKey}`,
       'Content-Type': 'application/json',
       'Idempotency-Key': message.idempotencyKey,
-      'User-Agent': 'wooden-bridge-password-recovery/1.0',
+      'User-Agent': 'wooden-bridge-transactional-email/1.0',
     },
     body: JSON.stringify({
       from,
@@ -95,9 +94,76 @@ async function deliverEmail(message: EmailMessage) {
   if (!response.ok) {
     const errorBody = await response.text();
     throw new Error(
-      `Password recovery email failed (${response.status}): ${errorBody.slice(0, 300)}`,
+      `Transactional email failed (${response.status}): ${errorBody.slice(0, 300)}`,
     );
   }
+}
+
+export async function sendWelcomeEmail({
+  to,
+  firstName,
+  userId,
+}: {
+  to: string;
+  firstName: string;
+  userId: string;
+}) {
+  const dashboardUrl = new URL('/dashboard', getAppUrl());
+  const safeName = escapeHtml(firstName || 'Explorer');
+  const safeDashboardUrl = escapeHtml(dashboardUrl.toString());
+
+  await deliverEmail({
+    to,
+    subject: 'Welcome to your Wooden Bridge field atlas',
+    idempotencyKey: `welcome-${userId}`,
+    text: `Hello ${firstName || 'Explorer'},\n\nWelcome to Wooden Bridge. Your personal field atlas is ready.\n\nOpen your atlas:\n${dashboardUrl.toString()}\n\nSave remarkable crossings, remember the bridges you have visited, and keep the next journey close.`,
+    html: `
+      <div style="background:#f5f2e9;padding:32px;font-family:Arial,sans-serif;color:#10231d">
+        <div style="max-width:560px;margin:0 auto;background:#fbfaf5;border:1px solid #d8d8cd;border-radius:18px;padding:32px">
+          <p style="font-size:12px;letter-spacing:.14em;text-transform:uppercase;color:#4c6a5b;font-weight:700">Wooden Bridge Field Atlas</p>
+          <h1 style="font-family:Georgia,serif;font-size:32px;font-weight:400;margin:18px 0">Your atlas is ready</h1>
+          <p>Hello ${safeName},</p>
+          <p>Welcome to Wooden Bridge. A place to save remarkable crossings, remember where you have wandered, and keep the next journey close.</p>
+          <p style="margin:28px 0"><a href="${safeDashboardUrl}" style="display:inline-block;background:#10231d;color:#fbfaf5;text-decoration:none;padding:14px 20px;border-radius:12px;font-weight:700">Open your atlas</a></p>
+          <p style="font-size:13px;line-height:1.6;color:#4c6a5b">Go slowly. Cross thoughtfully.</p>
+        </div>
+      </div>
+    `,
+  });
+}
+
+export async function sendEmailVerificationEmail({
+  to,
+  firstName,
+  code,
+  challengeId,
+}: {
+  to: string;
+  firstName: string;
+  code: string;
+  challengeId: string;
+}) {
+  const safeName = escapeHtml(firstName || 'Explorer');
+  const safeCode = escapeHtml(code);
+
+  await deliverEmail({
+    to,
+    subject: `${code} is your Wooden Bridge verification code`,
+    idempotencyKey: `email-verification-${challengeId}`,
+    text: `Hello ${firstName || 'Explorer'},\n\nUse this code to verify your Wooden Bridge email address:\n\n${code}\n\nThe code expires in 10 minutes and can only be used once. If you did not create this account, you can ignore this email.`,
+    html: `
+      <div style="background:#f5f2e9;padding:32px;font-family:Arial,sans-serif;color:#10231d">
+        <div style="max-width:560px;margin:0 auto;background:#fbfaf5;border:1px solid #d8d8cd;border-radius:18px;padding:32px">
+          <p style="font-size:12px;letter-spacing:.14em;text-transform:uppercase;color:#4c6a5b;font-weight:700">Wooden Bridge Field Atlas</p>
+          <h1 style="font-family:Georgia,serif;font-size:32px;font-weight:400;margin:18px 0">Confirm your crossing</h1>
+          <p>Hello ${safeName},</p>
+          <p>Enter this code to verify your email address and open your atlas.</p>
+          <p style="margin:28px 0;padding:18px 20px;background:#f5f2e9;border:1px solid #d8d8cd;border-radius:12px;font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:32px;font-weight:700;letter-spacing:.22em;text-align:center;color:#10231d">${safeCode}</p>
+          <p style="font-size:13px;line-height:1.6;color:#4c6a5b">This code expires in 10 minutes and works once. If you did not create this account, no action is needed.</p>
+        </div>
+      </div>
+    `,
+  });
 }
 
 export async function sendPasswordResetEmail({

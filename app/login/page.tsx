@@ -12,10 +12,14 @@ export const metadata: Metadata = {
 export default async function LoginPage({
   searchParams,
 }: {
-  searchParams: Promise<{ reset?: string | string[] }>;
+  searchParams: Promise<{
+    reset?: string | string[];
+    verified?: string | string[];
+  }>;
 }) {
   const params = await searchParams;
   const resetComplete = params.reset === 'success';
+  const verificationComplete = params.verified === 'success';
 
   return (
     <AuthShell
@@ -33,7 +37,10 @@ export default async function LoginPage({
         </p>
       }
     >
-      <LoginForm resetComplete={resetComplete} />
+      <LoginForm
+        resetComplete={resetComplete}
+        verificationComplete={verificationComplete}
+      />
     </AuthShell>
   );
 }

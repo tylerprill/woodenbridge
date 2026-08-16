@@ -1,19 +1,24 @@
-const { readFile } = require('node:fs/promises');
+const { readFile, readdir } = require('node:fs/promises');
 const { resolve } = require('node:path');
 
 const { db } = require('@vercel/postgres');
 
 async function main() {
-  const migrationPath = resolve(
-    process.cwd(),
-    'migrations/001_password_reset.sql',
-  );
-  const migration = await readFile(migrationPath, 'utf8');
+  const migrationsDirectory = resolve(process.cwd(), 'migrations');
+  const migrationFiles = (await readdir(migrationsDirectory))
+    .filter((fileName) => fileName.endsWith('.sql'))
+    .sort();
   const client = await db.connect();
 
   try {
-    await client.query(migration);
-    console.log('Password recovery migration applied successfully.');
+    for (const migrationFile of migrationFiles) {
+      const migrationPath = resolve(migrationsDirectory, migrationFile);
+      const migration = await readFile(migrationPath, 'utf8');
+      await client.query(migration);
+      console.log(`Applied ${migrationFile}.`);
+    }
+
+    console.log('Authentication migrations applied successfully.');
   } finally {
     client.release();
     await db.end();
@@ -21,6 +26,6 @@ async function main() {
 }
 
 main().catch((error) => {
-  console.error('Password recovery migration failed:', error.message);
+  console.error('Authentication migration failed:', error.message);
   process.exitCode = 1;
 });

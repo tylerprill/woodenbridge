@@ -2,6 +2,7 @@ import type { Metadata } from 'next';
 import { redirect } from 'next/navigation';
 
 import { auth } from '@/auth';
+import { getAccountDisplayName } from '@/app/lib/auth/account-display';
 import SideNav from '@/components/unclean/dashboard/sidenav';
 
 export const metadata: Metadata = {
@@ -22,7 +23,10 @@ export default async function DashboardLayout({
 
   return (
     <div className="dashboard-shell">
-      <SideNav userEmail={session?.user?.email} />
+      <SideNav
+        userEmail={session.user.email}
+        userName={getAccountDisplayName(session.user)}
+      />
       <main className="dashboard-main">{children}</main>
     </div>
   );

@@ -6,7 +6,7 @@ import { normalizeEmail } from './auth/password';
 export async function getUser(email: string) {
   try {
     const user = await sql`
-      SELECT id, first_name, last_name, email, password
+      SELECT id, first_name, last_name, email, password, email_verified_at
       FROM users
       WHERE LOWER(email) = ${normalizeEmail(email)}
       LIMIT 1
@@ -22,7 +22,7 @@ export async function addUser(user: NewUser) {
   try {
     const hashedPassword = await bcrypt.hash(user.password, 12);
 
-    const result = await sql`
+    const result = await sql<Pick<User, 'id'>>`
       INSERT INTO users (first_name, last_name, email, password)
       VALUES (
         ${user.first_name},
@@ -34,7 +34,7 @@ export async function addUser(user: NewUser) {
       RETURNING id
     `;
 
-    return result.rowCount === 1;
+    return result.rows[0];
   } catch (error) {
     console.error('Failed to add user:', error);
     throw new Error('Failed to add user.');

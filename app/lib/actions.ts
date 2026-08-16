@@ -2,18 +2,38 @@
 
 import { signIn } from '@/auth';
 import { AuthError } from 'next-auth';
+import { after } from 'next/server';
 
 import { z } from 'zod';
 import { getUser, addUser } from './data';
 import { NewUser } from './definitions';
+import {
+  createDecoyVerificationChallengeId,
+  deleteExpiredEmailVerificationData,
+} from './auth/email-verification';
+import { setEmailVerificationChallengeCookie } from './auth/email-verification-cookie';
+import { issueEmailVerification } from './auth/email-verification-flow';
 import { newPasswordSchema, normalizeEmail } from './auth/password';
+import { getClientIpHash } from './auth/security';
+
+const AUTHENTICATED_HOME = '/dashboard';
+
+function redirectToAuthenticatedHome(formData: FormData) {
+  formData.set('redirectTo', AUTHENTICATED_HOME);
+  return formData;
+}
+
+function redirectToEmailVerification(formData: FormData) {
+  formData.set('redirectTo', '/verify-email?sent=1');
+  return formData;
+}
 
 export async function authenticate(
   prevState: string | undefined,
   formData: FormData,
 ) {
   try {
-    await signIn('credentials', formData);
+    await signIn('credentials', redirectToAuthenticatedHome(formData));
   } catch (error) {
     if (error instanceof AuthError) {
       switch (error.type) {
@@ -66,11 +86,35 @@ export async function createUser(
   formData.set('last_name', user.last_name);
   formData.set('email', user.email);
 
-  const userCreated = await addUser(user);
+  const createdUser = await addUser(user);
 
-  if (!userCreated) {
+  if (!createdUser) {
     return 'An account already exists for this email address.';
   }
 
-  await signIn('credentials', formData);
+  let challengeId = createDecoyVerificationChallengeId();
+
+  try {
+    challengeId = await issueEmailVerification({
+      email: user.email,
+      ipHash: await getClientIpHash(),
+      user: {
+        id: createdUser.id,
+        email: user.email,
+        first_name: user.first_name,
+        email_verified_at: null,
+      },
+    });
+  } catch (error) {
+    console.error('Initial email verification delivery failed:', error);
+  }
+
+  await setEmailVerificationChallengeCookie(challengeId);
+  after(async () => {
+    await deleteExpiredEmailVerificationData().catch((error) => {
+      console.error('Email verification cleanup failed:', error);
+    });
+  });
+
+  await signIn('credentials', redirectToEmailVerification(formData));
 }

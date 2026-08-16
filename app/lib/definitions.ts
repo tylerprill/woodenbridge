@@ -4,6 +4,7 @@ export type User = {
   last_name: string;
   email: string;
   password: string;
+  email_verified_at: Date | null;
 };
 
-export type NewUser = Omit<User, 'id'>;
+export type NewUser = Omit<User, 'id' | 'email_verified_at'>;
