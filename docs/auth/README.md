@@ -1,4 +1,4 @@
-# Wooden Bridge authentication
+# Field Atlas authentication
 
 This document describes the authentication system as implemented. It is the
 reference for account creation, email verification, credentials login, session
@@ -127,7 +127,7 @@ version.
 
 ## Authorization roles
 
-Wooden Bridge has three hierarchical application roles:
+Field Atlas has three hierarchical application roles:
 
 | Role    | Intended access                                                               |
 | ------- | ----------------------------------------------------------------------------- |
@@ -250,7 +250,7 @@ APP_URL=https://your-production-origin.example
 AUTH_SECRET=<high-entropy-auth-secret>
 DATABASE_URL=<postgres-connection-string>
 RESEND_API_KEY=<resend-api-key>
-RESEND_FROM_EMAIL=Wooden Bridge <account@your-verified-domain.example>
+RESEND_FROM_EMAIL=Field Atlas <account@your-verified-domain.example>
 ```
 
 For local development only, `EMAIL_DELIVERY=console` writes verification codes

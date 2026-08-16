@@ -9,29 +9,29 @@ export type SavedBridge = {
 
 export const savedBridges: SavedBridge[] = [
   {
-    name: 'Kintai Bridge',
-    location: 'Iwakuni, Japan',
+    name: 'Fushimi Inari at Dawn',
+    location: 'Kyoto, Japan',
     description:
-      'Five timber arches moving in rhythm across the Nishiki River.',
-    note: 'Best approached at first light, before the river walk grows busy.',
-    status: 'Want to visit',
+      'A quiet climb through vermilion gates before the city began to stir.',
+    note: 'Arrive before sunrise and let the trail set the pace for the day.',
+    status: 'Visited',
     tone: 'cedar',
   },
   {
-    name: 'Kapellbrücke',
+    name: 'Lake Lucerne Morning',
     location: 'Lucerne, Switzerland',
     description:
-      'A covered crossing carrying painted stories through the center of town.',
-    note: 'Walk the bridge slowly and look up—the story is above you.',
+      'Still water, mountain air, and the first clear morning of the journey.',
+    note: 'Save time for the lakeside walk before the old town grows busy.',
     status: 'Visited',
     tone: 'alpine',
   },
   {
-    name: 'Humpback Bridge',
-    location: 'Virginia, United States',
+    name: 'Cathedral Rock Trail',
+    location: 'Sedona, Arizona',
     description:
-      'A singular arched covered bridge in a quiet Appalachian valley.',
-    note: 'Pair the crossing with a slow drive through the surrounding valley.',
+      'A red-rock trail turning gold as the final light reaches the canyon.',
+    note: 'Pack water, start late in the afternoon, and stay for the color.',
     status: 'Want to visit',
     tone: 'ember',
   },

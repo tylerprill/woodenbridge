@@ -9,8 +9,8 @@ import VerifyEmailForm from '@/components/unclean/verify-email-form';
 export const dynamic = 'force-dynamic';
 
 export const metadata: Metadata = {
-  title: 'Verify your email — Wooden Bridge',
-  description: 'Verify your email address to open your Wooden Bridge atlas.',
+  title: 'Verify your email — Field Atlas',
+  description: 'Verify your email address to open your Field Atlas account.',
   referrer: 'no-referrer',
 };
 
@@ -36,9 +36,9 @@ export default async function VerifyEmailPage({
           ? 'Enter the short code we sent to prove this inbox belongs to you.'
           : 'Request a secure, single-use code to confirm your email address.'
       }
-      panelEyebrow="One last crossing"
+      panelEyebrow="One last step"
       panelTitle={hasChallenge ? 'Check your email' : 'Verify your email'}
-      storyDescription="A quick confirmation keeps every field note, saved crossing, and future journey connected to its rightful explorer."
+      storyDescription="A quick confirmation keeps every field note, saved place, and future journey connected to its rightful explorer."
       storyEyebrow="Confirm your route"
       storyNote="A six-digit marker, valid for ten minutes, opens the way forward."
       storyTitle="Make sure this atlas finds its owner."

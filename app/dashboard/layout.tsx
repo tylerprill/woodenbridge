@@ -4,8 +4,8 @@ import { requireVerifiedSession } from '@/app/lib/auth/session';
 import SideNav from '@/components/unclean/dashboard/sidenav';
 
 export const metadata: Metadata = {
-  title: 'Your atlas — Wooden Bridge',
-  description: 'Your saved crossings, field notes, and future journeys.',
+  title: 'Your atlas — Field Atlas',
+  description: 'Your saved places, field notes, and future journeys.',
 };
 
 export const dynamic = 'force-dynamic';

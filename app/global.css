@@ -150,22 +150,23 @@ body {
 
 .brand-mark::before {
   position: absolute;
-  bottom: 0.36rem;
-  left: 0.28rem;
-  width: 1.55rem;
-  height: 0.78rem;
+  top: 0.45rem;
+  left: 0.69rem;
+  width: 0.75rem;
+  height: 0.75rem;
   border: 2px solid var(--forest-950);
-  border-bottom: 0;
-  border-radius: 2rem 2rem 0 0;
+  border-radius: 50% 50% 50% 0;
   content: '';
+  transform: rotate(-45deg);
 }
 
 .brand-mark span {
   position: absolute;
-  right: 0.3rem;
-  bottom: 0.32rem;
-  left: 0.3rem;
-  height: 1px;
+  top: 0.71rem;
+  left: 0.95rem;
+  width: 0.25rem;
+  height: 0.25rem;
+  border-radius: 50%;
   background: var(--forest-950);
 }
 
@@ -604,7 +605,7 @@ body {
 .bridge-structure {
   position: absolute;
   right: 8%;
-  bottom: 24%;
+  bottom: 20%;
   left: 8%;
   height: 34%;
   filter: drop-shadow(0 1.6rem 1.2rem rgba(7, 20, 16, 0.28));
@@ -612,39 +613,51 @@ body {
 
 .bridge-arch {
   position: absolute;
-  right: 8%;
-  bottom: 0;
-  left: 8%;
-  height: 88%;
-  border: clamp(1rem, 2.8vw, 2rem) solid #8c4d32;
-  border-bottom: 0;
+  right: 14%;
+  bottom: 6%;
+  left: 10%;
+  height: 70%;
+  border: 0;
+  border-top: clamp(0.18rem, 0.55vw, 0.32rem) dashed rgba(245, 242, 233, 0.82);
   border-radius: 50% 50% 0 0;
+  transform: rotate(-7deg);
 }
 
 .bridge-deck {
   position: absolute;
-  right: 0;
-  bottom: 0;
-  left: 0;
-  height: 1.2rem;
-  border-radius: 0.25rem;
-  background: #6f3927;
-  box-shadow: inset 0 0.35rem rgba(255, 255, 255, 0.08);
+  right: 9%;
+  bottom: 56%;
+  width: clamp(2.8rem, 7vw, 4.4rem);
+  height: clamp(2.8rem, 7vw, 4.4rem);
+  border-radius: 50% 50% 50% 0;
+  background: var(--timber);
+  box-shadow: 0 1rem 2rem rgba(7, 20, 16, 0.24);
+  transform: rotate(-45deg);
+}
+
+.bridge-deck::after {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 30%;
+  height: 30%;
+  border-radius: 50%;
+  background: var(--paper-light);
+  content: '';
+  transform: translate(-50%, -50%);
 }
 
 .bridge-rail {
   position: absolute;
-  right: 2%;
-  bottom: 1.2rem;
-  left: 2%;
+  bottom: 5%;
+  left: 7%;
   z-index: 1;
-  height: 2.6rem;
-  border-top: 0.36rem solid #8c4d32;
-  background: repeating-linear-gradient(
-    90deg,
-    transparent 0 8%,
-    #8c4d32 8% 9.1%
-  );
+  width: 1.35rem;
+  height: 1.35rem;
+  border: 0.28rem solid var(--paper-light);
+  border-radius: 50%;
+  background: var(--forest-800);
+  box-shadow: 0 0 0 0.4rem rgba(245, 242, 233, 0.18);
 }
 
 .hero-field-note {
@@ -848,40 +861,40 @@ body {
 
 .card-span {
   position: absolute;
-  right: 11%;
+  right: 12%;
   bottom: 24%;
-  left: 11%;
   z-index: 1;
-  height: 26%;
-  border: clamp(0.75rem, 1.5vw, 1.2rem) solid rgba(91, 46, 29, 0.95);
-  border-bottom: 0;
-  border-radius: 50% 50% 0 0;
+  width: clamp(2.5rem, 4vw, 3.65rem);
+  height: clamp(2.5rem, 4vw, 3.65rem);
+  border: 0;
+  border-radius: 50% 50% 50% 0;
+  background: rgba(128, 67, 41, 0.96);
   filter: drop-shadow(0 0.8rem 0.7rem rgba(25, 18, 14, 0.22));
+  transform: rotate(-45deg);
 }
 
 .card-span::after {
   position: absolute;
-  right: -12%;
-  bottom: -0.9rem;
-  left: -12%;
-  height: 0.9rem;
-  border-radius: 0.2rem;
-  background: #5b2e1d;
+  top: 50%;
+  left: 50%;
+  width: 28%;
+  height: 28%;
+  border-radius: 50%;
+  background: rgba(251, 250, 245, 0.9);
   content: '';
+  transform: translate(-50%, -50%);
 }
 
 .bridge-card-art-alpine .card-span {
-  right: 18%;
-  left: 18%;
-  height: 42%;
-  border-radius: 0.7rem 0.7rem 0 0;
+  right: 20%;
+  bottom: 34%;
+  background: rgba(52, 79, 69, 0.96);
 }
 
 .bridge-card-art-ember .card-span {
   right: 8%;
-  left: 8%;
-  height: 34%;
-  border-color: #75432b;
+  bottom: 20%;
+  background: #75432b;
 }
 
 .card-index {
@@ -1141,11 +1154,11 @@ body {
 
 .footer-mark {
   display: block;
-  width: 1.6rem;
+  width: 0.8rem;
   height: 0.8rem;
   border: 1px solid currentColor;
-  border-bottom: 0;
-  border-radius: 2rem 2rem 0 0;
+  border-radius: 50% 50% 50% 0;
+  transform: rotate(-45deg);
 }
 
 .home-footer nav {
@@ -1329,26 +1342,28 @@ body {
 
 .auth-bridge {
   position: absolute;
-  right: 17%;
-  bottom: 18%;
-  left: 17%;
+  right: 19%;
+  bottom: 22%;
   z-index: 1;
-  height: 38%;
-  border: 0.85rem solid var(--timber);
-  border-bottom: 0;
-  border-radius: 50% 50% 0 0;
+  width: 4.5rem;
+  height: 4.5rem;
+  border: 0;
+  border-radius: 50% 50% 50% 0;
+  background: var(--timber);
   filter: drop-shadow(0 0.8rem 0.8rem rgba(0, 0, 0, 0.2));
+  transform: rotate(-45deg);
 }
 
 .auth-bridge::after {
   position: absolute;
-  right: -12%;
-  bottom: -0.7rem;
-  left: -12%;
-  height: 0.7rem;
-  border-radius: 0.2rem;
-  background: var(--timber);
+  top: 50%;
+  left: 50%;
+  width: 1.25rem;
+  height: 1.25rem;
+  border-radius: 50%;
+  background: var(--forest-950);
   content: '';
+  transform: translate(-50%, -50%);
 }
 
 .auth-story-note {

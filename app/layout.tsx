@@ -7,27 +7,27 @@ const siteUrl = process.env.VERCEL_PROJECT_PRODUCTION_URL
 
 export const metadata: Metadata = {
   metadataBase: new URL(siteUrl),
-  title: 'Wooden Bridge — A Field Atlas',
+  title: 'Field Atlas — Your travels, thoughtfully mapped',
   description:
-    'Discover remarkable wooden bridges, the landscapes they cross, and the stories held in every timber.',
+    'Pin the places you have traveled, add photos and field notes, and keep every journey in one personal atlas.',
   openGraph: {
-    title: 'Wooden Bridge — A Field Atlas',
+    title: 'Field Atlas — Your travels, thoughtfully mapped',
     description:
-      'Discover remarkable wooden bridges, the landscapes they cross, and the stories held in every timber.',
+      'Pin the places you have traveled, add photos and field notes, and keep every journey in one personal atlas.',
     images: [
       {
         url: '/og.png',
         width: 1732,
         height: 909,
-        alt: 'Wooden Bridge — A field atlas for the curious',
+        alt: 'Field Atlas — Your travels, thoughtfully mapped',
       },
     ],
   },
   twitter: {
     card: 'summary_large_image',
-    title: 'Wooden Bridge — A Field Atlas',
+    title: 'Field Atlas — Your travels, thoughtfully mapped',
     description:
-      'Discover remarkable wooden bridges, the landscapes they cross, and the stories held in every timber.',
+      'Pin the places you have traveled, add photos and field notes, and keep every journey in one personal atlas.',
     images: ['/og.png'],
   },
 };

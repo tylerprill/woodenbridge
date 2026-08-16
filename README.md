@@ -1,14 +1,16 @@
-# Wooden Bridge App
+# Field Atlas
 
-The Wooded Bridge App is a web application that provides a platform for users to explore and discover various wooden bridges around the world. It aims to showcase the beauty and craftsmanship of these structures while also providing useful information for travelers and enthusiasts.
+Field Atlas is a personal travel journal for mapping the places that matter,
+preserving photographs and field notes, and keeping a thoughtful record of
+every journey.
 
 ## Features
 
-- Browse a collection of wooden bridges with detailed descriptions and photos.
-- Search for bridges based on location, style, or other criteria.
-- Save favorite bridges for future reference.
-- Share bridges with others through social media or email.
-- Get directions to bridges using integrated maps.
+- Secure account creation, email verification, login, and password recovery.
+- A private personal-atlas dashboard with saved-place and field-note previews.
+- Hierarchical user, administrator, and protected-owner access.
+- Responsive, accessible interfaces across public and authenticated pages.
+- Transactional account emails branded for Field Atlas.
 
 ## Installation
 
@@ -41,11 +43,12 @@ codes and password-reset links.
 ## Usage
 
 1. Open the app in your web browser.
-2. Explore the collection of wooden bridges.
-3. Use the search functionality to find specific bridges.
-4. Save your favorite bridges by clicking the "Save" button.
-5. Share bridges with others using the provided sharing options.
-6. Get directions to a bridge by clicking the "Directions" button.
+2. Create an account and verify your email address.
+3. Sign in to open your personal atlas.
+4. Explore the current travel-memory previews and dashboard experience.
+
+Interactive map pins, photo-backed travel entries, and editable field notes are
+the next product milestone.
 
 ## Contributing
 

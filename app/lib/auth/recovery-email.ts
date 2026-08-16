@@ -49,6 +49,13 @@ function escapeHtml(value: string) {
   );
 }
 
+function getBrandedSender(configuredFrom: string) {
+  const displayAddress = configuredFrom.match(/<([^<>]+)>\s*$/)?.[1];
+  const address = displayAddress ?? configuredFrom.trim();
+
+  return `Field Atlas <${address}>`;
+}
+
 async function deliverEmail(message: EmailMessage) {
   const useConsoleDelivery =
     process.env.EMAIL_DELIVERY === 'console' ||
@@ -65,13 +72,15 @@ async function deliverEmail(message: EmailMessage) {
   }
 
   const apiKey = process.env.RESEND_API_KEY;
-  const from = process.env.RESEND_FROM_EMAIL;
+  const configuredFrom = process.env.RESEND_FROM_EMAIL;
 
-  if (!apiKey || !from) {
+  if (!apiKey || !configuredFrom) {
     throw new Error(
       'RESEND_API_KEY and RESEND_FROM_EMAIL are required for transactional email.',
     );
   }
+
+  const from = getBrandedSender(configuredFrom);
 
   const response = await fetch('https://api.resend.com/emails', {
     method: 'POST',
@@ -114,18 +123,18 @@ export async function sendWelcomeEmail({
 
   await deliverEmail({
     to,
-    subject: 'Welcome to your Wooden Bridge field atlas',
+    subject: 'Welcome to Field Atlas',
     idempotencyKey: `welcome-${userId}`,
-    text: `Hello ${firstName || 'Explorer'},\n\nWelcome to Wooden Bridge. Your personal field atlas is ready.\n\nOpen your atlas:\n${dashboardUrl.toString()}\n\nSave remarkable crossings, remember the bridges you have visited, and keep the next journey close.`,
+    text: `Hello ${firstName || 'Explorer'},\n\nWelcome to Field Atlas. Your personal travel journal is ready.\n\nOpen your atlas:\n${dashboardUrl.toString()}\n\nPin the places you have traveled, preserve the moments that mattered, and keep the next journey close.`,
     html: `
       <div style="background:#f5f2e9;padding:32px;font-family:Arial,sans-serif;color:#10231d">
         <div style="max-width:560px;margin:0 auto;background:#fbfaf5;border:1px solid #d8d8cd;border-radius:18px;padding:32px">
-          <p style="font-size:12px;letter-spacing:.14em;text-transform:uppercase;color:#4c6a5b;font-weight:700">Wooden Bridge Field Atlas</p>
+          <p style="font-size:12px;letter-spacing:.14em;text-transform:uppercase;color:#4c6a5b;font-weight:700">Field Atlas</p>
           <h1 style="font-family:Georgia,serif;font-size:32px;font-weight:400;margin:18px 0">Your atlas is ready</h1>
           <p>Hello ${safeName},</p>
-          <p>Welcome to Wooden Bridge. A place to save remarkable crossings, remember where you have wandered, and keep the next journey close.</p>
+          <p>Welcome to Field Atlas. A place to pin where you have traveled, preserve what happened there, and keep the next journey close.</p>
           <p style="margin:28px 0"><a href="${safeDashboardUrl}" style="display:inline-block;background:#10231d;color:#fbfaf5;text-decoration:none;padding:14px 20px;border-radius:12px;font-weight:700">Open your atlas</a></p>
-          <p style="font-size:13px;line-height:1.6;color:#4c6a5b">Go slowly. Cross thoughtfully.</p>
+          <p style="font-size:13px;line-height:1.6;color:#4c6a5b">Go far. Remember well.</p>
         </div>
       </div>
     `,
@@ -148,14 +157,14 @@ export async function sendEmailVerificationEmail({
 
   await deliverEmail({
     to,
-    subject: `${code} is your Wooden Bridge verification code`,
+    subject: `${code} is your Field Atlas verification code`,
     idempotencyKey: `email-verification-${challengeId}`,
-    text: `Hello ${firstName || 'Explorer'},\n\nUse this code to verify your Wooden Bridge email address:\n\n${code}\n\nThe code expires in 10 minutes and can only be used once. If you did not create this account, you can ignore this email.`,
+    text: `Hello ${firstName || 'Explorer'},\n\nUse this code to verify your Field Atlas email address:\n\n${code}\n\nThe code expires in 10 minutes and can only be used once. If you did not create this account, you can ignore this email.`,
     html: `
       <div style="background:#f5f2e9;padding:32px;font-family:Arial,sans-serif;color:#10231d">
         <div style="max-width:560px;margin:0 auto;background:#fbfaf5;border:1px solid #d8d8cd;border-radius:18px;padding:32px">
-          <p style="font-size:12px;letter-spacing:.14em;text-transform:uppercase;color:#4c6a5b;font-weight:700">Wooden Bridge Field Atlas</p>
-          <h1 style="font-family:Georgia,serif;font-size:32px;font-weight:400;margin:18px 0">Confirm your crossing</h1>
+          <p style="font-size:12px;letter-spacing:.14em;text-transform:uppercase;color:#4c6a5b;font-weight:700">Field Atlas</p>
+          <h1 style="font-family:Georgia,serif;font-size:32px;font-weight:400;margin:18px 0">Confirm your atlas</h1>
           <p>Hello ${safeName},</p>
           <p>Enter this code to verify your email address and open your atlas.</p>
           <p style="margin:28px 0;padding:18px 20px;background:#f5f2e9;border:1px solid #d8d8cd;border-radius:12px;font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:32px;font-weight:700;letter-spacing:.22em;text-align:center;color:#10231d">${safeCode}</p>
@@ -184,16 +193,16 @@ export async function sendPasswordResetEmail({
 
   await deliverEmail({
     to,
-    subject: 'Reset your Wooden Bridge password',
+    subject: 'Reset your Field Atlas password',
     idempotencyKey: `password-reset-${tokenHash}`,
-    text: `Hello ${firstName || 'there'},\n\nUse this link to reset your Wooden Bridge password:\n${resetUrl.toString()}\n\nThis link expires in 30 minutes and can only be used once. If you did not request it, you can ignore this email.`,
+    text: `Hello ${firstName || 'there'},\n\nUse this link to reset your Field Atlas password:\n${resetUrl.toString()}\n\nThis link expires in 30 minutes and can only be used once. If you did not request it, you can ignore this email.`,
     html: `
       <div style="background:#f5f2e9;padding:32px;font-family:Arial,sans-serif;color:#10231d">
         <div style="max-width:560px;margin:0 auto;background:#fbfaf5;border:1px solid #d8d8cd;border-radius:18px;padding:32px">
-          <p style="font-size:12px;letter-spacing:.14em;text-transform:uppercase;color:#4c6a5b;font-weight:700">Wooden Bridge Field Atlas</p>
+          <p style="font-size:12px;letter-spacing:.14em;text-transform:uppercase;color:#4c6a5b;font-weight:700">Field Atlas</p>
           <h1 style="font-family:Georgia,serif;font-size:32px;font-weight:400;margin:18px 0">Find your way back</h1>
           <p>Hello ${safeName},</p>
-          <p>We received a request to reset your Wooden Bridge password.</p>
+          <p>We received a request to reset your Field Atlas password.</p>
           <p style="margin:28px 0"><a href="${safeUrl}" style="display:inline-block;background:#10231d;color:#fbfaf5;text-decoration:none;padding:14px 20px;border-radius:12px;font-weight:700">Reset password</a></p>
           <p style="font-size:13px;line-height:1.6;color:#4c6a5b">This link expires in 30 minutes and can only be used once. If you did not request it, no action is needed.</p>
         </div>
@@ -215,16 +224,16 @@ export async function sendPasswordChangedEmail({
 
   await deliverEmail({
     to,
-    subject: 'Your Wooden Bridge password was changed',
+    subject: 'Your Field Atlas password was changed',
     idempotencyKey: `password-changed-${changeId}`,
-    text: `Hello ${firstName || 'there'},\n\nYour Wooden Bridge password was changed successfully. All existing sessions have been revoked. If you did not make this change, contact the site owner immediately.`,
+    text: `Hello ${firstName || 'there'},\n\nYour Field Atlas password was changed successfully. All existing sessions have been revoked. If you did not make this change, contact the site owner immediately.`,
     html: `
       <div style="background:#f5f2e9;padding:32px;font-family:Arial,sans-serif;color:#10231d">
         <div style="max-width:560px;margin:0 auto;background:#fbfaf5;border:1px solid #d8d8cd;border-radius:18px;padding:32px">
-          <p style="font-size:12px;letter-spacing:.14em;text-transform:uppercase;color:#4c6a5b;font-weight:700">Wooden Bridge Field Atlas</p>
+          <p style="font-size:12px;letter-spacing:.14em;text-transform:uppercase;color:#4c6a5b;font-weight:700">Field Atlas</p>
           <h1 style="font-family:Georgia,serif;font-size:32px;font-weight:400;margin:18px 0">Password changed</h1>
           <p>Hello ${safeName},</p>
-          <p>Your Wooden Bridge password was changed successfully. All existing sessions have been revoked.</p>
+          <p>Your Field Atlas password was changed successfully. All existing sessions have been revoked.</p>
           <p style="font-size:13px;line-height:1.6;color:#4c6a5b">If you did not make this change, contact the site owner immediately.</p>
         </div>
       </div>

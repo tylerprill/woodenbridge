@@ -15,6 +15,8 @@ const LOCAL_BLOCKLIST = new Set([
   'qwertyqwertyqwerty',
   'woodenbridge',
   'woodenbridge123',
+  'fieldatlas',
+  'fieldatlas123',
 ]);
 
 type PasswordContext = {

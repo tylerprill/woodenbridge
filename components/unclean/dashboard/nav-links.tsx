@@ -14,8 +14,8 @@ import { hasRequiredRole, type AppRole } from '@/app/lib/auth/roles';
 
 const links = [
   { name: 'Overview', href: '/dashboard', icon: Squares2X2Icon },
-  { name: 'Collection', href: '/dashboard/users', icon: BookmarkIcon },
-  { name: 'Discover', href: '/', icon: MapIcon },
+  { name: 'My places', href: '/dashboard/users', icon: BookmarkIcon },
+  { name: 'Explore', href: '/', icon: MapIcon },
 ];
 
 const ownerLinks = [

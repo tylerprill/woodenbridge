@@ -5,7 +5,7 @@ import { AuthShell } from '@/components/clean/auth-shell';
 import SignUpForm from '@/components/unclean/sign-up-form';
 
 export const metadata: Metadata = {
-  title: 'Create an account — Wooden Bridge',
+  title: 'Create an account — Field Atlas',
   description: 'Create an account and begin your personal field atlas.',
 };
 
@@ -16,9 +16,9 @@ export default function SignUpPage() {
       panelDescription="Create your account, then confirm the short code we send to your email."
       panelEyebrow="Begin your atlas"
       panelTitle="Create your account"
-      storyDescription="Save remarkable bridges, remember where you have wandered, and keep the next journey close."
+      storyDescription="Save the places that mattered, remember where you wandered, and keep the next journey close."
       storyEyebrow="Make it yours"
-      storyNote="Every collection begins with a single crossing."
+      storyNote="Every atlas begins with a single place."
       storyTitle="Keep the places worth remembering."
       footer={
         <p className="auth-signup-prompt">

@@ -5,8 +5,8 @@ import { AuthShell } from '@/components/clean/auth-shell';
 import ForgotPasswordForm from '@/components/unclean/forgot-password-form';
 
 export const metadata: Metadata = {
-  title: 'Reset your password — Wooden Bridge',
-  description: 'Request a secure link to reset your Wooden Bridge password.',
+  title: 'Reset your password — Field Atlas',
+  description: 'Request a secure link to reset your Field Atlas password.',
 };
 
 export default function ForgotPasswordPage() {

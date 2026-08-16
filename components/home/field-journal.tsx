@@ -8,18 +8,18 @@ import Link from 'next/link';
 const principles = [
   {
     icon: MapIcon,
-    title: 'Find the crossing',
-    copy: 'Explore by landscape, bridge form, or the journey you want to take.',
+    title: 'Drop a pin',
+    copy: 'Mark any place you have visited or hope to remember someday.',
   },
   {
     icon: GlobeAmericasIcon,
-    title: 'Read the place',
-    copy: 'Carry the history, construction notes, and local context with you.',
+    title: 'Tell the story',
+    copy: 'Add a photo, a brief title, and the details that made it yours.',
   },
   {
     icon: BookmarkIcon,
-    title: 'Keep what moves you',
-    copy: 'Save favorites and shape a personal atlas for the road ahead.',
+    title: 'Keep your atlas',
+    copy: 'Return to every journey through one thoughtful, personal map.',
   },
 ];
 
@@ -34,13 +34,12 @@ export function FieldJournal() {
         <div className="journal-intro">
           <p className="section-kicker">The field journal · 02</p>
           <h2 id="journal-title">
-            More than a route across.
-            <span>A reason to stop.</span>
+            More than a pin on a map.
+            <span>A memory with a place.</span>
           </h2>
           <p>
-            Wooden bridges are pieces of living infrastructure. We document the
-            craft, landscape, and human stories that make each one worth
-            finding.
+            Field Atlas gives every journey a home. Preserve the places,
+            photographs, and small details you want to carry forward.
           </p>
         </div>
 
@@ -75,11 +74,11 @@ export function FieldJournal() {
           Keep a record of everywhere wonder takes you.
         </h2>
         <p>
-          Collect bridges you love, remember those you have crossed, and plan
-          the ones still ahead.
+          Pin the places you have been, preserve what happened there, and keep
+          the journeys still ahead within reach.
         </p>
         <Link href="/sign-up" className="callout-action">
-          Create your collection
+          Create your atlas
           <span aria-hidden="true">↗</span>
         </Link>
       </section>

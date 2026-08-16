@@ -6,9 +6,9 @@ import {
 import Link from 'next/link';
 
 const highlights = [
-  'Historic spans',
-  'Trail-ready guides',
-  'Personal collections',
+  'Your personal map',
+  'Photo memories',
+  'Private by default',
 ];
 
 export function HeroSection() {
@@ -17,17 +17,17 @@ export function HeroSection() {
       <div className="hero-copy">
         <p className="eyebrow">
           <SparklesIcon aria-hidden="true" />
-          An atlas for the curious
+          Your personal travel journal
         </p>
 
         <h1 id="hero-title">
-          Built by hand.
-          <span>Found by wonder.</span>
+          Every place.
+          <span>A story worth keeping.</span>
         </h1>
 
         <p className="hero-intro">
-          Discover remarkable wooden bridges, the landscapes they cross, and the
-          stories held in every timber.
+          Pin the places you have traveled, add the moments that made them
+          matter, and build a map that is unmistakably yours.
         </p>
 
         <div className="hero-actions">
@@ -36,7 +36,7 @@ export function HeroSection() {
             <ArrowRightIcon aria-hidden="true" />
           </a>
           <Link className="secondary-action" href="/sign-up">
-            Start a collection
+            Start your atlas
           </Link>
         </div>
 
@@ -50,7 +50,7 @@ export function HeroSection() {
       <div
         className="hero-art"
         role="img"
-        aria-label="A stylized wooden bridge landscape"
+        aria-label="A stylized mapped travel landscape"
       >
         <div className="hero-sun" />
         <div className="hero-horizon hero-horizon-back" />
@@ -62,10 +62,10 @@ export function HeroSection() {
         </div>
         <div className="hero-field-note">
           <span className="field-note-index">Field note 01</span>
-          <strong>Crossings worth the journey</strong>
+          <strong>Somewhere worth remembering</strong>
           <span className="field-note-location">
             <MapPinIcon aria-hidden="true" />
-            Wander slowly. Look closely.
+            Pin the places that shaped you.
           </span>
         </div>
       </div>

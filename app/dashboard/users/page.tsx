@@ -10,24 +10,24 @@ export default function CollectionPage() {
         <div>
           <p className="section-kicker">Personal atlas</p>
           <h1>Your collection.</h1>
-          <p>Bridges you have crossed and those still calling you onward.</p>
+          <p>Places you have explored and those still calling you onward.</p>
         </div>
         <div className="collection-count">
           <BookmarkIcon aria-hidden="true" />
           <span>
             <strong>{String(savedBridges.length).padStart(2, '0')}</strong>
-            saved crossings
+            saved places
           </span>
         </div>
       </header>
 
       <div className="collection-filter" aria-label="Collection summary">
-        <span>All crossings</span>
-        <span>01 visited</span>
-        <span>02 want to visit</span>
+        <span>All places</span>
+        <span>02 visited</span>
+        <span>01 want to visit</span>
       </div>
 
-      <section className="collection-grid" aria-label="Saved bridges">
+      <section className="collection-grid" aria-label="Saved places">
         {savedBridges.map((bridge, index) => (
           <article className="collection-card" key={bridge.name}>
             <BridgeScene

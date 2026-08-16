@@ -7,19 +7,19 @@ type BrandLockupProps = {
 
 export function BrandLockup({
   className = '',
-  label = 'Field atlas',
+  label = 'Travel journal',
 }: BrandLockupProps) {
   return (
     <Link
       className={`brand-lockup ${className}`.trim()}
       href="/"
-      aria-label="Wooden Bridge home"
+      aria-label="Field Atlas home"
     >
       <span className="brand-mark" aria-hidden="true">
         <span />
       </span>
       <span className="brand-name">
-        Wooden Bridge
+        Field Atlas
         <small>{label}</small>
       </span>
     </Link>

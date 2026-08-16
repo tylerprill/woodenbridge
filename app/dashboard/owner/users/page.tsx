@@ -14,8 +14,8 @@ import { getManagedUsers } from '@/app/lib/owner/users';
 import { OwnerActionButton } from '@/components/dashboard/owner-action-button';
 
 export const metadata: Metadata = {
-  title: 'Users — Wooden Bridge',
-  description: 'Management tools for Wooden Bridge user accounts.',
+  title: 'Users — Field Atlas',
+  description: 'Management tools for Field Atlas user accounts.',
 };
 
 const messages = {
@@ -23,7 +23,7 @@ const messages = {
   'no-change': 'That account already has the selected role.',
   'sessions-revoked': 'The account must sign in again on every device.',
   'self-protected': 'You cannot change or revoke your current account.',
-  'protected-owner': 'The Wooden Bridge owner account is immutable.',
+  'protected-owner': 'The Field Atlas owner account is immutable.',
   'owner-required': 'Only the owner can appoint or remove administrators.',
   'admin-peer-protected': 'Administrators cannot manage another administrator.',
   'not-found': 'That account no longer exists.',

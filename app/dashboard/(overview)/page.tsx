@@ -13,9 +13,9 @@ import { BridgeScene } from '@/components/clean/bridge-scene';
 import { savedBridges } from '@/components/dashboard/bridge-data';
 
 const stats = [
-  { label: 'Saved crossings', value: '03', icon: BookmarkIcon },
-  { label: 'Places explored', value: '03', icon: GlobeAltIcon },
-  { label: 'Bridges visited', value: '01', icon: CheckCircleIcon },
+  { label: 'Saved places', value: '03', icon: BookmarkIcon },
+  { label: 'Places explored', value: '02', icon: GlobeAltIcon },
+  { label: 'Memories added', value: '03', icon: CheckCircleIcon },
 ];
 
 export default async function DashboardPage() {
@@ -30,10 +30,10 @@ export default async function DashboardPage() {
           <h1>
             Welcome back, <span>{displayName}</span>.
           </h1>
-          <p>Your saved crossings and field notes, gathered in one place.</p>
+          <p>Your saved places and field notes, gathered in one atlas.</p>
         </div>
         <Link className="dashboard-header-action" href="/">
-          Discover bridges
+          Explore the map
           <ArrowRightIcon aria-hidden="true" />
         </Link>
       </header>
@@ -44,13 +44,13 @@ export default async function DashboardPage() {
       >
         <div className="dashboard-welcome-copy">
           <p>Next on the horizon</p>
-          <h2 id="dashboard-welcome-title">Kintai Bridge</h2>
+          <h2 id="dashboard-welcome-title">Cathedral Rock Trail</h2>
           <span>
             <MapPinIcon aria-hidden="true" />
-            Iwakuni, Japan
+            Sedona, Arizona
           </span>
           <p>
-            Five timber arches and a riverside approach worth taking slowly.
+            A red-rock trail turning gold as the final light reaches the canyon.
           </p>
           <Link href="/dashboard/users">
             View your collection
@@ -80,7 +80,7 @@ export default async function DashboardPage() {
           <header className="dashboard-panel-heading">
             <div>
               <p className="section-kicker">Recently saved</p>
-              <h2 id="recent-title">Your crossings</h2>
+              <h2 id="recent-title">Your places</h2>
             </div>
             <Link href="/dashboard/users">View all</Link>
           </header>
@@ -102,12 +102,12 @@ export default async function DashboardPage() {
 
         <aside className="dashboard-note" aria-labelledby="field-note-title">
           <p className="section-kicker">Field note · 04</p>
-          <h2 id="field-note-title">Leave room for the unplanned crossing.</h2>
+          <h2 id="field-note-title">Leave room for the unplanned stop.</h2>
           <p>
-            The bridge you remember most may be the one you found because the
+            The place you remember most may be the one you found because the
             road bent unexpectedly.
           </p>
-          <span>From the Wooden Bridge journal</span>
+          <span>From your Field Atlas journal</span>
         </aside>
       </div>
     </div>

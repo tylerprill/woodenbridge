@@ -35,7 +35,7 @@ export function AuthShell({
       <AmbientBackground />
 
       <section className="auth-layout" aria-labelledby={headingId}>
-        <aside className="auth-story" aria-label="Wooden Bridge field atlas">
+        <aside className="auth-story" aria-label="Field Atlas travel journal">
           <BrandLockup className="auth-story-brand" />
 
           <div className="auth-story-copy">
@@ -77,7 +77,7 @@ export function AuthShell({
           </div>
 
           <p className="auth-fine-print">
-            Your collection stays private and belongs only to you.
+            Your atlas stays private and belongs only to you.
           </p>
         </div>
       </section>

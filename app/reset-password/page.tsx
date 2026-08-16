@@ -8,8 +8,8 @@ import ResetPasswordForm from '@/components/unclean/reset-password-form';
 export const dynamic = 'force-dynamic';
 
 export const metadata: Metadata = {
-  title: 'Choose a new password — Wooden Bridge',
-  description: 'Choose a new password for your Wooden Bridge account.',
+  title: 'Choose a new password — Field Atlas',
+  description: 'Choose a new password for your Field Atlas account.',
   referrer: 'no-referrer',
 };
 
@@ -32,10 +32,10 @@ export default async function ResetPasswordPage({
       }
       panelEyebrow="Account recovery"
       panelTitle={isValid ? 'Choose a new password' : 'The trail has gone cold'}
-      storyDescription="A fresh key gets you back across while closing every old route into your account."
-      storyEyebrow="Secure crossing"
+      storyDescription="A fresh key gets you back into your atlas while closing every old route into your account."
+      storyEyebrow="Secure route"
       storyNote="Reset links expire after 30 minutes and disappear after one use."
-      storyTitle="Make the next crossing yours."
+      storyTitle="Make the next journey yours."
       footer={
         <p className="auth-signup-prompt">
           {isValid ? (

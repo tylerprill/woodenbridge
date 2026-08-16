@@ -5,26 +5,26 @@ import { BridgeScene } from '@/components/clean/bridge-scene';
 const bridges = [
   {
     index: '01',
-    name: 'Kintai Bridge',
-    location: 'Iwakuni, Japan',
+    name: 'Morning in Kyoto',
+    location: 'Kyoto, Japan',
     description:
-      'Five timber arches rise and fall in rhythm with the Nishiki River.',
+      'A quiet climb through vermilion gates before the city began to stir.',
     tone: 'cedar',
   },
   {
     index: '02',
-    name: 'Kapellbrücke',
+    name: 'Lake Lucerne in Blue',
     location: 'Lucerne, Switzerland',
     description:
-      'A covered crossing that carries centuries of paintings over the Reuss.',
+      'Still water, mountain air, and the first clear morning of the journey.',
     tone: 'alpine',
   },
   {
     index: '03',
-    name: 'Humpback Bridge',
-    location: 'Virginia, United States',
+    name: 'Red Rock Afternoon',
+    location: 'Sedona, Arizona',
     description:
-      'A rare arched covered bridge tucked into a quiet Appalachian valley.',
+      'A dusty trail turning gold as the last light reached the canyon walls.',
     tone: 'ember',
   },
 ];
@@ -37,10 +37,10 @@ export function FeaturedBridges() {
       aria-labelledby="featured-title"
     >
       <div className="section-heading">
-        <p>Selected crossings · 01</p>
-        <h2 id="featured-title">Three reasons to take the long way.</h2>
+        <p>Selected memories · 01</p>
+        <h2 id="featured-title">Three moments worth keeping.</h2>
         <span>
-          A starting point for wandering—chosen for craft, setting, and story.
+          A glimpse of the places, photographs, and stories that shape an atlas.
         </span>
       </div>
 
