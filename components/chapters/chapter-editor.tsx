@@ -4,9 +4,15 @@ import {
   ArrowDownIcon,
   ArrowLeftIcon,
   ArrowUpIcon,
+  Bars3Icon,
   CheckIcon,
+  EyeIcon,
+  EyeSlashIcon,
+  GlobeAltIcon,
+  LockClosedIcon,
   MagnifyingGlassIcon,
   MapPinIcon,
+  PhotoIcon,
   PlusIcon,
   TrashIcon,
   XMarkIcon,
@@ -15,10 +21,14 @@ import Image from 'next/image';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import {
+  Fragment,
   type FormEvent,
+  type KeyboardEvent,
+  type PointerEvent,
   useDeferredValue,
   useEffect,
   useMemo,
+  useRef,
   useState,
   useTransition,
 } from 'react';
@@ -34,8 +44,10 @@ import type {
 } from '@/app/lib/chapters/definitions';
 import {
   CHAPTER_INTRODUCTION_MAX_LENGTH,
+  CHAPTER_MAX_MEMORIES,
   CHAPTER_MIN_MEMORIES,
   CHAPTER_TITLE_MAX_LENGTH,
+  CHAPTER_TRANSITION_MAX_LENGTH,
 } from '@/app/lib/chapters/validation';
 import styles from './chapters.module.css';
 
@@ -65,15 +77,18 @@ function memoryName(entry: AtlasChapterMemoryOption) {
 function MemoryThumbnail({
   entry,
   compact = false,
+  isCover = false,
 }: {
   entry: AtlasChapterMemoryOption;
   compact?: boolean;
+  isCover?: boolean;
 }) {
   return (
     <div
       className={styles.memoryThumbnail}
       data-compact={compact ? 'true' : undefined}
       data-has-image={entry.thumbnailUrl ? 'true' : undefined}
+      data-cover={isCover ? 'true' : undefined}
       aria-hidden="true"
     >
       {entry.thumbnailUrl ? (
@@ -100,21 +115,64 @@ export function ChapterEditor({
   availableEntries: AtlasChapterMemoryOption[];
 }) {
   const router = useRouter();
+  const initialMemories = useMemo(() => chapter?.memories ?? [], [chapter]);
   const [title, setTitle] = useState(chapter?.title ?? '');
   const [introduction, setIntroduction] = useState(chapter?.introduction ?? '');
-  const [selectedIds, setSelectedIds] = useState(chapter?.entryIds ?? []);
+  const [selectedIds, setSelectedIds] = useState(
+    initialMemories.map((memory) => memory.entryId),
+  );
+  const [transitionNotes, setTransitionNotes] = useState<
+    Record<string, string>
+  >(
+    Object.fromEntries(
+      initialMemories.map((memory) => [memory.entryId, memory.transitionNote]),
+    ),
+  );
+  const [openTransitionIds, setOpenTransitionIds] = useState(
+    new Set(
+      initialMemories
+        .filter((memory) => memory.transitionNote)
+        .map((memory) => memory.entryId),
+    ),
+  );
+  const [coverMediaId, setCoverMediaId] = useState(
+    chapter?.coverMediaId ?? null,
+  );
+  const [visibility, setVisibility] = useState(
+    chapter?.visibility ?? 'private',
+  );
+  const [shareMap, setShareMap] = useState(chapter?.shareMap ?? true);
+  const [shareLocationPrecision, setShareLocationPrecision] = useState(
+    chapter?.shareLocationPrecision ?? 'approximate',
+  );
   const [query, setQuery] = useState('');
   const deferredQuery = useDeferredValue(query);
   const [visibleMemoryCount, setVisibleMemoryCount] = useState(
     MEMORY_PICKER_BATCH_SIZE,
   );
   const [error, setError] = useState('');
+  const [reorderAnnouncement, setReorderAnnouncement] = useState('');
+  const [draggingId, setDraggingId] = useState<string | null>(null);
   const [confirmingDelete, setConfirmingDelete] = useState(false);
   const [isPending, startTransition] = useTransition();
+  const sequenceListRef = useRef<HTMLOListElement>(null);
+  const draggingIdRef = useRef<string | null>(null);
+  const initialMemoryState = JSON.stringify(initialMemories);
+  const currentMemoryState = JSON.stringify(
+    selectedIds.map((entryId) => ({
+      entryId,
+      transitionNote: transitionNotes[entryId] ?? '',
+    })),
+  );
   const isDirty =
     title !== (chapter?.title ?? '') ||
     introduction !== (chapter?.introduction ?? '') ||
-    selectedIds.join('|') !== (chapter?.entryIds ?? []).join('|');
+    currentMemoryState !== initialMemoryState ||
+    coverMediaId !== (chapter?.coverMediaId ?? null) ||
+    visibility !== (chapter?.visibility ?? 'private') ||
+    shareMap !== (chapter?.shareMap ?? true) ||
+    shareLocationPrecision !==
+      (chapter?.shareLocationPrecision ?? 'approximate');
 
   const entriesById = useMemo(() => {
     return new Map(availableEntries.map((entry) => [entry.id, entry]));
@@ -127,6 +185,9 @@ export function ChapterEditor({
         .filter((entry): entry is AtlasChapterMemoryOption => Boolean(entry)),
     [entriesById, selectedIds],
   );
+  const automaticCoverMediaId =
+    selectedEntries.find((entry) => entry.coverMediaId)?.coverMediaId ?? null;
+  const effectiveCoverMediaId = coverMediaId ?? automaticCoverMediaId;
   const filteredEntries = useMemo(() => {
     const normalizedQuery = deferredQuery.trim().toLowerCase();
     if (!normalizedQuery) return availableEntries;
@@ -184,22 +245,119 @@ export function ChapterEditor({
 
   function addEntry(entryId: string) {
     setError('');
-    setSelectedIds((current) =>
-      current.includes(entryId) ? current : [...current, entryId],
-    );
+    if (selectedIds.includes(entryId)) return;
+    if (selectedIds.length >= CHAPTER_MAX_MEMORIES) {
+      setError(`A chapter can hold up to ${CHAPTER_MAX_MEMORIES} memories.`);
+      return;
+    }
+    setSelectedIds([...selectedIds, entryId]);
   }
 
   function removeEntry(entryId: string) {
     setError('');
     setSelectedIds((current) => current.filter((id) => id !== entryId));
+    const entry = entriesById.get(entryId);
+    if (entry?.coverMediaId === coverMediaId) setCoverMediaId(null);
+  }
+
+  function announcePosition(entryId: string, nextIds: string[]) {
+    const entry = entriesById.get(entryId);
+    const index = nextIds.indexOf(entryId);
+    if (!entry || index < 0) return;
+    setReorderAnnouncement(
+      `${memoryName(entry)} moved to position ${index + 1} of ${nextIds.length}.`,
+    );
   }
 
   function moveEntry(index: number, direction: -1 | 1) {
     const target = index + direction;
     if (target < 0 || target >= selectedIds.length) return;
-    setSelectedIds((current) => {
-      const next = [...current];
-      [next[index], next[target]] = [next[target], next[index]];
+    const next = [...selectedIds];
+    [next[index], next[target]] = [next[target], next[index]];
+    setSelectedIds(next);
+    announcePosition(next[target], next);
+  }
+
+  function moveEntryTo(entryId: string, targetId: string) {
+    if (entryId === targetId) return;
+    const from = selectedIds.indexOf(entryId);
+    const to = selectedIds.indexOf(targetId);
+    if (from < 0 || to < 0 || from === to) return;
+    const next = [...selectedIds];
+    next.splice(from, 1);
+    next.splice(to, 0, entryId);
+    setSelectedIds(next);
+    announcePosition(entryId, next);
+  }
+
+  function startPointerReorder(
+    event: PointerEvent<HTMLButtonElement>,
+    entryId: string,
+  ) {
+    if (event.button !== 0) return;
+    event.currentTarget.setPointerCapture(event.pointerId);
+    draggingIdRef.current = entryId;
+    setDraggingId(entryId);
+  }
+
+  function continuePointerReorder(event: PointerEvent<HTMLButtonElement>) {
+    const entryId = draggingIdRef.current;
+    const list = sequenceListRef.current;
+    if (!entryId || !list) return;
+
+    const bounds = list.getBoundingClientRect();
+    if (event.clientY < bounds.top + 44) list.scrollTop -= 18;
+    if (event.clientY > bounds.bottom - 44) list.scrollTop += 18;
+
+    const target = Array.from(
+      list.querySelectorAll<HTMLElement>('[data-sequence-entry]'),
+    ).find((item) => {
+      const rect = item.getBoundingClientRect();
+      return event.clientY >= rect.top && event.clientY <= rect.bottom;
+    });
+    const targetId = target?.dataset.sequenceEntry;
+    if (targetId) moveEntryTo(entryId, targetId);
+  }
+
+  function finishPointerReorder(event: PointerEvent<HTMLButtonElement>) {
+    if (event.currentTarget.hasPointerCapture(event.pointerId)) {
+      event.currentTarget.releasePointerCapture(event.pointerId);
+    }
+    draggingIdRef.current = null;
+    setDraggingId(null);
+  }
+
+  function handleReorderKey(
+    event: KeyboardEvent<HTMLButtonElement>,
+    entryId: string,
+    index: number,
+  ) {
+    if (event.key === 'ArrowUp') {
+      event.preventDefault();
+      moveEntry(index, -1);
+    } else if (event.key === 'ArrowDown') {
+      event.preventDefault();
+      moveEntry(index, 1);
+    } else if (event.key === 'Home' && index > 0) {
+      event.preventDefault();
+      moveEntryTo(entryId, selectedIds[0]);
+    } else if (event.key === 'End' && index < selectedIds.length - 1) {
+      event.preventDefault();
+      moveEntryTo(entryId, selectedIds[selectedIds.length - 1]);
+    }
+  }
+
+  function updateTransitionNote(entryId: string, value: string) {
+    setTransitionNotes((current) => ({ ...current, [entryId]: value }));
+  }
+
+  function toggleTransition(entryId: string) {
+    const isOpen = openTransitionIds.has(entryId);
+    if (isOpen) updateTransitionNote(entryId, '');
+    setOpenTransitionIds((current) => {
+      const next = new Set(current);
+      if (isOpen) next.delete(entryId);
+      else next.add(entryId);
       return next;
     });
   }
@@ -216,7 +374,18 @@ export function ChapterEditor({
     }
 
     startTransition(async () => {
-      const input = { title, introduction, entryIds: selectedIds };
+      const input = {
+        title,
+        introduction,
+        memories: selectedIds.map((entryId) => ({
+          entryId,
+          transitionNote: transitionNotes[entryId] ?? '',
+        })),
+        coverMediaId,
+        visibility,
+        shareMap,
+        shareLocationPrecision,
+      };
       const result = chapter
         ? await updateAtlasChapterAction({
             ...input,
@@ -390,6 +559,10 @@ export function ChapterEditor({
                               : addEntry(entry.id)
                           }
                           aria-label={`${isSelected ? 'Remove' : 'Add'} ${memoryName(entry)}`}
+                          disabled={
+                            !isSelected &&
+                            selectedIds.length >= CHAPTER_MAX_MEMORIES
+                          }
                         >
                           {isSelected ? (
                             <CheckIcon aria-hidden="true" />
@@ -447,6 +620,123 @@ export function ChapterEditor({
               </div>
             )}
           </section>
+
+          <section
+            className={styles.editorSection}
+            aria-labelledby="chapter-sharing-heading"
+          >
+            <div className={styles.editorSectionHeading}>
+              <span>03</span>
+              <div>
+                <p className="section-kicker">Privacy</p>
+                <h2 id="chapter-sharing-heading">Choose who can enter.</h2>
+              </div>
+            </div>
+
+            <div className={styles.chapterVisibilityChoices}>
+              <label
+                data-selected={visibility === 'private' ? 'true' : undefined}
+              >
+                <input
+                  type="radio"
+                  name="visibility"
+                  value="private"
+                  checked={visibility === 'private'}
+                  onChange={() => setVisibility('private')}
+                />
+                <LockClosedIcon aria-hidden="true" />
+                <span>
+                  <strong>Private</strong>
+                  <small>Only you can open this chapter.</small>
+                </span>
+                {visibility === 'private' ? (
+                  <CheckIcon aria-hidden="true" />
+                ) : null}
+              </label>
+              <label
+                data-selected={visibility === 'shared' ? 'true' : undefined}
+              >
+                <input
+                  type="radio"
+                  name="visibility"
+                  value="shared"
+                  checked={visibility === 'shared'}
+                  onChange={() => setVisibility('shared')}
+                />
+                <GlobeAltIcon aria-hidden="true" />
+                <span>
+                  <strong>Anyone with the link</strong>
+                  <small>Unlisted, read-only, and revocable at any time.</small>
+                </span>
+                {visibility === 'shared' ? (
+                  <CheckIcon aria-hidden="true" />
+                ) : null}
+              </label>
+            </div>
+
+            {visibility === 'shared' ? (
+              <div className={styles.chapterShareOptions}>
+                <label>
+                  <input
+                    type="checkbox"
+                    checked={shareMap}
+                    onChange={(event) => setShareMap(event.target.checked)}
+                  />
+                  <span
+                    className={styles.chapterShareToggle}
+                    aria-hidden="true"
+                  />
+                  {shareMap ? (
+                    <EyeIcon aria-hidden="true" />
+                  ) : (
+                    <EyeSlashIcon aria-hidden="true" />
+                  )}
+                  <span>
+                    <strong>Include the route map</strong>
+                    <small>
+                      Turn this off when the story matters more than the
+                      geography.
+                    </small>
+                  </span>
+                </label>
+                <label data-disabled={!shareMap ? 'true' : undefined}>
+                  <input
+                    type="checkbox"
+                    checked={shareLocationPrecision === 'exact'}
+                    disabled={!shareMap}
+                    onChange={(event) =>
+                      setShareLocationPrecision(
+                        event.target.checked ? 'exact' : 'approximate',
+                      )
+                    }
+                  />
+                  <span
+                    className={styles.chapterShareToggle}
+                    aria-hidden="true"
+                  />
+                  <MapPinIcon aria-hidden="true" />
+                  <span>
+                    <strong>Show exact pin positions</strong>
+                    <small>
+                      Off by default. Approximate pins protect the precise
+                      places you saved.
+                    </small>
+                  </span>
+                </label>
+                {chapter ? (
+                  <p>
+                    Saving a newly shared chapter creates a fresh private link.
+                    Returning it to private immediately revokes that link.
+                  </p>
+                ) : null}
+              </div>
+            ) : (
+              <p className={styles.chapterPrivacyNote}>
+                Chapters begin private. Sharing never changes the privacy of the
+                original memories.
+              </p>
+            )}
+          </section>
         </div>
 
         <aside
@@ -462,46 +752,163 @@ export function ChapterEditor({
           </div>
 
           {selectedEntries.length ? (
-            <ol className={styles.sequenceList}>
-              {selectedEntries.map((entry, index) => (
-                <li key={entry.id}>
-                  <span className={styles.sequenceNumber}>
-                    {String(index + 1).padStart(2, '0')}
-                  </span>
-                  <MemoryThumbnail entry={entry} compact />
-                  <div className={styles.sequenceMemory}>
-                    <strong>{memoryName(entry)}</strong>
-                    <span>
-                      {entry.placeLabel || entry.placeName || 'Pinned place'}
-                    </span>
-                  </div>
-                  <div className={styles.sequenceActions}>
-                    <button
-                      type="button"
-                      onClick={() => moveEntry(index, -1)}
-                      disabled={index === 0}
-                      aria-label={`Move ${memoryName(entry)} earlier`}
+            <ol className={styles.sequenceList} ref={sequenceListRef}>
+              {selectedEntries.map((entry, index) => {
+                const transitionNote = transitionNotes[entry.id] ?? '';
+                const transitionIsOpen = openTransitionIds.has(entry.id);
+                const isCover =
+                  Boolean(entry.coverMediaId) &&
+                  entry.coverMediaId === effectiveCoverMediaId;
+                const isExplicitCover =
+                  Boolean(entry.coverMediaId) &&
+                  entry.coverMediaId === coverMediaId;
+
+                return (
+                  <Fragment key={entry.id}>
+                    {index > 0 ? (
+                      <li
+                        className={styles.transitionEditor}
+                        role="presentation"
+                      >
+                        {transitionIsOpen ? (
+                          <label>
+                            <span>
+                              Words between{' '}
+                              {memoryName(selectedEntries[index - 1])} and{' '}
+                              {memoryName(entry)}
+                            </span>
+                            <textarea
+                              value={transitionNote}
+                              onChange={(event) =>
+                                updateTransitionNote(
+                                  entry.id,
+                                  event.target.value,
+                                )
+                              }
+                              maxLength={CHAPTER_TRANSITION_MAX_LENGTH}
+                              rows={3}
+                              placeholder="The road changed here…"
+                            />
+                            <small>
+                              {transitionNote.length} /{' '}
+                              {CHAPTER_TRANSITION_MAX_LENGTH}
+                            </small>
+                            <button
+                              type="button"
+                              onClick={() => toggleTransition(entry.id)}
+                            >
+                              Remove transition
+                            </button>
+                          </label>
+                        ) : (
+                          <button
+                            type="button"
+                            onClick={() => toggleTransition(entry.id)}
+                          >
+                            <PlusIcon aria-hidden="true" />
+                            Add words between these stops
+                          </button>
+                        )}
+                      </li>
+                    ) : null}
+                    <li
+                      className={styles.sequenceItem}
+                      data-sequence-entry={entry.id}
+                      data-dragging={
+                        draggingId === entry.id ? 'true' : undefined
+                      }
                     >
-                      <ArrowUpIcon aria-hidden="true" />
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => moveEntry(index, 1)}
-                      disabled={index === selectedEntries.length - 1}
-                      aria-label={`Move ${memoryName(entry)} later`}
-                    >
-                      <ArrowDownIcon aria-hidden="true" />
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => removeEntry(entry.id)}
-                      aria-label={`Remove ${memoryName(entry)}`}
-                    >
-                      <XMarkIcon aria-hidden="true" />
-                    </button>
-                  </div>
-                </li>
-              ))}
+                      <button
+                        type="button"
+                        className={styles.sequenceDragHandle}
+                        aria-label={`Reorder ${memoryName(entry)}. Use arrow keys, Home, or End.`}
+                        onPointerDown={(event) =>
+                          startPointerReorder(event, entry.id)
+                        }
+                        onPointerMove={continuePointerReorder}
+                        onPointerUp={finishPointerReorder}
+                        onPointerCancel={finishPointerReorder}
+                        onKeyDown={(event) =>
+                          handleReorderKey(event, entry.id, index)
+                        }
+                      >
+                        <Bars3Icon aria-hidden="true" />
+                      </button>
+                      <MemoryThumbnail
+                        entry={entry}
+                        compact
+                        isCover={isCover}
+                      />
+                      <div className={styles.sequenceMemory}>
+                        <small>
+                          {String(index + 1).padStart(2, '0')}
+                          {isCover ? ' · Cover' : ''}
+                        </small>
+                        <strong>{memoryName(entry)}</strong>
+                        <span>
+                          {entry.placeLabel ||
+                            entry.placeName ||
+                            'Pinned place'}
+                        </span>
+                      </div>
+                      <button
+                        type="button"
+                        className={styles.sequenceRemove}
+                        onClick={() => removeEntry(entry.id)}
+                        aria-label={`Remove ${memoryName(entry)}`}
+                      >
+                        <XMarkIcon aria-hidden="true" />
+                      </button>
+                      <div className={styles.sequenceActions}>
+                        <button
+                          type="button"
+                          onClick={() =>
+                            setCoverMediaId(
+                              isExplicitCover ? null : entry.coverMediaId,
+                            )
+                          }
+                          disabled={
+                            !entry.coverMediaId || (isCover && !isExplicitCover)
+                          }
+                          aria-pressed={isCover}
+                          aria-label={
+                            !entry.coverMediaId
+                              ? `${memoryName(entry)} has no photo to use as a cover`
+                              : isCover && !isExplicitCover
+                                ? `${memoryName(entry)} is the automatic chapter cover`
+                                : `${isExplicitCover ? 'Return to the automatic cover instead of' : 'Use'} ${memoryName(entry)} as the chapter cover`
+                          }
+                        >
+                          <PhotoIcon aria-hidden="true" />
+                          <span>
+                            {isCover && !isExplicitCover
+                              ? 'Auto cover'
+                              : isCover
+                                ? 'Cover'
+                                : 'Set cover'}
+                          </span>
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => moveEntry(index, -1)}
+                          disabled={index === 0}
+                          aria-label={`Move ${memoryName(entry)} earlier`}
+                        >
+                          <ArrowUpIcon aria-hidden="true" />
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => moveEntry(index, 1)}
+                          disabled={index === selectedEntries.length - 1}
+                          aria-label={`Move ${memoryName(entry)} later`}
+                        >
+                          <ArrowDownIcon aria-hidden="true" />
+                        </button>
+                      </div>
+                    </li>
+                  </Fragment>
+                );
+              })}
             </ol>
           ) : (
             <div className={styles.sequenceEmpty}>
@@ -510,6 +917,10 @@ export function ChapterEditor({
               <small>Select at least {CHAPTER_MIN_MEMORIES} memories.</small>
             </div>
           )}
+
+          <p className="sr-only" aria-live="polite">
+            {reorderAnnouncement}
+          </p>
 
           {error ? (
             <p className={styles.editorError} role="alert">

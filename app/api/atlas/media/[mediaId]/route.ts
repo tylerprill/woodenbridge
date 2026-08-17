@@ -3,6 +3,7 @@ import { sql } from '@vercel/postgres';
 
 import { getVerifiedSession } from '@/app/lib/auth/session';
 import { getAtlasBlobToken } from '@/app/lib/atlas/media-storage';
+import { atlasChapterIdSchema } from '@/app/lib/chapters/validation';
 
 export const runtime = 'nodejs';
 const PRIVATE_MEDIA_CACHE = 'private, max-age=300, stale-while-revalidate=3600';
@@ -17,25 +18,50 @@ export async function GET(
   request: Request,
   context: { params: Promise<{ mediaId: string }> },
 ) {
-  const session = await getVerifiedSession();
-  if (!session) return new Response(null, { status: 404 });
-
-  const variant = new URL(request.url).searchParams.get('variant');
+  const searchParams = new URL(request.url).searchParams;
+  const variant = searchParams.get('variant');
   if (variant && variant !== 'thumbnail') {
     return new Response(null, { status: 404 });
   }
 
   const { mediaId } = await context.params;
-  const media = await sql<MediaPathRow>`
-    SELECT media.storage_path, media.thumbnail_path, media.mime_type
-    FROM atlas_media AS media
-    INNER JOIN atlas_entries AS entry ON entry.id = media.entry_id
-    WHERE media.id = ${mediaId}
-      AND media.user_id = ${session.user.id}
-      AND entry.user_id = ${session.user.id}
-      AND entry.deleted_at IS NULL
-    LIMIT 1
-  `;
+  const parsedShareId = atlasChapterIdSchema.safeParse(
+    searchParams.get('share'),
+  );
+  const session = parsedShareId.success ? null : await getVerifiedSession();
+  if (!parsedShareId.success && !session) {
+    return new Response(null, { status: 404 });
+  }
+
+  const media = parsedShareId.success
+    ? await sql<MediaPathRow>`
+        SELECT media.storage_path, media.thumbnail_path, media.mime_type
+        FROM atlas_media AS media
+        INNER JOIN atlas_entries AS entry
+          ON entry.id = media.entry_id
+          AND entry.user_id = media.user_id
+        INNER JOIN atlas_chapter_entries AS chapter_entry
+          ON chapter_entry.entry_id = entry.id
+          AND chapter_entry.user_id = entry.user_id
+        INNER JOIN atlas_chapters AS chapter
+          ON chapter.id = chapter_entry.chapter_id
+          AND chapter.user_id = chapter_entry.user_id
+        WHERE media.id = ${mediaId}
+          AND chapter.share_id = ${parsedShareId.data}
+          AND chapter.visibility = 'shared'
+          AND entry.deleted_at IS NULL
+        LIMIT 1
+      `
+    : await sql<MediaPathRow>`
+        SELECT media.storage_path, media.thumbnail_path, media.mime_type
+        FROM atlas_media AS media
+        INNER JOIN atlas_entries AS entry ON entry.id = media.entry_id
+        WHERE media.id = ${mediaId}
+          AND media.user_id = ${session!.user.id}
+          AND entry.user_id = ${session!.user.id}
+          AND entry.deleted_at IS NULL
+        LIMIT 1
+      `;
 
   const row = media.rows[0];
   if (!row) return new Response(null, { status: 404 });

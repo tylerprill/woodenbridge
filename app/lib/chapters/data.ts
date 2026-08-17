@@ -1,9 +1,10 @@
 import 'server-only';
 
 import { sql } from '@vercel/postgres';
+import { cache } from 'react';
 
 import { requireVerifiedSession } from '@/app/lib/auth/session';
-import type { AtlasEntry, AtlasMedia } from '@/app/lib/atlas/definitions';
+import type { AtlasMedia } from '@/app/lib/atlas/definitions';
 import {
   type AtlasEntryRow,
   type AtlasMediaRow,
@@ -12,6 +13,7 @@ import {
 } from '@/app/lib/atlas/rows';
 import type {
   AtlasChapter,
+  AtlasChapterEntry,
   AtlasChapterEditorData,
   AtlasChapterSummary,
 } from './definitions';
@@ -25,6 +27,11 @@ type ChapterRow = {
   memory_count: number | string;
   start_date: Date | string | null;
   end_date: Date | string | null;
+  cover_media_id: string | null;
+  visibility: AtlasChapterSummary['visibility'];
+  share_id: string;
+  share_map: boolean;
+  share_location_precision: AtlasChapterSummary['shareLocationPrecision'];
   created_at: Date | string;
   updated_at: Date | string;
 };
@@ -36,8 +43,15 @@ type ChapterEditorRow = {
   title: string;
   introduction: string;
   version: number;
-  entry_ids: string[];
+  cover_media_id: string | null;
+  visibility: AtlasChapterSummary['visibility'];
+  share_id: string;
+  share_map: boolean;
+  share_location_precision: AtlasChapterSummary['shareLocationPrecision'];
+  memories: Array<{ entryId: string; transitionNote: string }>;
 };
+
+type ChapterEntryRow = AtlasEntryRow & { transition_note: string };
 
 type ChapterMemoryOptionRow = {
   id: string;
@@ -63,7 +77,10 @@ function toDateString(value: Date | string | null) {
     : String(value).slice(0, 10);
 }
 
-function attachMedia(entries: AtlasEntryRow[], mediaRows: AtlasMediaRow[]) {
+function attachMedia(
+  entries: ChapterEntryRow[],
+  mediaRows: AtlasMediaRow[],
+): AtlasChapterEntry[] {
   const mediaByEntry = new Map<string, AtlasMedia[]>();
   for (const row of mediaRows) {
     const media = toAtlasMedia(row);
@@ -72,9 +89,10 @@ function attachMedia(entries: AtlasEntryRow[], mediaRows: AtlasMediaRow[]) {
     mediaByEntry.set(media.entryId, current);
   }
 
-  return entries.map((row) =>
-    toAtlasEntry(row, mediaByEntry.get(row.id) ?? []),
-  );
+  return entries.map((row) => ({
+    ...toAtlasEntry(row, mediaByEntry.get(row.id) ?? []),
+    transitionNote: row.transition_note,
+  }));
 }
 
 function toChapterSummary(
@@ -90,12 +108,25 @@ function toChapterSummary(
     startDate: toDateString(row.start_date),
     endDate: toDateString(row.end_date),
     coverMedia,
+    coverMediaId: row.cover_media_id,
+    visibility: row.visibility,
+    shareId: row.share_id,
+    shareMap: row.share_map,
+    shareLocationPrecision: row.share_location_precision,
     createdAt: toIsoString(row.created_at),
     updatedAt: toIsoString(row.updated_at),
   };
 }
 
-async function loadChapter(userId: string, chapterId: string) {
+async function loadChapter({
+  userId,
+  chapterId,
+  shareId,
+}: {
+  userId: string | null;
+  chapterId: string | null;
+  shareId: string | null;
+}) {
   const [chapterResult, entriesResult, mediaResult] = await Promise.all([
     sql<ChapterRow>`
       SELECT
@@ -106,6 +137,11 @@ async function loadChapter(userId: string, chapterId: string) {
         COUNT(entry.id)::int AS memory_count,
         MIN(entry.visited_on) AS start_date,
         MAX(entry.visited_on) AS end_date,
+        chapter.cover_media_id,
+        chapter.visibility,
+        chapter.share_id,
+        chapter.share_map,
+        chapter.share_location_precision,
         chapter.created_at,
         chapter.updated_at
       FROM atlas_chapters AS chapter
@@ -116,12 +152,14 @@ async function loadChapter(userId: string, chapterId: string) {
         AND entry.user_id = chapter.user_id
         AND entry.record_state = 'saved'
         AND entry.deleted_at IS NULL
-      WHERE chapter.id = ${chapterId}
-        AND chapter.user_id = ${userId}
+      WHERE (
+        (chapter.id = ${chapterId}::uuid AND chapter.user_id = ${userId}::uuid)
+        OR (chapter.share_id = ${shareId}::uuid AND chapter.visibility = 'shared')
+      )
       GROUP BY chapter.id
       LIMIT 1
     `,
-    sql<AtlasEntryRow>`
+    sql<ChapterEntryRow>`
       SELECT
         entry.id,
         entry.title,
@@ -141,15 +179,18 @@ async function loadChapter(userId: string, chapterId: string) {
         ST_X(entry.location::geometry)::float8 AS longitude,
         entry.version,
         entry.created_at,
-        entry.updated_at
+        entry.updated_at,
+        chapter_entry.transition_note
       FROM atlas_chapter_entries AS chapter_entry
       INNER JOIN atlas_chapters AS chapter
         ON chapter.id = chapter_entry.chapter_id
       INNER JOIN atlas_entries AS entry
         ON entry.id = chapter_entry.entry_id
-      WHERE chapter.id = ${chapterId}
-        AND chapter.user_id = ${userId}
-        AND entry.user_id = ${userId}
+      WHERE (
+        (chapter.id = ${chapterId}::uuid AND chapter.user_id = ${userId}::uuid)
+        OR (chapter.share_id = ${shareId}::uuid AND chapter.visibility = 'shared')
+      )
+        AND entry.user_id = chapter.user_id
         AND entry.record_state = 'saved'
         AND entry.deleted_at IS NULL
       ORDER BY chapter_entry.position
@@ -173,10 +214,12 @@ async function loadChapter(userId: string, chapterId: string) {
         ON entry.id = chapter_entry.entry_id
       INNER JOIN atlas_media AS media
         ON media.entry_id = entry.id
-        AND media.user_id = ${userId}
-      WHERE chapter.id = ${chapterId}
-        AND chapter.user_id = ${userId}
-        AND entry.user_id = ${userId}
+        AND media.user_id = chapter.user_id
+      WHERE (
+        (chapter.id = ${chapterId}::uuid AND chapter.user_id = ${userId}::uuid)
+        OR (chapter.share_id = ${shareId}::uuid AND chapter.visibility = 'shared')
+      )
+        AND entry.user_id = chapter.user_id
         AND entry.record_state = 'saved'
         AND entry.deleted_at IS NULL
       ORDER BY chapter_entry.position, media.sort_order, media.created_at
@@ -188,7 +231,13 @@ async function loadChapter(userId: string, chapterId: string) {
 
   const entries = attachMedia(entriesResult.rows, mediaResult.rows);
   const coverMedia =
-    entries.find((entry) => entry.media.length)?.media[0] ?? null;
+    (row.cover_media_id
+      ? entries
+          .flatMap((entry) => entry.media)
+          .find((media) => media.id === row.cover_media_id)
+      : null) ??
+    entries.find((entry) => entry.media.length)?.media[0] ??
+    null;
 
   return {
     ...toChapterSummary(row, coverMedia),
@@ -218,6 +267,11 @@ export async function getAtlasChapters({
         COUNT(entry.id)::int AS memory_count,
         MIN(entry.visited_on) AS start_date,
         MAX(entry.visited_on) AS end_date,
+        chapter.cover_media_id,
+        chapter.visibility,
+        chapter.share_id,
+        chapter.share_map,
+        chapter.share_location_precision,
         chapter.created_at,
         chapter.updated_at
       FROM atlas_chapters AS chapter
@@ -269,7 +323,12 @@ export async function getAtlasChapters({
         ON media.entry_id = entry.id
         AND media.user_id = chapter.user_id
       WHERE chapter.user_id = ${userId}
-      ORDER BY chapter.id, chapter_entry.position, media.sort_order, media.created_at
+      ORDER BY
+        chapter.id,
+        (media.id = chapter.cover_media_id) DESC,
+        chapter_entry.position,
+        media.sort_order,
+        media.created_at
     `,
     sql<{ total: number | string }>`
       SELECT COUNT(*)::int AS total
@@ -300,8 +359,50 @@ export async function getAtlasChapter(chapterId: string) {
   if (!parsed.success) return null;
 
   const session = await requireVerifiedSession();
-  return loadChapter(session.user.id, parsed.data);
+  return loadChapter({
+    userId: session.user.id,
+    chapterId: parsed.data,
+    shareId: null,
+  });
 }
+
+export const getSharedAtlasChapter = cache(async (shareId: string) => {
+  const parsed = atlasChapterIdSchema.safeParse(shareId);
+  if (!parsed.success) return null;
+
+  const chapter = await loadChapter({
+    userId: null,
+    chapterId: null,
+    shareId: parsed.data,
+  });
+  if (!chapter) return null;
+
+  const withShareAccess = (url: string) =>
+    `${url}${url.includes('?') ? '&' : '?'}share=${chapter.shareId}`;
+  const entries = chapter.entries.map((entry) => ({
+    ...entry,
+    latitude:
+      chapter.shareLocationPrecision === 'exact'
+        ? entry.latitude
+        : Number(entry.latitude.toFixed(1)),
+    longitude:
+      chapter.shareLocationPrecision === 'exact'
+        ? entry.longitude
+        : Number(entry.longitude.toFixed(1)),
+    media: entry.media.map((media) => ({
+      ...media,
+      deliveryUrl: withShareAccess(media.deliveryUrl),
+      thumbnailUrl: withShareAccess(media.thumbnailUrl),
+    })),
+  }));
+  const coverMedia = chapter.coverMedia
+    ? (entries
+        .flatMap((entry) => entry.media)
+        .find((media) => media.id === chapter.coverMedia?.id) ?? null)
+    : null;
+
+  return { ...chapter, entries, coverMedia } satisfies AtlasChapter;
+});
 
 export async function getAtlasChapterEditorData(
   chapterId?: string,
@@ -323,11 +424,22 @@ export async function getAtlasChapterEditorData(
             chapter.title,
             chapter.introduction,
             chapter.version,
+            chapter.cover_media_id,
+            chapter.visibility,
+            chapter.share_id,
+            chapter.share_map,
+            chapter.share_location_precision,
             COALESCE(
-              ARRAY_AGG(chapter_entry.entry_id ORDER BY chapter_entry.position)
+              JSONB_AGG(
+                JSONB_BUILD_OBJECT(
+                  'entryId', chapter_entry.entry_id,
+                  'transitionNote', chapter_entry.transition_note
+                )
+                ORDER BY chapter_entry.position
+              )
                 FILTER (WHERE chapter_entry.entry_id IS NOT NULL),
-              ARRAY[]::uuid[]
-            ) AS entry_ids
+              '[]'::jsonb
+            ) AS memories
           FROM atlas_chapters AS chapter
           LEFT JOIN atlas_chapter_entries AS chapter_entry
             ON chapter_entry.chapter_id = chapter.id
@@ -344,7 +456,12 @@ export async function getAtlasChapterEditorData(
                 title: row.title,
                 introduction: row.introduction,
                 version: row.version,
-                entryIds: row.entry_ids,
+                coverMediaId: row.cover_media_id,
+                visibility: row.visibility,
+                shareId: row.share_id,
+                shareMap: row.share_map,
+                shareLocationPrecision: row.share_location_precision,
+                memories: row.memories,
               }
             : null;
         })
@@ -408,6 +525,7 @@ export async function getAtlasChapterEditorData(
       placeName: row.place_name,
       visitedOn: toDateString(row.visited_on),
       journeyState: row.journey_state,
+      coverMediaId: row.media_id,
       thumbnailUrl: row.media_id
         ? `/api/atlas/media/${row.media_id}${row.thumbnail_path ? '?variant=thumbnail' : ''}`
         : null,

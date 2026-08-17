@@ -86,6 +86,25 @@ an ordered reading experience, a mapped route, derived dates, cover imagery,
 and a short introduction while leaving the original atlas memories intact. This
 gives the map a narrative layer without turning Atlas into an itinerary planner.
 
+The production chapter experience now includes:
+
+- an accessible workshop for selecting up to fifty memories;
+- pointer, touch, keyboard, and explicit-button reordering;
+- a user-selected photographic cover with a sensible automatic fallback;
+- optional authored prose between individual memories;
+- an ordered, curved route and an editorial desktop/mobile reading experience;
+- private-by-default chapters and unlisted read-only links;
+- revocable sharing links that rotate when sharing is re-enabled;
+- optional maps and approximate shared coordinates by default;
+- ownership-checked private media delivery for shared chapter photographs; and
+- lazy thumbnails, bounded editor rendering, and off-screen content containment
+  for responsive long chapters.
+
+Chapter quality is measured as a complete path rather than a single screen:
+creation, reordering, cover selection, reading, sharing, revocation, re-sharing,
+and narrow-mobile use must all remain coherent. Original atlas memories stay
+independent, private, and editable regardless of a chapter's sharing state.
+
 ### Priority 4 — The return loop
 
 Atlas should reward returning:

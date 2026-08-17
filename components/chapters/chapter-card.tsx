@@ -53,9 +53,15 @@ export function ChapterCard({
 
         <div className={styles.chapterCardBody}>
           <p className={styles.chapterCardMeta}>
-            <span>{formatChapterDateRange(chapter.startDate, chapter.endDate)}</span>
+            <span>
+              {formatChapterDateRange(chapter.startDate, chapter.endDate)}
+            </span>
             <span aria-hidden="true">·</span>
             <span>{chapterMemoryLabel(chapter.memoryCount)}</span>
+            <span aria-hidden="true">·</span>
+            <span>
+              {chapter.visibility === 'shared' ? 'Shared' : 'Private'}
+            </span>
           </p>
           <h2>{chapter.title}</h2>
           {chapter.introduction ? (

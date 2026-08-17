@@ -4,6 +4,13 @@ import type {
   JourneyState,
 } from '@/app/lib/atlas/definitions';
 
+export const CHAPTER_VISIBILITIES = ['private', 'shared'] as const;
+export type ChapterVisibility = (typeof CHAPTER_VISIBILITIES)[number];
+
+export const CHAPTER_LOCATION_PRECISIONS = ['approximate', 'exact'] as const;
+export type ChapterLocationPrecision =
+  (typeof CHAPTER_LOCATION_PRECISIONS)[number];
+
 export type AtlasChapterSummary = {
   id: string;
   title: string;
@@ -13,19 +20,36 @@ export type AtlasChapterSummary = {
   startDate: string | null;
   endDate: string | null;
   coverMedia: AtlasMedia | null;
+  coverMediaId: string | null;
+  visibility: ChapterVisibility;
+  shareId: string;
+  shareMap: boolean;
+  shareLocationPrecision: ChapterLocationPrecision;
   createdAt: string;
   updatedAt: string;
 };
 
+export type AtlasChapterEntry = AtlasEntry & {
+  transitionNote: string;
+};
+
 export type AtlasChapter = AtlasChapterSummary & {
-  entries: AtlasEntry[];
+  entries: AtlasChapterEntry[];
 };
 
 export type AtlasChapterEditorChapter = Pick<
   AtlasChapter,
-  'id' | 'title' | 'introduction' | 'version'
+  | 'id'
+  | 'title'
+  | 'introduction'
+  | 'version'
+  | 'coverMediaId'
+  | 'visibility'
+  | 'shareId'
+  | 'shareMap'
+  | 'shareLocationPrecision'
 > & {
-  entryIds: string[];
+  memories: AtlasChapterMemoryInput[];
 };
 
 export type AtlasChapterMemoryOption = {
@@ -35,6 +59,7 @@ export type AtlasChapterMemoryOption = {
   placeName: string | null;
   visitedOn: string | null;
   journeyState: JourneyState;
+  coverMediaId: string | null;
   thumbnailUrl: string | null;
 };
 
@@ -43,10 +68,19 @@ export type AtlasChapterEditorData = {
   availableEntries: AtlasChapterMemoryOption[];
 };
 
+export type AtlasChapterMemoryInput = {
+  entryId: string;
+  transitionNote: string;
+};
+
 export type AtlasChapterInput = {
   title: string;
   introduction: string;
-  entryIds: string[];
+  memories: AtlasChapterMemoryInput[];
+  coverMediaId: string | null;
+  visibility: ChapterVisibility;
+  shareMap: boolean;
+  shareLocationPrecision: ChapterLocationPrecision;
 };
 
 export type AtlasChapterUpdateInput = AtlasChapterInput & {

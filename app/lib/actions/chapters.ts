@@ -6,6 +6,7 @@ import { revalidatePath } from 'next/cache';
 import { requireVerifiedSession } from '@/app/lib/auth/session';
 import type {
   AtlasChapterInput,
+  AtlasChapterMemoryInput,
   AtlasChapterUpdateInput,
   ChapterActionResult,
 } from '@/app/lib/chapters/definitions';
@@ -15,7 +16,7 @@ import {
   atlasChapterUpdateSchema,
 } from '@/app/lib/chapters/validation';
 
-type ChapterMutationData = { id: string; version: number };
+type ChapterMutationData = { id: string; version: number; shareId: string };
 
 function failed(message = 'We could not save that chapter. Please try again.') {
   return { ok: false, error: 'failed', message } as const;
@@ -45,7 +46,7 @@ async function replaceChapterEntries(
   client: VercelPoolClient,
   chapterId: string,
   userId: string,
-  entryIds: string[],
+  memories: AtlasChapterMemoryInput[],
 ) {
   await client.query(
     'DELETE FROM atlas_chapter_entries WHERE chapter_id = $1',
@@ -53,18 +54,64 @@ async function replaceChapterEntries(
   );
   await client.query(
     `
-      INSERT INTO atlas_chapter_entries (chapter_id, entry_id, user_id, position)
-      SELECT $1, entry_id, $2, (ordinality - 1)::smallint
-      FROM unnest($3::uuid[]) WITH ORDINALITY AS selected(entry_id, ordinality)
+      INSERT INTO atlas_chapter_entries (
+        chapter_id,
+        entry_id,
+        user_id,
+        position,
+        transition_note
+      )
+      SELECT
+        $1,
+        selected.entry_id,
+        $2,
+        (selected.ordinality - 1)::smallint,
+        selected.transition_note
+      FROM unnest($3::uuid[], $4::text[])
+        WITH ORDINALITY AS selected(entry_id, transition_note, ordinality)
     `,
-    [chapterId, userId, entryIds],
+    [
+      chapterId,
+      userId,
+      memories.map((memory) => memory.entryId),
+      memories.map((memory) => memory.transitionNote),
+    ],
   );
 }
 
-function revalidateChapter(chapterId: string) {
+async function ownsCoverMedia(
+  client: VercelPoolClient,
+  userId: string,
+  coverMediaId: string | null,
+  entryIds: string[],
+) {
+  if (!coverMediaId) return true;
+  const result = await client.query(
+    `
+      SELECT 1
+      FROM atlas_media
+      WHERE id = $1
+        AND user_id = $2
+        AND entry_id = ANY($3::uuid[])
+      LIMIT 1
+    `,
+    [coverMediaId, userId, entryIds],
+  );
+  return Boolean(result.rows[0]);
+}
+
+function revalidateChapter(
+  chapterId: string,
+  ...shareIds: Array<string | null | undefined>
+) {
   revalidatePath('/dashboard/chapters');
   revalidatePath(`/dashboard/chapters/${chapterId}`);
   revalidatePath(`/dashboard/chapters/${chapterId}/edit`);
+  for (const shareId of Array.from(
+    new Set(shareIds.filter((id): id is string => Boolean(id))),
+  )) {
+    revalidatePath(`/shared/chapters/${shareId}`);
+  }
 }
 
 export async function createAtlasChapterAction(
@@ -77,14 +124,16 @@ export async function createAtlasChapterAction(
     return {
       ok: false,
       error: 'invalid',
-      message: parsed.error.issues[0]?.message ?? 'Check the chapter and try again.',
+      message:
+        parsed.error.issues[0]?.message ?? 'Check the chapter and try again.',
     };
   }
 
   const client = await db.connect();
   try {
     await client.query('BEGIN');
-    if (!(await ownsEveryEntry(client, session.user.id, parsed.data.entryIds))) {
+    const entryIds = parsed.data.memories.map((memory) => memory.entryId);
+    if (!(await ownsEveryEntry(client, session.user.id, entryIds))) {
       await client.query('ROLLBACK');
       return {
         ok: false,
@@ -92,25 +141,56 @@ export async function createAtlasChapterAction(
         message: 'One of those memories is no longer available.',
       };
     }
+    if (
+      !(await ownsCoverMedia(
+        client,
+        session.user.id,
+        parsed.data.coverMediaId,
+        entryIds,
+      ))
+    ) {
+      await client.query('ROLLBACK');
+      return {
+        ok: false,
+        error: 'invalid',
+        message: 'Choose a cover from the memories in this chapter.',
+      };
+    }
 
     const inserted = await client.query<ChapterMutationData>(
       `
-        INSERT INTO atlas_chapters (user_id, title, introduction)
-        VALUES ($1, $2, $3)
-        RETURNING id, version
+        INSERT INTO atlas_chapters (
+          user_id,
+          title,
+          introduction,
+          cover_media_id,
+          visibility,
+          share_map,
+          share_location_precision
+        )
+        VALUES ($1, $2, $3, $4, $5, $6, $7)
+        RETURNING id, version, share_id AS "shareId"
       `,
-      [session.user.id, parsed.data.title, parsed.data.introduction],
+      [
+        session.user.id,
+        parsed.data.title,
+        parsed.data.introduction,
+        parsed.data.coverMediaId,
+        parsed.data.visibility,
+        parsed.data.shareMap,
+        parsed.data.shareLocationPrecision,
+      ],
     );
     const chapter = inserted.rows[0];
     await replaceChapterEntries(
       client,
       chapter.id,
       session.user.id,
-      parsed.data.entryIds,
+      parsed.data.memories,
     );
     await client.query('COMMIT');
 
-    revalidateChapter(chapter.id);
+    revalidateChapter(chapter.id, chapter.shareId);
     return { ok: true, data: chapter };
   } catch (error) {
     await client.query('ROLLBACK').catch(() => undefined);
@@ -131,16 +211,21 @@ export async function updateAtlasChapterAction(
     return {
       ok: false,
       error: 'invalid',
-      message: parsed.error.issues[0]?.message ?? 'Check the chapter and try again.',
+      message:
+        parsed.error.issues[0]?.message ?? 'Check the chapter and try again.',
     };
   }
 
   const client = await db.connect();
   try {
     await client.query('BEGIN');
-    const current = await client.query<{ version: number }>(
+    const current = await client.query<{
+      version: number;
+      visibility: 'private' | 'shared';
+      share_id: string;
+    }>(
       `
-        SELECT version
+        SELECT version, visibility, share_id
         FROM atlas_chapters
         WHERE id = $1 AND user_id = $2
         FOR UPDATE
@@ -166,12 +251,28 @@ export async function updateAtlasChapterAction(
       };
     }
 
-    if (!(await ownsEveryEntry(client, session.user.id, parsed.data.entryIds))) {
+    const entryIds = parsed.data.memories.map((memory) => memory.entryId);
+    if (!(await ownsEveryEntry(client, session.user.id, entryIds))) {
       await client.query('ROLLBACK');
       return {
         ok: false,
         error: 'invalid',
         message: 'One of those memories is no longer available.',
+      };
+    }
+    if (
+      !(await ownsCoverMedia(
+        client,
+        session.user.id,
+        parsed.data.coverMediaId,
+        entryIds,
+      ))
+    ) {
+      await client.query('ROLLBACK');
+      return {
+        ok: false,
+        error: 'invalid',
+        message: 'Choose a cover from the memories in this chapter.',
       };
     }
 
@@ -181,14 +282,26 @@ export async function updateAtlasChapterAction(
         SET
           title = $1,
           introduction = $2,
+          cover_media_id = $3,
+          visibility = $4::varchar,
+          share_map = $5,
+          share_location_precision = $6,
+          share_id = CASE
+            WHEN visibility = 'private' AND $4::varchar = 'shared' THEN gen_random_uuid()
+            ELSE share_id
+          END,
           version = version + 1,
           updated_at = NOW()
-        WHERE id = $3 AND user_id = $4
-        RETURNING id, version
+        WHERE id = $7 AND user_id = $8
+        RETURNING id, version, share_id AS "shareId"
       `,
       [
         parsed.data.title,
         parsed.data.introduction,
+        parsed.data.coverMediaId,
+        parsed.data.visibility,
+        parsed.data.shareMap,
+        parsed.data.shareLocationPrecision,
         parsed.data.id,
         session.user.id,
       ],
@@ -197,11 +310,15 @@ export async function updateAtlasChapterAction(
       client,
       parsed.data.id,
       session.user.id,
-      parsed.data.entryIds,
+      parsed.data.memories,
     );
     await client.query('COMMIT');
 
-    revalidateChapter(parsed.data.id);
+    revalidateChapter(
+      parsed.data.id,
+      current.rows[0].share_id,
+      updated.rows[0].shareId,
+    );
     return { ok: true, data: updated.rows[0] };
   } catch (error) {
     await client.query('ROLLBACK').catch(() => undefined);
