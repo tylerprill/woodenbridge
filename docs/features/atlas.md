@@ -100,6 +100,8 @@ The production chapter experience now includes:
 - a user-selected photographic cover with a sensible automatic fallback;
 - optional authored prose between individual memories;
 - an ordered, curved route and an editorial desktop/mobile reading experience;
+- a cinematic public reader with native sharing, chapter-specific social
+  previews, and a clear path into a new Field Atlas account;
 - private-by-default chapters and unlisted read-only links;
 - revocable sharing links that rotate when sharing is re-enabled;
 - optional maps and approximate shared coordinates by default, with coordinates

@@ -3,6 +3,7 @@
  */
 
 import { act, render, screen } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
 
 import { ChapterMapLoader } from '@/components/chapters/chapter-map-loader';
 
@@ -37,6 +38,7 @@ describe('ChapterMapLoader', () => {
 
   afterEach(() => {
     global.IntersectionObserver = originalObserver;
+    window.history.replaceState(null, '', '/');
   });
 
   it('holds MapLibre until the route approaches the viewport', () => {
@@ -51,6 +53,9 @@ describe('ChapterMapLoader', () => {
     render(<ChapterMapLoader entries={entries} />);
 
     expect(screen.getByRole('status')).toHaveTextContent('Route map ahead');
+    expect(
+      screen.getByRole('button', { name: 'Show route map' }),
+    ).toBeInTheDocument();
     expect(
       screen.queryByTestId('deferred-chapter-map'),
     ).not.toBeInTheDocument();
@@ -75,5 +80,43 @@ describe('ChapterMapLoader', () => {
     render(<ChapterMapLoader entries={entries} />);
 
     expect(screen.getByTestId('deferred-chapter-map')).toBeInTheDocument();
+  });
+
+  it('lets a reader load the route explicitly', async () => {
+    const user = userEvent.setup();
+    global.IntersectionObserver = jest.fn(() => {
+      return {
+        disconnect: jest.fn(),
+        observe: jest.fn(),
+      } as unknown as IntersectionObserver;
+    }) as unknown as typeof IntersectionObserver;
+
+    render(<ChapterMapLoader entries={entries} />);
+
+    await user.click(screen.getByRole('button', { name: 'Show route map' }));
+
+    expect(screen.getByTestId('deferred-chapter-map')).toHaveTextContent(
+      '1 stops',
+    );
+  });
+
+  it('loads immediately when the route is opened from a direct link', () => {
+    const observe = jest.fn();
+    global.IntersectionObserver = jest.fn(() => {
+      return {
+        disconnect: jest.fn(),
+        observe,
+      } as unknown as IntersectionObserver;
+    }) as unknown as typeof IntersectionObserver;
+    window.history.replaceState(
+      null,
+      '',
+      '/shared/chapters/example#chapter-route',
+    );
+
+    render(<ChapterMapLoader entries={entries} />);
+
+    expect(screen.getByTestId('deferred-chapter-map')).toBeInTheDocument();
+    expect(observe).not.toHaveBeenCalled();
   });
 });

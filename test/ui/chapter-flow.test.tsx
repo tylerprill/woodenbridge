@@ -124,7 +124,7 @@ describe('chapter creation and sharing UI', () => {
       />,
     );
 
-    await user.click(screen.getByRole('button', { name: 'Share' }));
+    await user.click(screen.getByRole('button', { name: 'Share chapter' }));
 
     await waitFor(() =>
       expect(writeText).toHaveBeenCalledWith(
@@ -134,5 +134,39 @@ describe('chapter creation and sharing UI', () => {
     expect(screen.getByRole('status')).toHaveTextContent(
       'Unlisted chapter link copied.',
     );
+  });
+
+  it('uses the native share sheet when the browser supports it', async () => {
+    const user = userEvent.setup();
+    const share = jest.fn().mockResolvedValue(undefined);
+    const canShare = jest.fn().mockReturnValue(true);
+    Object.defineProperty(navigator, 'share', {
+      configurable: true,
+      value: share,
+    });
+    Object.defineProperty(navigator, 'canShare', {
+      configurable: true,
+      value: canShare,
+    });
+
+    render(
+      <ChapterShareControl
+        chapterId="chapter-1"
+        chapterTitle="Wonders without borders"
+        shareId="share-1"
+        visibility="shared"
+      />,
+    );
+
+    await user.click(screen.getByRole('button', { name: 'Share chapter' }));
+
+    await waitFor(() =>
+      expect(share).toHaveBeenCalledWith({
+        title: 'Wonders without borders',
+        url: 'http://localhost/shared/chapters/share-1',
+      }),
+    );
+    expect(canShare).toHaveBeenCalled();
+    expect(screen.getByRole('status')).toHaveTextContent('Chapter shared.');
   });
 });

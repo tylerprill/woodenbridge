@@ -9,6 +9,18 @@ import styles from './chapters.module.css';
 
 type ShareFeedback = 'idle' | 'sharing' | 'shared' | 'copied' | 'error';
 
+function canUseNativeShare(shareData: ShareData) {
+  if (typeof navigator.share !== 'function') return false;
+
+  try {
+    return (
+      typeof navigator.canShare !== 'function' || navigator.canShare(shareData)
+    );
+  } catch {
+    return false;
+  }
+}
+
 export function ChapterShareControl({
   chapterId,
   chapterTitle,
@@ -56,11 +68,12 @@ export function ChapterShareControl({
 
   async function shareChapter() {
     const url = chapterUrl();
+    const shareData = { title: chapterTitle, url };
     setFeedback('sharing');
 
-    if (navigator.share && navigator.maxTouchPoints > 0) {
+    if (canUseNativeShare(shareData)) {
       try {
-        await navigator.share({ title: chapterTitle, url });
+        await navigator.share(shareData);
         showTransientFeedback('shared');
         return;
       } catch (error) {
@@ -87,6 +100,7 @@ export function ChapterShareControl({
         onClick={shareChapter}
         disabled={feedback === 'sharing'}
         aria-busy={feedback === 'sharing'}
+        aria-label="Share chapter"
         title="Share chapter"
       >
         {feedback === 'shared' || feedback === 'copied' ? (

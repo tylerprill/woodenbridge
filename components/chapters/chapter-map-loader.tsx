@@ -14,13 +14,28 @@ const DeferredChapterMap = dynamic(
   },
 );
 
-function ChapterMapPlaceholder({ label }: { label: string }) {
+function ChapterMapPlaceholder({
+  label,
+  onLoad,
+}: {
+  label: string;
+  onLoad?: () => void;
+}) {
   return (
     <div className={styles.chapterMapFrame} aria-live="polite">
       <div className={styles.chapterMapDeferred} role="status">
         <div className={styles.chapterMapDeferredStatus}>
           <span aria-hidden="true" />
           <p>{label}</p>
+          {onLoad ? (
+            <button
+              type="button"
+              className={styles.chapterMapDeferredAction}
+              onClick={onLoad}
+            >
+              Show route map
+            </button>
+          ) : null}
         </div>
       </div>
     </div>
@@ -33,7 +48,11 @@ export function ChapterMapLoader({ entries }: { entries: ChapterMapMemory[] }) {
 
   useEffect(() => {
     const boundary = boundaryRef.current;
-    if (!boundary || typeof IntersectionObserver === 'undefined') {
+    if (
+      window.location.hash === '#chapter-route' ||
+      !boundary ||
+      typeof IntersectionObserver === 'undefined'
+    ) {
       setShouldLoad(true);
       return;
     }
@@ -48,7 +67,17 @@ export function ChapterMapLoader({ entries }: { entries: ChapterMapMemory[] }) {
     );
     observer.observe(boundary);
 
-    return () => observer.disconnect();
+    const loadLinkedRoute = () => {
+      if (window.location.hash !== '#chapter-route') return;
+      setShouldLoad(true);
+      observer.disconnect();
+    };
+    window.addEventListener('hashchange', loadLinkedRoute);
+
+    return () => {
+      observer.disconnect();
+      window.removeEventListener('hashchange', loadLinkedRoute);
+    };
   }, []);
 
   return (
@@ -56,7 +85,10 @@ export function ChapterMapLoader({ entries }: { entries: ChapterMapMemory[] }) {
       {shouldLoad ? (
         <DeferredChapterMap entries={entries} />
       ) : (
-        <ChapterMapPlaceholder label="Route map ahead" />
+        <ChapterMapPlaceholder
+          label="Route map ahead"
+          onLoad={() => setShouldLoad(true)}
+        />
       )}
     </div>
   );

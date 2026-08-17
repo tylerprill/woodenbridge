@@ -420,10 +420,7 @@ export async function drainSecurityNotificationOutbox(options?: {
   const requestedMaxBatches = Number.isFinite(options?.maxBatches)
     ? Math.trunc(options!.maxBatches!)
     : 3;
-  const maxBatches = Math.max(
-    1,
-    Math.min(requestedMaxBatches, 4),
-  );
+  const maxBatches = Math.max(1, Math.min(requestedMaxBatches, 4));
   const aggregate: SecurityNotificationDeliverySummary = {
     claimed: 0,
     deadLettered: 0,

@@ -1,5 +1,7 @@
 import {
+  ArrowDownIcon,
   ArrowLeftIcon,
+  ArrowRightIcon,
   CalendarDaysIcon,
   MapPinIcon,
   PencilIcon,
@@ -54,9 +56,18 @@ export function ChapterReader({
           : [],
       )
     : [];
+  const sharedChapterStart = chapter.introduction
+    ? '#chapter-story'
+    : showMap
+      ? '#chapter-route'
+      : '#chapter-memories';
 
   return (
-    <article className={styles.chapterDetail} data-reader-mode={mode}>
+    <article
+      id="chapter-top"
+      className={styles.chapterDetail}
+      data-reader-mode={mode}
+    >
       <nav className={styles.chapterDetailNav} aria-label="Chapter actions">
         <Link href={mode === 'owner' ? '/dashboard/chapters' : '/'}>
           <ArrowLeftIcon aria-hidden="true" />
@@ -76,7 +87,15 @@ export function ChapterReader({
             </Link>
           </div>
         ) : (
-          <Link href="/sign-up">Create your atlas</Link>
+          <div className={styles.chapterDetailActions}>
+            <ChapterShareControl
+              chapterId={chapter.id}
+              chapterTitle={chapter.title}
+              shareId={chapter.shareId}
+              visibility={chapter.visibility}
+            />
+            <Link href="/sign-up">Start your atlas</Link>
+          </div>
         )}
       </nav>
 
@@ -94,7 +113,11 @@ export function ChapterReader({
               src={chapter.coverMedia.thumbnailUrl}
               alt={chapter.coverMedia.altText || ''}
               fill
-              sizes="(max-width: 800px) 100vw, 48vw"
+              sizes={
+                mode === 'shared'
+                  ? '(max-width: 860px) 100vw, 86rem'
+                  : '(max-width: 800px) 100vw, 48vw'
+              }
               className={styles.chapterHeroImage}
               loading="eager"
               fetchPriority="high"
@@ -119,7 +142,7 @@ export function ChapterReader({
               : 'A chapter from your atlas'}
           </p>
           <h1>{chapter.title}</h1>
-          {chapter.introduction ? (
+          {mode === 'owner' && chapter.introduction ? (
             <p className={styles.chapterIntroduction}>{chapter.introduction}</p>
           ) : null}
           <div className={styles.chapterHeroMeta}>
@@ -138,18 +161,43 @@ export function ChapterReader({
               {places.length > 4 ? ` · +${places.length - 4} more` : ''}
             </p>
           ) : null}
+          {mode === 'shared' ? (
+            <a className={styles.chapterHeroBegin} href={sharedChapterStart}>
+              Begin the journey
+              <ArrowDownIcon aria-hidden="true" />
+            </a>
+          ) : null}
         </div>
       </header>
 
+      {mode === 'shared' && chapter.introduction ? (
+        <section
+          id="chapter-story"
+          className={styles.sharedChapterPrologue}
+          aria-label="Chapter introduction"
+        >
+          <div>
+            <p className="section-kicker">The field note</p>
+            <span aria-hidden="true" />
+          </div>
+          <p>{chapter.introduction}</p>
+        </section>
+      ) : null}
+
       {showMap ? (
         <section
+          id="chapter-route"
           className={styles.routeSection}
           aria-labelledby="chapter-route-heading"
         >
           <div className={styles.chapterSectionHeading}>
             <div>
               <p className="section-kicker">The path between</p>
-              <h2 id="chapter-route-heading">Your route, remembered.</h2>
+              <h2 id="chapter-route-heading">
+                {mode === 'shared'
+                  ? 'The route, remembered.'
+                  : 'Your route, remembered.'}
+              </h2>
             </div>
             <p>
               {mode === 'shared' &&
@@ -163,6 +211,7 @@ export function ChapterReader({
       ) : null}
 
       <section
+        id="chapter-memories"
         className={styles.chapterMemories}
         aria-labelledby="chapter-memories-heading"
       >
@@ -206,7 +255,17 @@ export function ChapterReader({
         <footer className={styles.sharedChapterFooter}>
           <p className="section-kicker">Field Atlas</p>
           <h2>Keep the places that shaped you.</h2>
-          <Link href="/sign-up">Create your own atlas</Link>
+          <p className={styles.sharedChapterFooterCopy}>
+            Pin the places, photographs, and field notes that make your story
+            yours.
+          </p>
+          <Link className={styles.sharedChapterFooterCta} href="/sign-up">
+            Start your own atlas
+            <ArrowRightIcon aria-hidden="true" />
+          </Link>
+          <a className={styles.sharedChapterBackToTop} href="#chapter-top">
+            Back to the beginning
+          </a>
         </footer>
       ) : null}
     </article>
