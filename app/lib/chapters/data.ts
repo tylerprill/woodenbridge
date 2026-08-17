@@ -5,6 +5,7 @@ import { cache } from 'react';
 
 import { requireVerifiedSession } from '@/app/lib/auth/session';
 import type { AtlasMedia } from '@/app/lib/atlas/definitions';
+import { createAuthenticatedAtlasMediaUrls } from '@/app/lib/atlas/media-grant';
 import {
   type AtlasEntryRow,
   type AtlasMediaRow,
@@ -61,7 +62,9 @@ type ChapterMemoryOptionRow = {
   visited_on: Date | string | null;
   journey_state: AtlasEntryRow['journey_state'];
   media_id: string | null;
+  storage_path: string | null;
   thumbnail_path: string | null;
+  mime_type: string | null;
 };
 
 function toIsoString(value: Date | string) {
@@ -80,10 +83,11 @@ function toDateString(value: Date | string | null) {
 function attachMedia(
   entries: ChapterEntryRow[],
   mediaRows: AtlasMediaRow[],
+  userId: string | null,
 ): AtlasChapterEntry[] {
   const mediaByEntry = new Map<string, AtlasMedia[]>();
   for (const row of mediaRows) {
-    const media = toAtlasMedia(row);
+    const media = toAtlasMedia(row, userId ?? undefined);
     const current = mediaByEntry.get(media.entryId) ?? [];
     current.push(media);
     mediaByEntry.set(media.entryId, current);
@@ -199,6 +203,7 @@ async function loadChapter({
       SELECT
         media.id,
         media.entry_id,
+        media.storage_path,
         media.thumbnail_path,
         media.mime_type,
         media.width,
@@ -229,7 +234,7 @@ async function loadChapter({
   const row = chapterResult.rows[0];
   if (!row) return null;
 
-  const entries = attachMedia(entriesResult.rows, mediaResult.rows);
+  const entries = attachMedia(entriesResult.rows, mediaResult.rows, userId);
   const coverMedia =
     (row.cover_media_id
       ? entries
@@ -301,6 +306,7 @@ export async function getAtlasChapters({
         chapter.id AS chapter_id,
         media.id,
         media.entry_id,
+        media.storage_path,
         media.thumbnail_path,
         media.mime_type,
         media.width,
@@ -338,7 +344,7 @@ export async function getAtlasChapters({
   ]);
 
   const coverByChapter = new Map(
-    coverResult.rows.map((row) => [row.chapter_id, toAtlasMedia(row)]),
+    coverResult.rows.map((row) => [row.chapter_id, toAtlasMedia(row, userId)]),
   );
 
   const total = Number(countResult.rows[0]?.total ?? 0);
@@ -493,12 +499,16 @@ export async function getAtlasChapterEditorData(
         entry.visited_on,
         entry.journey_state,
         cover_media.id AS media_id,
-        cover_media.thumbnail_path
+        cover_media.storage_path,
+        cover_media.thumbnail_path,
+        cover_media.mime_type
       FROM atlas_entries AS entry
       LEFT JOIN LATERAL (
         SELECT
           media.id,
-          media.thumbnail_path
+          media.storage_path,
+          media.thumbnail_path,
+          media.mime_type
         FROM atlas_media AS media
         WHERE media.entry_id = entry.id
           AND media.user_id = ${userId}
@@ -518,17 +528,31 @@ export async function getAtlasChapterEditorData(
 
   return {
     chapter,
-    availableEntries: entriesResult.rows.map((row) => ({
-      id: row.id,
-      title: row.title,
-      placeLabel: row.place_label ?? '',
-      placeName: row.place_name,
-      visitedOn: toDateString(row.visited_on),
-      journeyState: row.journey_state,
-      coverMediaId: row.media_id,
-      thumbnailUrl: row.media_id
-        ? `/api/atlas/media/${row.media_id}${row.thumbnail_path ? '?variant=thumbnail' : ''}`
-        : null,
-    })),
+    availableEntries: entriesResult.rows.map((row) => {
+      const mediaUrls =
+        row.media_id && row.storage_path && row.mime_type
+          ? createAuthenticatedAtlasMediaUrls(
+              {
+                id: row.media_id,
+                entryId: row.id,
+                storagePath: row.storage_path,
+                thumbnailPath: row.thumbnail_path,
+                mimeType: row.mime_type,
+              },
+              userId,
+            )
+          : null;
+
+      return {
+        id: row.id,
+        title: row.title,
+        placeLabel: row.place_label ?? '',
+        placeName: row.place_name,
+        visitedOn: toDateString(row.visited_on),
+        journeyState: row.journey_state,
+        coverMediaId: row.media_id,
+        thumbnailUrl: mediaUrls?.thumbnailUrl ?? null,
+      };
+    }),
   };
 }

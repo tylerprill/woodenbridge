@@ -19,7 +19,7 @@ const DEFAULT_STYLE =
   'https://tiles.openfreemap.org/styles/positron';
 const CHAPTER_MARKER_GUTTER = 12;
 
-type ChapterMapMemory = {
+export type ChapterMapMemory = {
   id: string;
   title: string;
   placeLabel: string;

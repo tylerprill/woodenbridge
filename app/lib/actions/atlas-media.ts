@@ -43,6 +43,7 @@ export async function getAtlasEntryMediaAction(
       SELECT
         media.id,
         media.entry_id,
+        media.storage_path,
         media.thumbnail_path,
         media.mime_type,
         media.width,
@@ -60,7 +61,10 @@ export async function getAtlasEntryMediaAction(
       ORDER BY media.sort_order, media.created_at
     `;
 
-    return { ok: true, data: media.rows.map((row) => toAtlasMedia(row)) };
+    return {
+      ok: true,
+      data: media.rows.map((row) => toAtlasMedia(row, session.user.id)),
+    };
   } catch (error) {
     console.error('Atlas media lookup failed:', error);
     return failed('The photographs could not be opened. Please try again.');
@@ -135,8 +139,8 @@ export async function registerAtlasMediaAction(
       const existing = await client.query<AtlasMediaRow>(
         `
           SELECT
-            id, entry_id, thumbnail_path, mime_type, width, height, byte_size,
-            alt_text, sort_order, created_at
+            id, entry_id, storage_path, thumbnail_path, mime_type, width,
+            height, byte_size, alt_text, sort_order, created_at
           FROM atlas_media
           WHERE storage_path = $1
             AND entry_id = $2
@@ -148,7 +152,10 @@ export async function registerAtlasMediaAction(
 
       if (existing.rows[0]) {
         await client.query('COMMIT');
-        return { ok: true, data: toAtlasMedia(existing.rows[0]) };
+        return {
+          ok: true,
+          data: toAtlasMedia(existing.rows[0], session.user.id),
+        };
       }
 
       const count = await client.query<{ count: number | string }>(
@@ -189,8 +196,8 @@ export async function registerAtlasMediaAction(
           )
           VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
           RETURNING
-            id, entry_id, thumbnail_path, mime_type, width, height, byte_size,
-            alt_text, sort_order, created_at
+            id, entry_id, storage_path, thumbnail_path, mime_type, width,
+            height, byte_size, alt_text, sort_order, created_at
         `,
         [
           mediaInput.entryId,
@@ -210,7 +217,10 @@ export async function registerAtlasMediaAction(
       revalidatePath('/dashboard');
       revalidatePath('/dashboard/places');
       revalidatePath(`/dashboard/card/${mediaInput.entryId}`);
-      return { ok: true, data: toAtlasMedia(inserted.rows[0]) };
+      return {
+        ok: true,
+        data: toAtlasMedia(inserted.rows[0], session.user.id),
+      };
     } catch (error) {
       await client.query('ROLLBACK').catch(() => undefined);
       throw error;

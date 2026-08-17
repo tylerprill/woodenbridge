@@ -176,30 +176,39 @@ export function MemoryPhotos({
         );
         const thumbnailPathname = createAtlasThumbnailPath(entryId, mediaId);
         pendingUpload = { pathname, thumbnailPathname };
-        const blob = await upload(pathname, file, {
-          access: 'private',
-          handleUploadUrl: '/api/atlas/media/upload',
-          clientPayload: JSON.stringify({ entryId }),
-          multipart: true,
-          onUploadProgress: ({ percentage }) =>
-            setProgress(
-              Math.round(
-                ((index * 2 + percentage / 100) / uploadOperations) * 100,
-              ),
+        const operationProgress = [0, 0];
+        const reportProgress = (operation: 0 | 1, percentage: number) => {
+          operationProgress[operation] = percentage / 100;
+          setProgress(
+            Math.round(
+              ((index * 2 + operationProgress[0] + operationProgress[1]) /
+                uploadOperations) *
+                100,
             ),
-        });
-        const thumbnailBlob = await upload(thumbnailPathname, thumbnail, {
-          access: 'private',
-          handleUploadUrl: '/api/atlas/media/upload',
-          clientPayload: JSON.stringify({ entryId }),
-          multipart: false,
-          onUploadProgress: ({ percentage }) =>
-            setProgress(
-              Math.round(
-                ((index * 2 + 1 + percentage / 100) / uploadOperations) * 100,
-              ),
-            ),
-        });
+          );
+        };
+        const [blobResult, thumbnailResult] = await Promise.allSettled([
+          upload(pathname, file, {
+            access: 'private',
+            handleUploadUrl: '/api/atlas/media/upload',
+            clientPayload: JSON.stringify({ entryId }),
+            multipart: true,
+            onUploadProgress: ({ percentage }) => reportProgress(0, percentage),
+          }),
+          upload(thumbnailPathname, thumbnail, {
+            access: 'private',
+            handleUploadUrl: '/api/atlas/media/upload',
+            clientPayload: JSON.stringify({ entryId }),
+            multipart: false,
+            onUploadProgress: ({ percentage }) => reportProgress(1, percentage),
+          }),
+        ]);
+        if (blobResult.status === 'rejected') throw blobResult.reason;
+        if (thumbnailResult.status === 'rejected') {
+          throw thumbnailResult.reason;
+        }
+        const blob = blobResult.value;
+        const thumbnailBlob = thumbnailResult.value;
         const result = await registerAtlasMediaAction({
           entryId,
           pathname: blob.pathname,

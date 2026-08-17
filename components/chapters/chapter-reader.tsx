@@ -13,7 +13,7 @@ import {
   formatChapterDateRange,
 } from '@/app/lib/chapters/format';
 import { KeepsakeCard } from '@/components/atlas/keepsake-card';
-import { ChapterMap } from './chapter-map';
+import { ChapterMapLoader } from './chapter-map-loader';
 import {
   ChapterSaveNotice,
   type ChapterSaveNoticeKind,
@@ -146,7 +146,7 @@ export function ChapterReader({
                 : 'Each stop follows the reading order you chose.'}
             </p>
           </div>
-          <ChapterMap entries={mapEntries} />
+          <ChapterMapLoader entries={mapEntries} />
         </section>
       ) : null}
 

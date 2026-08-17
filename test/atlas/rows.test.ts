@@ -3,8 +3,10 @@ import { type AtlasMediaRow, toAtlasMedia } from '@/app/lib/atlas/rows';
 const row: AtlasMediaRow = {
   id: 'bf69b9f1-4868-4206-abbf-df01e6a8d033',
   entry_id: 'cfe81448-0a0d-4eb5-b015-b3e9d81baaaf',
+  storage_path:
+    'atlas/memories/cfe81448-0a0d-4eb5-b015-b3e9d81baaaf/bf69b9f1-4868-4206-abbf-df01e6a8d033.jpg',
   thumbnail_path:
-    'atlas/memories/cfe81448-0a0d-4eb5-b015-b3e9d81baaaf/photo.thumbnail.webp',
+    'atlas/memories/cfe81448-0a0d-4eb5-b015-b3e9d81baaaf/bf69b9f1-4868-4206-abbf-df01e6a8d033.thumbnail.webp',
   mime_type: 'image/jpeg',
   width: 2400,
   height: 3000,

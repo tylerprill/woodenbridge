@@ -23,10 +23,11 @@ function safeLimit(limit: number) {
 function attachMedia(
   entries: AtlasEntryRow[],
   mediaRows: AtlasMediaRow[],
+  userId: string,
 ): AtlasEntry[] {
   const mediaByEntry = new Map<string, ReturnType<typeof toAtlasMedia>[]>();
   for (const row of mediaRows) {
-    const media = toAtlasMedia(row);
+    const media = toAtlasMedia(row, userId);
     const current = mediaByEntry.get(media.entryId) ?? [];
     current.push(media);
     mediaByEntry.set(media.entryId, current);
@@ -81,6 +82,7 @@ async function loadSavedEntries(userId: string, requestedLimit: number) {
       SELECT
         media.id,
         media.entry_id,
+        media.storage_path,
         media.thumbnail_path,
         media.mime_type,
         media.width,
@@ -96,7 +98,7 @@ async function loadSavedEntries(userId: string, requestedLimit: number) {
     `,
   ]);
 
-  return attachMedia(entriesResult.rows, mediaResult.rows);
+  return attachMedia(entriesResult.rows, mediaResult.rows, userId);
 }
 
 export async function getAtlasData(): Promise<AtlasData> {
@@ -224,6 +226,7 @@ export async function getAtlasCollectionData({
       SELECT
         media.id,
         media.entry_id,
+        media.storage_path,
         media.thumbnail_path,
         media.mime_type,
         media.width,
@@ -266,7 +269,7 @@ export async function getAtlasCollectionData({
         : counts.total;
 
   return {
-    entries: attachMedia(entriesResult.rows, mediaResult.rows),
+    entries: attachMedia(entriesResult.rows, mediaResult.rows, userId),
     counts,
     page: currentPage,
     pageSize: limit,
@@ -346,6 +349,7 @@ export async function getSavedAtlasEntry(entryId: string) {
       SELECT
         media.id,
         media.entry_id,
+        media.storage_path,
         media.thumbnail_path,
         media.mime_type,
         media.width,
@@ -369,6 +373,6 @@ export async function getSavedAtlasEntry(entryId: string) {
   if (!entry) return null;
   return toAtlasEntry(
     entry,
-    mediaResult.rows.map((media) => toAtlasMedia(media)),
+    mediaResult.rows.map((media) => toAtlasMedia(media, userId)),
   );
 }

@@ -1885,6 +1885,41 @@
   height: clamp(26rem, 56vw, 42rem);
 }
 
+.chapterMapDeferred {
+  display: grid;
+  width: 100%;
+  height: clamp(26rem, 56vw, 42rem);
+  place-items: center;
+  background:
+    radial-gradient(circle at 74% 28%, rgba(183, 93, 52, 0.1), transparent 31%),
+    linear-gradient(145deg, #eff0e8 0%, #e2e5dc 52%, #d9ded5 100%);
+}
+
+.chapterMapDeferredStatus {
+  display: grid;
+  max-width: 18rem;
+  justify-items: center;
+  color: var(--forest-600);
+  gap: 0.85rem;
+  text-align: center;
+}
+
+.chapterMapDeferredStatus span {
+  width: 2.1rem;
+  height: 2.1rem;
+  border: 1px solid rgba(16, 35, 29, 0.16);
+  border-radius: 50%;
+  background: rgba(251, 250, 245, 0.65);
+  box-shadow: 0 0.7rem 1.8rem rgba(16, 35, 29, 0.08);
+}
+
+.chapterMapDeferredStatus p {
+  font-size: 0.64rem;
+  font-weight: 800;
+  letter-spacing: 0.09em;
+  text-transform: uppercase;
+}
+
 .chapterMapHint {
   position: absolute;
   right: 0.8rem;
@@ -2524,6 +2559,10 @@
   }
 
   .chapterMap {
+    height: 27rem;
+  }
+
+  .chapterMapDeferred {
     height: 27rem;
   }
 

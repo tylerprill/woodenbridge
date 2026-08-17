@@ -7,6 +7,7 @@ import type {
   AtlasView,
   JourneyState,
 } from './definitions';
+import { createAuthenticatedAtlasMediaUrls } from './media-grant';
 
 export type AtlasEntryRow = {
   id: string;
@@ -41,6 +42,7 @@ export type AtlasViewRow = {
 export type AtlasMediaRow = {
   id: string;
   entry_id: string;
+  storage_path: string;
   thumbnail_path: string | null;
   mime_type: string;
   width: number | null;
@@ -95,8 +97,25 @@ export function toAtlasEntry(
   };
 }
 
-export function toAtlasMedia(row: AtlasMediaRow): AtlasMedia {
-  const deliveryUrl = `/api/atlas/media/${row.id}`;
+export function toAtlasMedia(row: AtlasMediaRow, userId?: string): AtlasMedia {
+  const fallbackDeliveryUrl = `/api/atlas/media/${row.id}`;
+  const urls = userId
+    ? createAuthenticatedAtlasMediaUrls(
+        {
+          id: row.id,
+          entryId: row.entry_id,
+          storagePath: row.storage_path,
+          thumbnailPath: row.thumbnail_path,
+          mimeType: row.mime_type,
+        },
+        userId,
+      )
+    : {
+        deliveryUrl: fallbackDeliveryUrl,
+        thumbnailUrl: row.thumbnail_path
+          ? `${fallbackDeliveryUrl}?variant=thumbnail`
+          : fallbackDeliveryUrl,
+      };
   return {
     id: row.id,
     entryId: row.entry_id,
@@ -107,10 +126,8 @@ export function toAtlasMedia(row: AtlasMediaRow): AtlasMedia {
     altText: row.alt_text ?? '',
     sortOrder: row.sort_order,
     createdAt: toIsoString(row.created_at),
-    deliveryUrl,
-    thumbnailUrl: row.thumbnail_path
-      ? `${deliveryUrl}?variant=thumbnail`
-      : deliveryUrl,
+    deliveryUrl: urls.deliveryUrl,
+    thumbnailUrl: urls.thumbnailUrl,
   };
 }
 

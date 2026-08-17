@@ -2,6 +2,7 @@ import { get } from '@vercel/blob';
 import { sql } from '@vercel/postgres';
 
 import { getVerifiedSession } from '@/app/lib/auth/session';
+import { verifyAtlasMediaGrant } from '@/app/lib/atlas/media-grant';
 import { getAtlasBlobToken } from '@/app/lib/atlas/media-storage';
 import { atlasChapterIdSchema } from '@/app/lib/chapters/validation';
 
@@ -28,13 +29,10 @@ export async function GET(
   const parsedShareId = atlasChapterIdSchema.safeParse(
     searchParams.get('share'),
   );
-  const session = parsedShareId.success ? null : await getVerifiedSession();
-  if (!parsedShareId.success && !session) {
-    return new Response(null, { status: 404 });
-  }
+  let row: MediaPathRow | undefined;
 
-  const media = parsedShareId.success
-    ? await sql<MediaPathRow>`
+  if (parsedShareId.success) {
+    const media = await sql<MediaPathRow>`
         SELECT media.storage_path, media.thumbnail_path, media.mime_type
         FROM atlas_media AS media
         INNER JOIN atlas_entries AS entry
@@ -51,19 +49,39 @@ export async function GET(
           AND chapter.visibility = 'shared'
           AND entry.deleted_at IS NULL
         LIMIT 1
-      `
-    : await sql<MediaPathRow>`
+      `;
+    row = media.rows[0];
+  } else {
+    const session = await getVerifiedSession();
+    if (!session) return new Response(null, { status: 404 });
+
+    const grant = searchParams.get('grant');
+    if (grant !== null) {
+      const grantedMedia = verifyAtlasMediaGrant(grant, {
+        mediaId,
+        userId: session.user.id,
+      });
+      if (!grantedMedia) return new Response(null, { status: 404 });
+      row = {
+        storage_path: grantedMedia.storagePath,
+        thumbnail_path: grantedMedia.thumbnailPath,
+        mime_type: grantedMedia.mimeType,
+      };
+    } else {
+      const media = await sql<MediaPathRow>`
         SELECT media.storage_path, media.thumbnail_path, media.mime_type
         FROM atlas_media AS media
         INNER JOIN atlas_entries AS entry ON entry.id = media.entry_id
         WHERE media.id = ${mediaId}
-          AND media.user_id = ${session!.user.id}
-          AND entry.user_id = ${session!.user.id}
+          AND media.user_id = ${session.user.id}
+          AND entry.user_id = ${session.user.id}
           AND entry.deleted_at IS NULL
         LIMIT 1
       `;
+      row = media.rows[0];
+    }
+  }
 
-  const row = media.rows[0];
   if (!row) return new Response(null, { status: 404 });
 
   const thumbnailPath = variant === 'thumbnail' ? row.thumbnail_path : null;

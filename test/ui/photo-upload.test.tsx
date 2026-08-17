@@ -38,12 +38,18 @@ describe('photo upload UI', () => {
       .mockImplementation((callback) => {
         callback(new Blob(['thumbnail'], { type: 'image/webp' }));
       });
+    let resolveOriginal!: (value: { pathname: string }) => void;
+    let resolveThumbnail!: (value: { pathname: string }) => void;
+    const originalUpload = new Promise<{ pathname: string }>((resolve) => {
+      resolveOriginal = resolve;
+    });
+    const thumbnailUpload = new Promise<{ pathname: string }>((resolve) => {
+      resolveThumbnail = resolve;
+    });
     jest
       .mocked(upload)
-      .mockResolvedValueOnce({ pathname: 'atlas/memory-1/photo.png' } as never)
-      .mockResolvedValueOnce({
-        pathname: 'atlas/memory-1/photo.thumb.webp',
-      } as never);
+      .mockImplementationOnce(() => originalUpload as never)
+      .mockImplementationOnce(() => thumbnailUpload as never);
     const media = {
       id: 'photo-1',
       entryId: 'memory-1',
@@ -74,12 +80,18 @@ describe('photo upload UI', () => {
     );
 
     const input = screen.getByLabelText('Add photos');
-    await user.upload(
+    const uploadInteraction = user.upload(
       input,
       new File(['photo'], 'kyoto.png', { type: 'image/png' }),
     );
 
+    // The thumbnail request starts before the unresolved original finishes.
     await waitFor(() => expect(upload).toHaveBeenCalledTimes(2));
+    expect(registerAtlasMediaAction).not.toHaveBeenCalled();
+    resolveOriginal({ pathname: 'atlas/memory-1/photo.png' });
+    resolveThumbnail({ pathname: 'atlas/memory-1/photo.thumb.webp' });
+    await uploadInteraction;
+    await waitFor(() => expect(registerAtlasMediaAction).toHaveBeenCalled());
     expect(registerAtlasMediaAction).toHaveBeenCalledWith(
       expect.objectContaining({
         entryId: 'memory-1',
