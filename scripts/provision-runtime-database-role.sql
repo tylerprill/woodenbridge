@@ -28,12 +28,22 @@ SELECT (:'runtime_role' = current_user) AS runtime_is_current_user \gset
   \quit 4
 \endif
 
+-- Role DDL and grants are transactional in PostgreSQL. Any ON_ERROR_STOP or
+-- fail-closed verification exit below therefore leaves no partially
+-- provisioned identity behind.
+BEGIN;
+
 SELECT EXISTS (
   SELECT 1
   FROM pg_catalog.pg_roles AS target
   WHERE target.rolname = :'runtime_role'
     AND (
-      EXISTS (
+      target.rolsuper
+      OR target.rolcreaterole
+      OR target.rolcreatedb
+      OR target.rolreplication
+      OR target.rolbypassrls
+      OR EXISTS (
         SELECT 1
         FROM pg_catalog.pg_class
         WHERE relowner = target.oid
@@ -54,15 +64,15 @@ SELECT EXISTS (
         WHERE member = target.oid
       )
     )
-) AS runtime_has_elevated_relationship \gset
+) AS runtime_has_elevated_state \gset
 
-\if :runtime_has_elevated_relationship
-  \echo 'The requested runtime role owns objects or inherits another role. Create a fresh runtime-only role.'
+\if :runtime_has_elevated_state
+  \echo 'The requested runtime role has elevated attributes or relationships. Create a fresh runtime-only role.'
   \quit 4
 \endif
 
 SELECT format(
-  'CREATE ROLE %I LOGIN PASSWORD %L NOSUPERUSER NOCREATEDB NOCREATEROLE NOINHERIT NOREPLICATION NOBYPASSRLS',
+  'CREATE ROLE %I LOGIN PASSWORD %L NOINHERIT',
   :'runtime_role',
   :'runtime_password'
 )
@@ -71,7 +81,7 @@ WHERE NOT EXISTS (
 ) \gexec
 
 SELECT format(
-  'ALTER ROLE %I WITH LOGIN PASSWORD %L NOSUPERUSER NOCREATEDB NOCREATEROLE NOINHERIT NOREPLICATION NOBYPASSRLS',
+  'ALTER ROLE %I WITH LOGIN PASSWORD %L NOINHERIT',
   :'runtime_role',
   :'runtime_password'
 ) \gexec
@@ -147,8 +157,55 @@ SELECT EXISTS (
   \quit 4
 \endif
 
+-- Explicit NOSUPERUSER, NOREPLICATION, and NOBYPASSRLS clauses require a
+-- PostgreSQL superuser even when those attributes are already false. Verify
+-- the complete catalog postcondition instead so delegated Neon CREATEROLE
+-- migration roles can safely provision the runtime identity.
+SELECT COALESCE((
+  SELECT
+    target.rolcanlogin
+    AND NOT target.rolinherit
+    AND NOT target.rolsuper
+    AND NOT target.rolcreaterole
+    AND NOT target.rolcreatedb
+    AND NOT target.rolreplication
+    AND NOT target.rolbypassrls
+    AND NOT EXISTS (
+      SELECT 1
+      FROM pg_catalog.pg_class
+      WHERE relowner = target.oid
+    )
+    AND NOT EXISTS (
+      SELECT 1
+      FROM pg_catalog.pg_namespace
+      WHERE nspowner = target.oid
+    )
+    AND NOT EXISTS (
+      SELECT 1
+      FROM pg_catalog.pg_database
+      WHERE datdba = target.oid
+    )
+    AND NOT EXISTS (
+      SELECT 1
+      FROM pg_catalog.pg_auth_members
+      WHERE member = target.oid
+    )
+  FROM pg_catalog.pg_roles AS target
+  WHERE target.rolname = :'runtime_role'
+), false) AS runtime_role_is_least_privilege \gset
+
+\if :runtime_role_is_least_privilege
+\else
+  \echo 'The runtime role failed the least-privilege catalog verification.'
+  \quit 4
+\endif
+
+COMMIT;
+
 SELECT
   rolname,
+  rolcanlogin,
+  rolinherit,
   rolsuper,
   rolcreaterole,
   rolcreatedb,

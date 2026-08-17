@@ -23,10 +23,7 @@ export default function SideNav({ userEmail, userName, role }: SideNavProps) {
         <BrandLockup className="dashboard-brand" label="Personal atlas" />
 
         <nav className="dashboard-nav" aria-label="Dashboard navigation">
-          <p>Your atlas</p>
-          <div className="dashboard-nav-links">
-            <NavLinks role={role} />
-          </div>
+          <NavLinks role={role} />
         </nav>
 
         <div className="dashboard-account">

@@ -47,6 +47,12 @@ connection has been configured:
 unset FIELD_ATLAS_RUNTIME_DATABASE_PASSWORD
 ```
 
+Neon migration roles with delegated `CREATEROLE` are supported and do not need
+PostgreSQL `SUPERUSER`. The provisioner avoids superuser-only role attribute
+clauses, then verifies from `pg_catalog` before commit that the runtime identity
+is not a superuser and has no `CREATEDB`, `CREATEROLE`, `REPLICATION`,
+`BYPASSRLS`, ownership, or inherited-role relationship.
+
 Verify from the runtime connection that normal reads work and DDL fails:
 
 ```bash

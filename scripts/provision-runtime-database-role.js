@@ -108,14 +108,14 @@ async function main() {
     if (!existingRole) {
       await executeFormatted(
         client,
-        "'CREATE ROLE %I LOGIN PASSWORD %L NOSUPERUSER NOCREATEDB NOCREATEROLE NOINHERIT NOREPLICATION NOBYPASSRLS', $1::text, $2::text",
+        "'CREATE ROLE %I LOGIN PASSWORD %L NOINHERIT', $1::text, $2::text",
         [runtimeRole, runtimePassword],
       );
     }
 
     await executeFormatted(
       client,
-      "'ALTER ROLE %I WITH LOGIN PASSWORD %L NOSUPERUSER NOCREATEDB NOCREATEROLE NOINHERIT NOREPLICATION NOBYPASSRLS', $1::text, $2::text",
+      "'ALTER ROLE %I WITH LOGIN PASSWORD %L NOINHERIT', $1::text, $2::text",
       [runtimeRole, runtimePassword],
     );
     await executeFormatted(
@@ -206,23 +206,56 @@ async function main() {
       );
     }
 
-    await client.query('COMMIT');
-
+    // PostgreSQL reserves changes to SUPERUSER, REPLICATION, and BYPASSRLS for
+    // superusers, including explicit NO* clauses. Neon migration roles commonly
+    // have delegated CREATEROLE without SUPERUSER, so establish the portable
+    // attributes above and fail closed on the complete catalog postcondition.
     const verification = await client.query(
       `
         SELECT
-          rolname,
-          rolsuper,
-          rolcreaterole,
-          rolcreatedb,
-          rolreplication,
-          rolbypassrls
-        FROM pg_catalog.pg_roles
-        WHERE rolname = $1
+          role.rolname,
+          role.rolcanlogin,
+          role.rolinherit,
+          role.rolsuper,
+          role.rolcreaterole,
+          role.rolcreatedb,
+          role.rolreplication,
+          role.rolbypassrls,
+          EXISTS (
+            SELECT 1 FROM pg_catalog.pg_class WHERE relowner = role.oid
+          ) OR EXISTS (
+            SELECT 1 FROM pg_catalog.pg_namespace WHERE nspowner = role.oid
+          ) OR EXISTS (
+            SELECT 1 FROM pg_catalog.pg_database WHERE datdba = role.oid
+          ) AS owns_objects,
+          EXISTS (
+            SELECT 1 FROM pg_catalog.pg_auth_members WHERE member = role.oid
+          ) AS inherits_roles
+        FROM pg_catalog.pg_roles AS role
+        WHERE role.rolname = $1
       `,
       [runtimeRole],
     );
-    console.log('Runtime database role provisioned:', verification.rows[0]);
+    const verifiedRole = verification.rows[0];
+
+    if (
+      !verifiedRole?.rolcanlogin ||
+      verifiedRole.rolinherit ||
+      verifiedRole.rolsuper ||
+      verifiedRole.rolcreaterole ||
+      verifiedRole.rolcreatedb ||
+      verifiedRole.rolreplication ||
+      verifiedRole.rolbypassrls ||
+      verifiedRole.owns_objects ||
+      verifiedRole.inherits_roles
+    ) {
+      throw new Error(
+        'The runtime role failed the least-privilege catalog verification.',
+      );
+    }
+
+    await client.query('COMMIT');
+    console.log('Runtime database role provisioned:', verifiedRole);
   } catch (error) {
     await client.query('ROLLBACK').catch(() => undefined);
     throw error;
