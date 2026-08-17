@@ -170,20 +170,21 @@ export default function AtlasMap({
       maxPitch: 0,
       attributionControl: false,
       cooperativeGestures: true,
-      boxZoom: false,
-      doubleClickZoom: false,
-      dragPan: false,
+      boxZoom: true,
+      doubleClickZoom: true,
+      dragPan: true,
       dragRotate: false,
-      keyboard: false,
+      keyboard: true,
       pitchWithRotate: false,
-      scrollZoom: { around: 'center' },
+      scrollZoom: true,
       touchPitch: false,
-      touchZoomRotate: { around: 'center' },
+      touchZoomRotate: true,
       canvasContextAttributes: { antialias: true },
       fadeDuration: 180,
     });
 
     mapRef.current = map;
+    map.keyboard.disableRotation();
     map.touchZoomRotate.disableRotation();
     map.addControl(
       new maplibregl.AttributionControl({ compact: true }),
