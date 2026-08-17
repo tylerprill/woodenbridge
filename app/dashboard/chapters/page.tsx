@@ -1,12 +1,28 @@
 import { BookOpenIcon, PlusIcon } from '@heroicons/react/24/outline';
 import Link from 'next/link';
+import { redirect } from 'next/navigation';
 
 import { getAtlasChapters } from '@/app/lib/chapters/data';
 import { ChapterCard } from '@/components/chapters/chapter-card';
 import styles from '@/components/chapters/chapters.module.css';
 
-export default async function ChaptersPage() {
-  const chapters = await getAtlasChapters();
+function chaptersHref(page = 1) {
+  return page > 1 ? `/dashboard/chapters?page=${page}` : '/dashboard/chapters';
+}
+
+export default async function ChaptersPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ page?: string }>;
+}) {
+  const query = await searchParams;
+  const requestedPage = Number.parseInt(query.page ?? '1', 10);
+  const data = await getAtlasChapters({
+    page: Number.isFinite(requestedPage) ? requestedPage : 1,
+  });
+  if (data.total && data.page > data.totalPages) {
+    redirect(chaptersHref(data.totalPages));
+  }
 
   return (
     <div className={`dashboard-page ${styles.chaptersPage}`}>
@@ -20,8 +36,8 @@ export default async function ChaptersPage() {
           <p className={styles.chapterCount}>
             <BookOpenIcon aria-hidden="true" />
             <span>
-              <strong>{String(chapters.length).padStart(2, '0')}</strong>
-              {chapters.length === 1 ? 'chapter' : 'chapters'}
+              <strong>{String(data.total).padStart(2, '0')}</strong>
+              {data.total === 1 ? 'chapter' : 'chapters'}
             </span>
           </p>
           <Link href="/dashboard/chapters/new" className={styles.newChapterButton}>
@@ -31,13 +47,14 @@ export default async function ChaptersPage() {
         </div>
       </header>
 
-      {chapters.length ? (
+      {data.chapters.length ? (
         <section className={styles.chapterGrid} aria-label="Your chapters">
-          {chapters.map((chapter, index) => (
+          {data.chapters.map((chapter, index) => (
             <ChapterCard
               key={chapter.id}
               chapter={chapter}
-              index={String(index + 1).padStart(2, '0')}
+              index={String(data.offset + index + 1).padStart(2, '0')}
+              eager={index === 0}
             />
           ))}
         </section>
@@ -60,6 +77,24 @@ export default async function ChaptersPage() {
           </Link>
         </section>
       )}
+
+      {data.chapters.length && data.totalPages > 1 ? (
+        <nav className="collection-pagination" aria-label="Chapter pages">
+          {data.page > 1 ? (
+            <Link href={chaptersHref(data.page - 1)}>Previous</Link>
+          ) : (
+            <span aria-hidden="true" />
+          )}
+          <p>
+            Page {data.page} of {data.totalPages}
+          </p>
+          {data.page < data.totalPages ? (
+            <Link href={chaptersHref(data.page + 1)}>Next</Link>
+          ) : (
+            <span aria-hidden="true" />
+          )}
+        </nav>
+      ) : null}
     </div>
   );
 }

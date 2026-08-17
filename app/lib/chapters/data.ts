@@ -31,6 +31,25 @@ type ChapterRow = {
 
 type ChapterCoverRow = AtlasMediaRow & { chapter_id: string };
 
+type ChapterEditorRow = {
+  id: string;
+  title: string;
+  introduction: string;
+  version: number;
+  entry_ids: string[];
+};
+
+type ChapterMemoryOptionRow = {
+  id: string;
+  title: string;
+  place_label: string | null;
+  place_name: string | null;
+  visited_on: Date | string | null;
+  journey_state: AtlasEntryRow['journey_state'];
+  media_id: string | null;
+  thumbnail_path: string | null;
+};
+
 function toIsoString(value: Date | string) {
   return value instanceof Date
     ? value.toISOString()
@@ -168,7 +187,8 @@ async function loadChapter(userId: string, chapterId: string) {
   if (!row) return null;
 
   const entries = attachMedia(entriesResult.rows, mediaResult.rows);
-  const coverMedia = entries.find((entry) => entry.media.length)?.media[0] ?? null;
+  const coverMedia =
+    entries.find((entry) => entry.media.length)?.media[0] ?? null;
 
   return {
     ...toChapterSummary(row, coverMedia),
@@ -176,10 +196,19 @@ async function loadChapter(userId: string, chapterId: string) {
   } satisfies AtlasChapter;
 }
 
-export async function getAtlasChapters(): Promise<AtlasChapterSummary[]> {
+export async function getAtlasChapters({
+  page,
+  pageSize = 18,
+}: {
+  page: number;
+  pageSize?: number;
+}) {
   const session = await requireVerifiedSession();
   const userId = session.user.id;
-  const [chaptersResult, coverResult] = await Promise.all([
+  const limit = Math.min(Math.max(Math.trunc(pageSize), 1), 60);
+  const currentPage = Math.max(Math.trunc(page) || 1, 1);
+  const offset = (currentPage - 1) * limit;
+  const [chaptersResult, coverResult, countResult] = await Promise.all([
     sql<ChapterRow>`
       SELECT
         chapter.id,
@@ -202,8 +231,18 @@ export async function getAtlasChapters(): Promise<AtlasChapterSummary[]> {
       WHERE chapter.user_id = ${userId}
       GROUP BY chapter.id
       ORDER BY chapter.updated_at DESC
+      LIMIT ${limit}
+      OFFSET ${offset}
     `,
     sql<ChapterCoverRow>`
+      WITH selected_chapters AS (
+        SELECT id
+        FROM atlas_chapters
+        WHERE user_id = ${userId}
+        ORDER BY updated_at DESC
+        LIMIT ${limit}
+        OFFSET ${offset}
+      )
       SELECT DISTINCT ON (chapter.id)
         chapter.id AS chapter_id,
         media.id,
@@ -217,6 +256,8 @@ export async function getAtlasChapters(): Promise<AtlasChapterSummary[]> {
         media.sort_order,
         media.created_at
       FROM atlas_chapters AS chapter
+      INNER JOIN selected_chapters AS selected
+        ON selected.id = chapter.id
       INNER JOIN atlas_chapter_entries AS chapter_entry
         ON chapter_entry.chapter_id = chapter.id
       INNER JOIN atlas_entries AS entry
@@ -230,15 +271,28 @@ export async function getAtlasChapters(): Promise<AtlasChapterSummary[]> {
       WHERE chapter.user_id = ${userId}
       ORDER BY chapter.id, chapter_entry.position, media.sort_order, media.created_at
     `,
+    sql<{ total: number | string }>`
+      SELECT COUNT(*)::int AS total
+      FROM atlas_chapters
+      WHERE user_id = ${userId}
+    `,
   ]);
 
   const coverByChapter = new Map(
     coverResult.rows.map((row) => [row.chapter_id, toAtlasMedia(row)]),
   );
 
-  return chaptersResult.rows.map((row) =>
-    toChapterSummary(row, coverByChapter.get(row.id) ?? null),
-  );
+  const total = Number(countResult.rows[0]?.total ?? 0);
+  return {
+    chapters: chaptersResult.rows.map((row) =>
+      toChapterSummary(row, coverByChapter.get(row.id) ?? null),
+    ),
+    total,
+    page: currentPage,
+    pageSize: limit,
+    offset,
+    totalPages: Math.max(1, Math.ceil(total / limit)),
+  };
 }
 
 export async function getAtlasChapter(chapterId: string) {
@@ -254,48 +308,109 @@ export async function getAtlasChapterEditorData(
 ): Promise<AtlasChapterEditorData> {
   const session = await requireVerifiedSession();
   const userId = session.user.id;
-  const parsedId = chapterId
-    ? atlasChapterIdSchema.safeParse(chapterId)
-    : null;
+  const parsedId = chapterId ? atlasChapterIdSchema.safeParse(chapterId) : null;
 
   if (chapterId && !parsedId?.success) {
     return { chapter: null, availableEntries: [] };
   }
+  const editorChapterId = parsedId?.success ? parsedId.data : null;
 
   const [chapter, entriesResult] = await Promise.all([
-    parsedId?.success ? loadChapter(userId, parsedId.data) : Promise.resolve(null),
-    sql<AtlasEntryRow>`
+    editorChapterId
+      ? sql<ChapterEditorRow>`
+          SELECT
+            chapter.id,
+            chapter.title,
+            chapter.introduction,
+            chapter.version,
+            COALESCE(
+              ARRAY_AGG(chapter_entry.entry_id ORDER BY chapter_entry.position)
+                FILTER (WHERE chapter_entry.entry_id IS NOT NULL),
+              ARRAY[]::uuid[]
+            ) AS entry_ids
+          FROM atlas_chapters AS chapter
+          LEFT JOIN atlas_chapter_entries AS chapter_entry
+            ON chapter_entry.chapter_id = chapter.id
+            AND chapter_entry.user_id = ${userId}
+          WHERE chapter.id = ${editorChapterId}
+            AND chapter.user_id = ${userId}
+          GROUP BY chapter.id
+          LIMIT 1
+        `.then((result) => {
+          const row = result.rows[0];
+          return row
+            ? {
+                id: row.id,
+                title: row.title,
+                introduction: row.introduction,
+                version: row.version,
+                entryIds: row.entry_ids,
+              }
+            : null;
+        })
+      : Promise.resolve(null),
+    sql<ChapterMemoryOptionRow>`
+      WITH recent_entries AS (
+        SELECT id
+        FROM atlas_entries
+        WHERE user_id = ${userId}
+          AND record_state = 'saved'
+          AND deleted_at IS NULL
+        ORDER BY visited_on DESC NULLS LAST, updated_at DESC
+        LIMIT 500
+      ),
+      selected_entries AS (
+        SELECT chapter_entry.entry_id AS id
+        FROM atlas_chapter_entries AS chapter_entry
+        INNER JOIN atlas_chapters AS chapter
+          ON chapter.id = chapter_entry.chapter_id
+        WHERE chapter.id = ${editorChapterId}::uuid
+          AND chapter.user_id = ${userId}
+          AND chapter_entry.user_id = ${userId}
+      )
       SELECT
-        id,
-        title,
-        description,
-        place_label,
-        place_name,
-        place_locality,
-        place_region,
-        place_country,
-        place_country_code,
-        place_geocoder,
-        place_geocoded_at,
-        visited_on,
-        record_state,
-        journey_state,
-        ST_Y(location::geometry)::float8 AS latitude,
-        ST_X(location::geometry)::float8 AS longitude,
-        version,
-        created_at,
-        updated_at
-      FROM atlas_entries
-      WHERE user_id = ${userId}
-        AND record_state = 'saved'
-        AND deleted_at IS NULL
-      ORDER BY visited_on DESC NULLS LAST, updated_at DESC
-      LIMIT 500
+        entry.id,
+        entry.title,
+        entry.place_label,
+        entry.place_name,
+        entry.visited_on,
+        entry.journey_state,
+        cover_media.id AS media_id,
+        cover_media.thumbnail_path
+      FROM atlas_entries AS entry
+      LEFT JOIN LATERAL (
+        SELECT
+          media.id,
+          media.thumbnail_path
+        FROM atlas_media AS media
+        WHERE media.entry_id = entry.id
+          AND media.user_id = ${userId}
+        ORDER BY media.sort_order, media.created_at
+        LIMIT 1
+      ) AS cover_media ON TRUE
+      WHERE entry.user_id = ${userId}
+        AND entry.record_state = 'saved'
+        AND entry.deleted_at IS NULL
+        AND (
+          entry.id IN (SELECT id FROM recent_entries)
+          OR entry.id IN (SELECT id FROM selected_entries)
+        )
+      ORDER BY entry.visited_on DESC NULLS LAST, entry.updated_at DESC
     `,
   ]);
 
   return {
     chapter,
-    availableEntries: entriesResult.rows.map((row) => toAtlasEntry(row)),
+    availableEntries: entriesResult.rows.map((row) => ({
+      id: row.id,
+      title: row.title,
+      placeLabel: row.place_label ?? '',
+      placeName: row.place_name,
+      visitedOn: toDateString(row.visited_on),
+      journeyState: row.journey_state,
+      thumbnailUrl: row.media_id
+        ? `/api/atlas/media/${row.media_id}${row.thumbnail_path ? '?variant=thumbnail' : ''}`
+        : null,
+    })),
   };
 }

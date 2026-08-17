@@ -29,6 +29,14 @@ export default async function ChapterPage({
   const places = chapter.entries
     .map((entry) => entry.placeLabel || entry.placeName)
     .filter((place): place is string => Boolean(place));
+  const mapEntries = chapter.entries.map((entry) => ({
+    id: entry.id,
+    title: entry.title,
+    placeLabel: entry.placeLabel,
+    placeName: entry.placeName,
+    latitude: entry.latitude,
+    longitude: entry.longitude,
+  }));
 
   return (
     <article className={styles.chapterDetail}>
@@ -47,12 +55,13 @@ export default async function ChapterPage({
         <div className={styles.chapterHeroArtwork}>
           {chapter.coverMedia ? (
             <Image
-              src={chapter.coverMedia.deliveryUrl}
+              src={chapter.coverMedia.thumbnailUrl}
               alt={chapter.coverMedia.altText || ''}
               fill
               sizes="(max-width: 800px) 100vw, 48vw"
               className={styles.chapterHeroImage}
-              priority
+              loading="eager"
+              fetchPriority="high"
               unoptimized
             />
           ) : (
@@ -64,7 +73,10 @@ export default async function ChapterPage({
             </div>
           )}
         </div>
-        <div className={styles.chapterHeroStory}>
+        <div
+          className={styles.chapterHeroStory}
+          data-long-title={chapter.title.length > 52 ? 'true' : undefined}
+        >
           <p className="section-kicker">A chapter from your atlas</p>
           <h1>{chapter.title}</h1>
           {chapter.introduction ? (
@@ -97,7 +109,7 @@ export default async function ChapterPage({
           </div>
           <p>Each stop follows the reading order you chose.</p>
         </div>
-        <ChapterMap entries={chapter.entries} />
+        <ChapterMap entries={mapEntries} />
       </section>
 
       <section className={styles.chapterMemories} aria-labelledby="chapter-memories-heading">
@@ -119,6 +131,7 @@ export default async function ChapterPage({
                 index={String(index + 1).padStart(2, '0')}
                 variant="row"
                 href={`/dashboard/card/${entry.id}`}
+                eager={false}
               />
             </div>
           ))}

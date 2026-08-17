@@ -1,4 +1,8 @@
-import type { AtlasEntry, AtlasMedia } from '@/app/lib/atlas/definitions';
+import type {
+  AtlasEntry,
+  AtlasMedia,
+  JourneyState,
+} from '@/app/lib/atlas/definitions';
 
 export type AtlasChapterSummary = {
   id: string;
@@ -17,9 +21,26 @@ export type AtlasChapter = AtlasChapterSummary & {
   entries: AtlasEntry[];
 };
 
+export type AtlasChapterEditorChapter = Pick<
+  AtlasChapter,
+  'id' | 'title' | 'introduction' | 'version'
+> & {
+  entryIds: string[];
+};
+
+export type AtlasChapterMemoryOption = {
+  id: string;
+  title: string;
+  placeLabel: string;
+  placeName: string | null;
+  visitedOn: string | null;
+  journeyState: JourneyState;
+  thumbnailUrl: string | null;
+};
+
 export type AtlasChapterEditorData = {
-  chapter: AtlasChapter | null;
-  availableEntries: AtlasEntry[];
+  chapter: AtlasChapterEditorChapter | null;
+  availableEntries: AtlasChapterMemoryOption[];
 };
 
 export type AtlasChapterInput = {
@@ -34,10 +55,7 @@ export type AtlasChapterUpdateInput = AtlasChapterInput & {
 };
 
 export type ChapterActionError =
-  | 'invalid'
-  | 'not-found'
-  | 'conflict'
-  | 'failed';
+  'invalid' | 'not-found' | 'conflict' | 'failed';
 
 export type ChapterActionResult<T> =
   | { ok: true; data: T }

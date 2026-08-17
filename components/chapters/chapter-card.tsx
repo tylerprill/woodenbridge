@@ -12,9 +12,11 @@ import styles from './chapters.module.css';
 export function ChapterCard({
   chapter,
   index,
+  eager = false,
 }: {
   chapter: AtlasChapterSummary;
   index: string;
+  eager?: boolean;
 }) {
   return (
     <article className={styles.chapterCard}>
@@ -31,6 +33,8 @@ export function ChapterCard({
               fill
               sizes="(max-width: 760px) 100vw, (max-width: 1180px) 50vw, 33vw"
               className={styles.chapterCardImage}
+              loading={eager ? 'eager' : 'lazy'}
+              fetchPriority={eager ? 'high' : 'auto'}
               unoptimized
             />
           ) : (

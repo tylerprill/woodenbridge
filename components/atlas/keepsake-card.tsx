@@ -21,6 +21,7 @@ type KeepsakeCardProps = {
   index?: string;
   variant?: KeepsakeVariant;
   href?: string;
+  eager?: boolean;
 };
 
 function getKeepsakeTone(entry: AtlasEntry): KeepsakeTone {
@@ -47,6 +48,7 @@ function CardContents({
   index,
   variant,
   href,
+  eager,
 }: Omit<KeepsakeCardProps, 'tone'> & {
   tone: KeepsakeTone;
   variant: KeepsakeVariant;
@@ -88,7 +90,7 @@ function CardContents({
         <MemoryArtwork
           entry={entry}
           tone={tone}
-          eager={index === '01'}
+          eager={eager ?? index === '01'}
           preview
           sizes="(max-width: 768px) 25vw, 4.8rem"
         />
@@ -137,7 +139,7 @@ function CardContents({
         entry={entry}
         index={index}
         tone={tone}
-        eager={variant === 'feature' || index === '01'}
+        eager={eager ?? (variant === 'feature' || index === '01')}
         preview={variant !== 'feature'}
         sizes={
           variant === 'feature'
@@ -166,6 +168,7 @@ export function KeepsakeCard({
   index,
   variant = 'grid',
   href,
+  eager,
 }: KeepsakeCardProps) {
   const className = `keepsake-card keepsake-card-${variant}`;
   const resolvedTone = tone ?? getKeepsakeTone(entry);
@@ -176,6 +179,7 @@ export function KeepsakeCard({
       index={index}
       variant={variant}
       href={href}
+      eager={eager}
     />
   );
 

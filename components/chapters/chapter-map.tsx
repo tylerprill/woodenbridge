@@ -4,9 +4,9 @@ import { useEffect, useRef } from 'react';
 import maplibregl, {
   type GeoJSONSource,
   type Map as MapLibreMap,
+  type Marker,
 } from 'maplibre-gl';
 
-import type { AtlasEntry } from '@/app/lib/atlas/definitions';
 import {
   createGentleChapterRoute,
   unwrapChapterCoordinates,
@@ -17,7 +17,16 @@ const DEFAULT_STYLE =
   process.env.NEXT_PUBLIC_ATLAS_STYLE_URL ??
   'https://tiles.openfreemap.org/styles/positron';
 
-function routeData(entries: AtlasEntry[]) {
+type ChapterMapMemory = {
+  id: string;
+  title: string;
+  placeLabel: string;
+  placeName: string | null;
+  latitude: number;
+  longitude: number;
+};
+
+function routeData(entries: ChapterMapMemory[]) {
   const coordinates = createGentleChapterRoute(entries);
   return {
     type: 'FeatureCollection' as const,
@@ -37,34 +46,67 @@ function routeData(entries: AtlasEntry[]) {
   };
 }
 
-function pointData(entries: AtlasEntry[]) {
-  const coordinates = unwrapChapterCoordinates(entries);
-  return {
-    type: 'FeatureCollection' as const,
-    features: entries.map((entry, index) => ({
-      type: 'Feature' as const,
-      properties: {
-        order: String(index + 1),
-        title: entry.title || 'Untitled memory',
-        place: entry.placeLabel || entry.placeName || 'Pinned place',
-      },
-      geometry: {
-        type: 'Point' as const,
-        coordinates: coordinates[index],
-      },
-    })),
-  };
+function markerPopupContent(entry: ChapterMapMemory, index: number) {
+  const content = document.createElement('div');
+  const number = document.createElement('span');
+  number.textContent = `Stop ${index + 1}`;
+  const title = document.createElement('strong');
+  title.textContent = entry.title || 'Untitled memory';
+  const place = document.createElement('p');
+  place.textContent = entry.placeLabel || entry.placeName || 'Pinned place';
+  content.append(number, title, place);
+  return content;
 }
 
-function fitChapter(map: MapLibreMap, entries: AtlasEntry[]) {
+function createChapterMarkers(
+  map: MapLibreMap,
+  entries: ChapterMapMemory[],
+  popup: maplibregl.Popup,
+) {
+  const coordinates = unwrapChapterCoordinates(entries);
+  return entries.map((entry, index) => {
+    const element = document.createElement('button');
+    element.type = 'button';
+    element.className = styles.chapterMapMarker;
+    element.textContent = String(index + 1);
+    element.setAttribute(
+      'aria-label',
+      `Stop ${index + 1}: ${entry.title || 'Untitled memory'}, ${
+        entry.placeLabel || entry.placeName || 'Pinned place'
+      }`,
+    );
+    const showPopup = () =>
+      popup
+        .setLngLat(coordinates[index])
+        .setDOMContent(markerPopupContent(entry, index))
+        .addTo(map);
+    const hidePopup = () => popup.remove();
+    element.addEventListener('mouseenter', showPopup);
+    element.addEventListener('mouseleave', hidePopup);
+    element.addEventListener('focus', showPopup);
+    element.addEventListener('blur', hidePopup);
+
+    return new maplibregl.Marker({ element, anchor: 'center' })
+      .setLngLat(coordinates[index])
+      .addTo(map);
+  });
+}
+
+function fitChapter(
+  map: MapLibreMap,
+  entries: ChapterMapMemory[],
+  animated = true,
+) {
   if (!entries.length) return;
+  const duration =
+    !animated || window.matchMedia('(prefers-reduced-motion: reduce)').matches
+      ? 0
+      : undefined;
   if (entries.length === 1) {
     map.easeTo({
       center: [entries[0].longitude, entries[0].latitude],
       zoom: 8,
-      duration: window.matchMedia('(prefers-reduced-motion: reduce)').matches
-        ? 0
-        : 700,
+      duration: duration ?? 700,
     });
     return;
   }
@@ -76,23 +118,27 @@ function fitChapter(map: MapLibreMap, entries: AtlasEntry[]) {
   map.fitBounds(bounds, {
     padding: window.innerWidth < 680 ? 52 : 88,
     maxZoom: 8.5,
-    duration: window.matchMedia('(prefers-reduced-motion: reduce)').matches
-      ? 0
-      : 900,
+    duration: duration ?? 900,
   });
 }
 
-export function ChapterMap({ entries }: { entries: AtlasEntry[] }) {
+export function ChapterMap({ entries }: { entries: ChapterMapMemory[] }) {
   const containerRef = useRef<HTMLDivElement>(null);
   const mapRef = useRef<MapLibreMap | null>(null);
+  const markersRef = useRef<Marker[]>([]);
+  const popupRef = useRef<maplibregl.Popup | null>(null);
+  const entriesRef = useRef(entries);
 
   useEffect(() => {
-    if (!containerRef.current || mapRef.current || !entries.length) return;
+    const initialEntries = entriesRef.current;
+    if (!containerRef.current || mapRef.current || !initialEntries.length) {
+      return;
+    }
 
     const map = new maplibregl.Map({
       container: containerRef.current,
       style: DEFAULT_STYLE,
-      center: [entries[0].longitude, entries[0].latitude],
+      center: [initialEntries[0].longitude, initialEntries[0].latitude],
       zoom: 3,
       attributionControl: false,
       cooperativeGestures: true,
@@ -111,15 +157,24 @@ export function ChapterMap({ entries }: { entries: AtlasEntry[] }) {
       offset: 16,
       className: 'chapter-map-popup',
     });
+    popupRef.current = popup;
+    let resizeFrame: number | null = null;
+    const resizeObserver = new ResizeObserver(() => {
+      if (resizeFrame !== null) cancelAnimationFrame(resizeFrame);
+      resizeFrame = requestAnimationFrame(() => {
+        map.resize();
+        if (map.isStyleLoaded()) {
+          fitChapter(map, entriesRef.current, false);
+        }
+      });
+    });
+    resizeObserver.observe(containerRef.current);
 
     map.on('load', () => {
+      const currentEntries = entriesRef.current;
       map.addSource('chapter-route', {
         type: 'geojson',
-        data: routeData(entries),
-      });
-      map.addSource('chapter-points', {
-        type: 'geojson',
-        data: pointData(entries),
+        data: routeData(currentEntries),
       });
       map.addLayer({
         id: 'chapter-route-shadow',
@@ -144,83 +199,33 @@ export function ChapterMap({ entries }: { entries: AtlasEntry[] }) {
         },
         layout: { 'line-cap': 'round', 'line-join': 'round' },
       });
-      map.addLayer({
-        id: 'chapter-point-halos',
-        type: 'circle',
-        source: 'chapter-points',
-        paint: {
-          'circle-radius': 13,
-          'circle-color': '#fbfaf5',
-          'circle-stroke-color': '#0e2a22',
-          'circle-stroke-width': 1,
-          'circle-opacity': 0.96,
-        },
-      });
-      map.addLayer({
-        id: 'chapter-points',
-        type: 'circle',
-        source: 'chapter-points',
-        paint: {
-          'circle-radius': 9.5,
-          'circle-color': '#0e2a22',
-          'circle-stroke-color': '#fbfaf5',
-          'circle-stroke-width': 1.5,
-        },
-      });
-      map.addLayer({
-        id: 'chapter-point-labels',
-        type: 'symbol',
-        source: 'chapter-points',
-        layout: {
-          'text-field': ['get', 'order'],
-          'text-size': 11,
-          'text-allow-overlap': true,
-        },
-        paint: { 'text-color': '#fbfaf5' },
-      });
-      fitChapter(map, entries);
-    });
-
-    map.on('mouseenter', 'chapter-points', (event) => {
-      map.getCanvas().style.cursor = 'pointer';
-      const feature = event.features?.[0];
-      const coordinates =
-        feature?.geometry.type === 'Point'
-          ? (feature.geometry.coordinates.slice() as [number, number])
-          : null;
-      if (!feature || !coordinates) return;
-
-      const content = document.createElement('div');
-      const number = document.createElement('span');
-      number.textContent = `Stop ${String(feature.properties?.order ?? '')}`;
-      const title = document.createElement('strong');
-      title.textContent = String(feature.properties?.title ?? 'Memory');
-      const place = document.createElement('p');
-      place.textContent = String(feature.properties?.place ?? '');
-      content.append(number, title, place);
-      popup.setLngLat(coordinates).setDOMContent(content).addTo(map);
-    });
-    map.on('mouseleave', 'chapter-points', () => {
-      map.getCanvas().style.cursor = '';
-      popup.remove();
+      markersRef.current = createChapterMarkers(map, currentEntries, popup);
+      fitChapter(map, currentEntries);
     });
 
     return () => {
+      if (resizeFrame !== null) cancelAnimationFrame(resizeFrame);
+      resizeObserver.disconnect();
+      markersRef.current.forEach((marker) => marker.remove());
+      markersRef.current = [];
       popup.remove();
+      popupRef.current = null;
       map.remove();
       mapRef.current = null;
     };
-  }, [entries]);
+  }, []);
 
   useEffect(() => {
+    entriesRef.current = entries;
     const map = mapRef.current;
     if (!map?.isStyleLoaded()) return;
     (map.getSource('chapter-route') as GeoJSONSource | undefined)?.setData(
       routeData(entries),
     );
-    (map.getSource('chapter-points') as GeoJSONSource | undefined)?.setData(
-      pointData(entries),
-    );
+    markersRef.current.forEach((marker) => marker.remove());
+    markersRef.current = popupRef.current
+      ? createChapterMarkers(map, entries, popupRef.current)
+      : [];
     fitChapter(map, entries);
   }, [entries]);
 
@@ -229,9 +234,10 @@ export function ChapterMap({ entries }: { entries: AtlasEntry[] }) {
       <div
         ref={containerRef}
         className={styles.chapterMap}
+        role="region"
         aria-label={`Map of ${entries.length} ordered chapter memories`}
       />
-      <p className={styles.chapterMapHint}>Scroll + command to explore</p>
+      <p className={styles.chapterMapHint}>Hold ⌘ / Ctrl to zoom</p>
     </div>
   );
 }
