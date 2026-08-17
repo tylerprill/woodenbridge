@@ -14,15 +14,21 @@ import {
 } from '@/app/lib/chapters/format';
 import { KeepsakeCard } from '@/components/atlas/keepsake-card';
 import { ChapterMap } from './chapter-map';
+import {
+  ChapterSaveNotice,
+  type ChapterSaveNoticeKind,
+} from './chapter-save-notice';
 import { ChapterShareControl } from './chapter-share-control';
 import styles from './chapters.module.css';
 
 export function ChapterReader({
   chapter,
   mode,
+  saveNotice,
 }: {
   chapter: AtlasChapter;
   mode: 'owner' | 'shared';
+  saveNotice?: ChapterSaveNoticeKind;
 }) {
   const places = chapter.entries
     .map((entry) => entry.placeLabel || entry.placeName)
@@ -61,6 +67,10 @@ export function ChapterReader({
           <Link href="/sign-up">Create your atlas</Link>
         )}
       </nav>
+
+      {mode === 'owner' && saveNotice ? (
+        <ChapterSaveNotice chapterId={chapter.id} kind={saveNotice} />
+      ) : null}
 
       <header
         className={styles.chapterHero}

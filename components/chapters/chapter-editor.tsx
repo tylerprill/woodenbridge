@@ -3,9 +3,10 @@
 import {
   ArrowDownIcon,
   ArrowLeftIcon,
+  ArrowPathIcon,
   ArrowUpIcon,
-  Bars3Icon,
   CheckIcon,
+  ExclamationTriangleIcon,
   EyeIcon,
   EyeSlashIcon,
   GlobeAltIcon,
@@ -23,12 +24,9 @@ import { useRouter } from 'next/navigation';
 import {
   Fragment,
   type FormEvent,
-  type KeyboardEvent,
-  type PointerEvent,
   useDeferredValue,
   useEffect,
   useMemo,
-  useRef,
   useState,
   useTransition,
 } from 'react';
@@ -41,6 +39,7 @@ import {
 import type {
   AtlasChapterEditorChapter,
   AtlasChapterMemoryOption,
+  ChapterActionError,
 } from '@/app/lib/chapters/definitions';
 import {
   CHAPTER_INTRODUCTION_MAX_LENGTH,
@@ -52,6 +51,7 @@ import {
 import styles from './chapters.module.css';
 
 const MEMORY_PICKER_BATCH_SIZE = 24;
+type ChapterEditorStep = 'details' | 'arrange';
 const MEMORY_DATE_FORMATTER = new Intl.DateTimeFormat('en-US', {
   month: 'short',
   day: 'numeric',
@@ -110,11 +110,14 @@ function MemoryThumbnail({
 export function ChapterEditor({
   chapter,
   availableEntries,
+  initialStep = 'details',
 }: {
   chapter: AtlasChapterEditorChapter | null;
   availableEntries: AtlasChapterMemoryOption[];
+  initialStep?: ChapterEditorStep;
 }) {
   const router = useRouter();
+  const [editorStep, setEditorStep] = useState<ChapterEditorStep>(initialStep);
   const initialMemories = useMemo(() => chapter?.memories ?? [], [chapter]);
   const [title, setTitle] = useState(chapter?.title ?? '');
   const [introduction, setIntroduction] = useState(chapter?.introduction ?? '');
@@ -151,12 +154,10 @@ export function ChapterEditor({
     MEMORY_PICKER_BATCH_SIZE,
   );
   const [error, setError] = useState('');
+  const [errorType, setErrorType] = useState<ChapterActionError | null>(null);
   const [reorderAnnouncement, setReorderAnnouncement] = useState('');
-  const [draggingId, setDraggingId] = useState<string | null>(null);
   const [confirmingDelete, setConfirmingDelete] = useState(false);
   const [isPending, startTransition] = useTransition();
-  const sequenceListRef = useRef<HTMLOListElement>(null);
-  const draggingIdRef = useRef<string | null>(null);
   const initialMemoryState = JSON.stringify(initialMemories);
   const currentMemoryState = JSON.stringify(
     selectedIds.map((entryId) => ({
@@ -198,6 +199,8 @@ export function ChapterEditor({
     );
   }, [availableEntries, deferredQuery]);
   const visibleEntries = filteredEntries.slice(0, visibleMemoryCount);
+  const canArrange =
+    title.trim().length > 0 && selectedIds.length >= CHAPTER_MIN_MEMORIES;
 
   useEffect(() => {
     if (!isDirty || isPending) return;
@@ -243,11 +246,40 @@ export function ChapterEditor({
     setVisibleMemoryCount(MEMORY_PICKER_BATCH_SIZE);
   }
 
+  function goToEditorStep(nextStep: ChapterEditorStep) {
+    if (nextStep === 'arrange' && !canArrange) return;
+    setEditorStep(nextStep);
+    const nextUrl = new URL(window.location.href);
+    if (nextStep === 'arrange') nextUrl.searchParams.set('step', 'arrange');
+    else nextUrl.searchParams.delete('step');
+    nextUrl.hash = '';
+    window.history.replaceState(
+      window.history.state,
+      '',
+      `${nextUrl.pathname}${nextUrl.search}`,
+    );
+    window.requestAnimationFrame(() => {
+      const headingId =
+        nextStep === 'details'
+          ? 'chapter-story-heading'
+          : 'chapter-sequence-heading';
+      document.getElementById(headingId)?.focus({ preventScroll: true });
+      window.scrollTo({
+        top: 0,
+        behavior: window.matchMedia('(prefers-reduced-motion: reduce)').matches
+          ? 'auto'
+          : 'smooth',
+      });
+    });
+  }
+
   function addEntry(entryId: string) {
     setError('');
+    setErrorType(null);
     if (selectedIds.includes(entryId)) return;
     if (selectedIds.length >= CHAPTER_MAX_MEMORIES) {
       setError(`A chapter can hold up to ${CHAPTER_MAX_MEMORIES} memories.`);
+      setErrorType('invalid');
       return;
     }
     setSelectedIds([...selectedIds, entryId]);
@@ -255,6 +287,7 @@ export function ChapterEditor({
 
   function removeEntry(entryId: string) {
     setError('');
+    setErrorType(null);
     setSelectedIds((current) => current.filter((id) => id !== entryId));
     const entry = entriesById.get(entryId);
     if (entry?.coverMediaId === coverMediaId) setCoverMediaId(null);
@@ -278,75 +311,6 @@ export function ChapterEditor({
     announcePosition(next[target], next);
   }
 
-  function moveEntryTo(entryId: string, targetId: string) {
-    if (entryId === targetId) return;
-    const from = selectedIds.indexOf(entryId);
-    const to = selectedIds.indexOf(targetId);
-    if (from < 0 || to < 0 || from === to) return;
-    const next = [...selectedIds];
-    next.splice(from, 1);
-    next.splice(to, 0, entryId);
-    setSelectedIds(next);
-    announcePosition(entryId, next);
-  }
-
-  function startPointerReorder(
-    event: PointerEvent<HTMLButtonElement>,
-    entryId: string,
-  ) {
-    if (event.button !== 0) return;
-    event.currentTarget.setPointerCapture(event.pointerId);
-    draggingIdRef.current = entryId;
-    setDraggingId(entryId);
-  }
-
-  function continuePointerReorder(event: PointerEvent<HTMLButtonElement>) {
-    const entryId = draggingIdRef.current;
-    const list = sequenceListRef.current;
-    if (!entryId || !list) return;
-
-    const bounds = list.getBoundingClientRect();
-    if (event.clientY < bounds.top + 44) list.scrollTop -= 18;
-    if (event.clientY > bounds.bottom - 44) list.scrollTop += 18;
-
-    const target = Array.from(
-      list.querySelectorAll<HTMLElement>('[data-sequence-entry]'),
-    ).find((item) => {
-      const rect = item.getBoundingClientRect();
-      return event.clientY >= rect.top && event.clientY <= rect.bottom;
-    });
-    const targetId = target?.dataset.sequenceEntry;
-    if (targetId) moveEntryTo(entryId, targetId);
-  }
-
-  function finishPointerReorder(event: PointerEvent<HTMLButtonElement>) {
-    if (event.currentTarget.hasPointerCapture(event.pointerId)) {
-      event.currentTarget.releasePointerCapture(event.pointerId);
-    }
-    draggingIdRef.current = null;
-    setDraggingId(null);
-  }
-
-  function handleReorderKey(
-    event: KeyboardEvent<HTMLButtonElement>,
-    entryId: string,
-    index: number,
-  ) {
-    if (event.key === 'ArrowUp') {
-      event.preventDefault();
-      moveEntry(index, -1);
-    } else if (event.key === 'ArrowDown') {
-      event.preventDefault();
-      moveEntry(index, 1);
-    } else if (event.key === 'Home' && index > 0) {
-      event.preventDefault();
-      moveEntryTo(entryId, selectedIds[0]);
-    } else if (event.key === 'End' && index < selectedIds.length - 1) {
-      event.preventDefault();
-      moveEntryTo(entryId, selectedIds[selectedIds.length - 1]);
-    }
-  }
-
   function updateTransitionNote(entryId: string, value: string) {
     setTransitionNotes((current) => ({ ...current, [entryId]: value }));
   }
@@ -365,11 +329,13 @@ export function ChapterEditor({
   function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     setError('');
+    setErrorType(null);
 
     if (selectedIds.length < CHAPTER_MIN_MEMORIES) {
       setError(
         `Choose at least ${CHAPTER_MIN_MEMORIES} memories for this chapter.`,
       );
+      setErrorType('invalid');
       return;
     }
 
@@ -386,21 +352,30 @@ export function ChapterEditor({
         shareMap,
         shareLocationPrecision,
       };
-      const result = chapter
-        ? await updateAtlasChapterAction({
-            ...input,
-            id: chapter.id,
-            version: chapter.version,
-          })
-        : await createAtlasChapterAction(input);
+      try {
+        const result = chapter
+          ? await updateAtlasChapterAction({
+              ...input,
+              id: chapter.id,
+              version: chapter.version,
+            })
+          : await createAtlasChapterAction(input);
 
-      if (!result.ok) {
-        setError(result.message);
-        return;
+        if (!result.ok) {
+          setError(result.message);
+          setErrorType(result.error);
+          return;
+        }
+
+        router.push(
+          `/dashboard/chapters/${result.data.id}?saved=${chapter ? 'updated' : 'created'}`,
+        );
+      } catch {
+        setError(
+          'We could not reach Field Atlas. Check your connection and try saving again.',
+        );
+        setErrorType('failed');
       }
-
-      router.push(`/dashboard/chapters/${result.data.id}`);
-      router.refresh();
     });
   }
 
@@ -412,21 +387,39 @@ export function ChapterEditor({
     }
 
     setError('');
+    setErrorType(null);
     startTransition(async () => {
-      const result = await deleteAtlasChapterAction(chapter.id);
-      if (!result.ok) {
-        setError(result.message);
+      try {
+        const result = await deleteAtlasChapterAction(chapter.id);
+        if (!result.ok) {
+          setError(result.message);
+          setErrorType(result.error);
+          setConfirmingDelete(false);
+          return;
+        }
+        router.push('/dashboard/chapters');
+      } catch {
+        setError(
+          'We could not reach Field Atlas. Your chapter has not been deleted.',
+        );
+        setErrorType('failed');
         setConfirmingDelete(false);
-        return;
       }
-      router.push('/dashboard/chapters');
-      router.refresh();
     });
   }
 
+  const errorTitle =
+    errorType === 'conflict'
+      ? 'A newer version is already saved.'
+      : errorType === 'not-found'
+        ? 'This chapter is no longer available.'
+        : errorType === 'invalid'
+          ? 'One detail needs attention.'
+          : 'Your work is still here.';
+
   return (
     <div className={styles.editorPage}>
-      <header className={styles.editorHeader}>
+      <header className={styles.editorHeader} data-editor-step={editorStep}>
         <div>
           <Link
             href={
@@ -450,17 +443,55 @@ export function ChapterEditor({
         </p>
       </header>
 
-      <form className={styles.editorLayout} onSubmit={handleSubmit}>
+      <form
+        className={styles.editorLayout}
+        data-editor-step={editorStep}
+        onSubmit={handleSubmit}
+      >
+        <nav className={styles.editorSteps} aria-label="Chapter maker steps">
+          <button
+            type="button"
+            data-active={editorStep === 'details' ? 'true' : undefined}
+            aria-current={editorStep === 'details' ? 'step' : undefined}
+            onClick={() => goToEditorStep('details')}
+          >
+            <span>01</span>
+            <span>
+              <strong>Story &amp; places</strong>
+              <small>Name the chapter and gather its memories.</small>
+            </span>
+            {editorStep === 'arrange' ? <CheckIcon aria-hidden="true" /> : null}
+          </button>
+          <button
+            type="button"
+            data-active={editorStep === 'arrange' ? 'true' : undefined}
+            aria-current={editorStep === 'arrange' ? 'step' : undefined}
+            onClick={() => goToEditorStep('arrange')}
+            disabled={editorStep === 'details' && !canArrange}
+          >
+            <span>02</span>
+            <span>
+              <strong>Arrange &amp; share</strong>
+              <small>
+                {canArrange
+                  ? 'Set the route, cover, and privacy.'
+                  : `Add a title and ${CHAPTER_MIN_MEMORIES} memories first.`}
+              </small>
+            </span>
+          </button>
+        </nav>
+
         <div className={styles.editorMain}>
           <section
             className={styles.editorSection}
             aria-labelledby="chapter-story-heading"
+            hidden={editorStep !== 'details'}
           >
             <div className={styles.editorSectionHeading}>
               <span>01</span>
               <div>
                 <p className="section-kicker">The story</p>
-                <h2 id="chapter-story-heading">
+                <h2 id="chapter-story-heading" tabIndex={-1}>
                   Name what connects these places.
                 </h2>
               </div>
@@ -502,6 +533,7 @@ export function ChapterEditor({
           <section
             className={styles.editorSection}
             aria-labelledby="chapter-memories-heading"
+            hidden={editorStep !== 'details'}
           >
             <div className={styles.editorSectionHeading}>
               <span>02</span>
@@ -624,6 +656,7 @@ export function ChapterEditor({
           <section
             className={styles.editorSection}
             aria-labelledby="chapter-sharing-heading"
+            hidden={editorStep !== 'arrange'}
           >
             <div className={styles.editorSectionHeading}>
               <span>03</span>
@@ -737,22 +770,123 @@ export function ChapterEditor({
               </p>
             )}
           </section>
+
+          <div
+            className={styles.chapterCompletion}
+            hidden={editorStep !== 'arrange'}
+          >
+            {error ? (
+              <div className={styles.editorError} role="alert">
+                <ExclamationTriangleIcon aria-hidden="true" />
+                <div>
+                  <strong>{errorTitle}</strong>
+                  <p>{error}</p>
+                  {errorType === 'failed' ? (
+                    <button type="submit" disabled={isPending}>
+                      <ArrowPathIcon aria-hidden="true" />
+                      Try saving again
+                    </button>
+                  ) : errorType === 'conflict' && chapter ? (
+                    <Link
+                      href={`/dashboard/chapters/${chapter.id}/edit`}
+                      target="_blank"
+                      rel="noreferrer"
+                    >
+                      Review latest in a new tab
+                    </Link>
+                  ) : errorType === 'not-found' ? (
+                    <Link href="/dashboard/chapters">
+                      Return to My Chapters
+                    </Link>
+                  ) : null}
+                </div>
+              </div>
+            ) : null}
+
+            <button
+              type="submit"
+              className={styles.chapterSave}
+              aria-busy={isPending}
+              data-saved={chapter && !isDirty ? 'true' : undefined}
+              disabled={
+                isPending ||
+                availableEntries.length < CHAPTER_MIN_MEMORIES ||
+                selectedIds.length < CHAPTER_MIN_MEMORIES ||
+                Boolean(chapter && !isDirty)
+              }
+            >
+              {isPending ? (
+                <>
+                  <span
+                    className={styles.chapterSaveSpinner}
+                    aria-hidden="true"
+                  />
+                  Saving chapter…
+                </>
+              ) : chapter && !isDirty ? (
+                <>
+                  <CheckIcon aria-hidden="true" />
+                  All changes saved
+                </>
+              ) : chapter ? (
+                'Save changes'
+              ) : (
+                'Create chapter'
+              )}
+            </button>
+            <p className={styles.chapterSaveHint} aria-live="polite">
+              {isPending
+                ? 'Keeping this page open while your chapter is saved.'
+                : chapter && !isDirty
+                  ? 'Your chapter is up to date.'
+                  : 'Your original atlas memories remain independent and unchanged.'}
+            </p>
+
+            {chapter ? (
+              <div className={styles.chapterDelete}>
+                {confirmingDelete ? (
+                  <p>
+                    Delete this chapter? Its memories will stay in your atlas.
+                  </p>
+                ) : null}
+                <button
+                  type="button"
+                  onClick={handleDelete}
+                  disabled={isPending}
+                >
+                  <TrashIcon aria-hidden="true" />
+                  {confirmingDelete ? 'Yes, delete chapter' : 'Delete chapter'}
+                </button>
+                {confirmingDelete ? (
+                  <button
+                    type="button"
+                    onClick={() => setConfirmingDelete(false)}
+                  >
+                    Keep it
+                  </button>
+                ) : null}
+              </div>
+            ) : null}
+          </div>
         </div>
 
         <aside
           className={styles.chapterSequence}
           aria-labelledby="chapter-sequence-heading"
+          hidden={editorStep !== 'arrange'}
         >
           <div className={styles.sequenceHeader}>
             <div>
               <p className="section-kicker">Reading order</p>
-              <h2 id="chapter-sequence-heading">The route.</h2>
+              <h2 id="chapter-sequence-heading" tabIndex={-1}>
+                The route.
+              </h2>
             </div>
             <span>{selectedIds.length}</span>
           </div>
 
           {selectedEntries.length ? (
-            <ol className={styles.sequenceList} ref={sequenceListRef}>
+            <ol className={styles.sequenceList}>
               {selectedEntries.map((entry, index) => {
                 const transitionNote = transitionNotes[entry.id] ?? '';
                 const transitionIsOpen = openTransitionIds.has(entry.id);
@@ -811,29 +945,7 @@ export function ChapterEditor({
                         )}
                       </li>
                     ) : null}
-                    <li
-                      className={styles.sequenceItem}
-                      data-sequence-entry={entry.id}
-                      data-dragging={
-                        draggingId === entry.id ? 'true' : undefined
-                      }
-                    >
-                      <button
-                        type="button"
-                        className={styles.sequenceDragHandle}
-                        aria-label={`Reorder ${memoryName(entry)}. Use arrow keys, Home, or End.`}
-                        onPointerDown={(event) =>
-                          startPointerReorder(event, entry.id)
-                        }
-                        onPointerMove={continuePointerReorder}
-                        onPointerUp={finishPointerReorder}
-                        onPointerCancel={finishPointerReorder}
-                        onKeyDown={(event) =>
-                          handleReorderKey(event, entry.id, index)
-                        }
-                      >
-                        <Bars3Icon aria-hidden="true" />
-                      </button>
+                    <li className={styles.sequenceItem}>
                       <MemoryThumbnail
                         entry={entry}
                         compact
@@ -921,53 +1033,6 @@ export function ChapterEditor({
           <p className="sr-only" aria-live="polite">
             {reorderAnnouncement}
           </p>
-
-          {error ? (
-            <p className={styles.editorError} role="alert">
-              {error}
-            </p>
-          ) : null}
-
-          <button
-            type="submit"
-            className={styles.chapterSave}
-            disabled={
-              isPending ||
-              availableEntries.length < CHAPTER_MIN_MEMORIES ||
-              selectedIds.length < CHAPTER_MIN_MEMORIES
-            }
-          >
-            {isPending
-              ? 'Saving chapter…'
-              : chapter
-                ? 'Save changes'
-                : 'Create chapter'}
-          </button>
-          <p className={styles.chapterSaveHint}>
-            Your original atlas memories remain independent and unchanged.
-          </p>
-
-          {chapter ? (
-            <div className={styles.chapterDelete}>
-              {confirmingDelete ? (
-                <p>
-                  Delete this chapter? Its memories will stay in your atlas.
-                </p>
-              ) : null}
-              <button type="button" onClick={handleDelete} disabled={isPending}>
-                <TrashIcon aria-hidden="true" />
-                {confirmingDelete ? 'Yes, delete chapter' : 'Delete chapter'}
-              </button>
-              {confirmingDelete ? (
-                <button
-                  type="button"
-                  onClick={() => setConfirmingDelete(false)}
-                >
-                  Keep it
-                </button>
-              ) : null}
-            </div>
-          ) : null}
         </aside>
       </form>
     </div>

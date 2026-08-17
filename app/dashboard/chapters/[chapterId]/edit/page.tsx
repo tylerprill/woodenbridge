@@ -5,10 +5,13 @@ import { ChapterEditor } from '@/components/chapters/chapter-editor';
 
 export default async function EditChapterPage({
   params,
+  searchParams,
 }: {
   params: Promise<{ chapterId: string }>;
+  searchParams: Promise<{ step?: string }>;
 }) {
   const { chapterId } = await params;
+  const { step } = await searchParams;
   const data = await getAtlasChapterEditorData(chapterId);
   if (!data.chapter) notFound();
 
@@ -16,6 +19,7 @@ export default async function EditChapterPage({
     <ChapterEditor
       chapter={data.chapter}
       availableEntries={data.availableEntries}
+      initialStep={step === 'arrange' ? 'arrange' : 'details'}
     />
   );
 }
