@@ -10,8 +10,9 @@ const config = {
     '^@/(.*)$': '<rootDir>/$1',
     '^server-only$': '<rootDir>/test/mocks/server-only.js',
   },
+  setupFilesAfterEnv: ['<rootDir>/test/setup.ts'],
   testEnvironment: 'node',
-  testMatch: ['<rootDir>/test/**/*.test.ts'],
+  testMatch: ['<rootDir>/test/**/*.test.ts', '<rootDir>/test/**/*.test.tsx'],
 };
 
 module.exports = createJestConfig(config);

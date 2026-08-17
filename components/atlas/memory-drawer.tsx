@@ -9,7 +9,13 @@ import {
   XMarkIcon,
 } from '@heroicons/react/24/outline';
 import Link from 'next/link';
-import { useCallback, useEffect, useRef, useState } from 'react';
+import {
+  useCallback,
+  useEffect,
+  useLayoutEffect,
+  useRef,
+  useState,
+} from 'react';
 
 import {
   archiveAtlasEntryAction,
@@ -75,7 +81,7 @@ export function MemoryDrawer({
   const [archiveArmed, setArchiveArmed] = useState(false);
   const [discardArmed, setDiscardArmed] = useState(false);
   const [placeTouched, setPlaceTouched] = useState(false);
-  const titleRef = useRef<HTMLInputElement>(null);
+  const titleRef = useRef<HTMLTextAreaElement>(null);
   const headingRef = useRef<HTMLHeadingElement>(null);
   const versionRef = useRef(entry.version);
   const mediaRef = useRef(entry.media);
@@ -89,6 +95,14 @@ export function MemoryDrawer({
         : headingRef.current?.focus(),
     );
   }, [entry.recordState]);
+
+  useLayoutEffect(() => {
+    const title = titleRef.current;
+    if (!title) return;
+
+    title.style.height = 'auto';
+    title.style.height = `${Math.min(title.scrollHeight, 92)}px`;
+  }, [form.title]);
 
   useEffect(() => {
     mediaRef.current = entry.media;
@@ -278,12 +292,13 @@ export function MemoryDrawer({
       <div className={styles.drawerBody}>
         <label className={styles.titleField}>
           <span>Title</span>
-          <input
+          <textarea
             ref={titleRef}
             id="memory-title"
             name="title"
             value={form.title}
             maxLength={ATLAS_TITLE_MAX_LENGTH}
+            rows={1}
             placeholder="Name this memory"
             autoComplete="off"
             autoCapitalize="words"

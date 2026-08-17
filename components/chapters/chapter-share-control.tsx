@@ -112,7 +112,7 @@ export function ChapterShareControl({
             {feedback === 'shared'
               ? 'Chapter shared.'
               : feedback === 'copied'
-                ? 'Private link copied.'
+                ? 'Unlisted chapter link copied.'
                 : 'Copy was blocked.'}
           </span>
           {feedback === 'error' ? (

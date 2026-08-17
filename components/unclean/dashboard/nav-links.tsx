@@ -14,7 +14,7 @@ import { hasRequiredRole, type AppRole } from '@/app/lib/auth/roles';
 
 const links = [
   { name: 'Atlas', href: '/dashboard', icon: GlobeAltIcon },
-  { name: 'My places', href: '/dashboard/users', icon: BookmarkIcon },
+  { name: 'My places', href: '/dashboard/places', icon: BookmarkIcon },
   { name: 'My Chapters', href: '/dashboard/chapters', icon: BookOpenIcon },
 ];
 

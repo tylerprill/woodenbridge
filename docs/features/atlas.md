@@ -30,12 +30,17 @@ The first Atlas release already provides the essential surface:
 - a private, verified-user map with clustered pins;
 - visited and ahead journey states;
 - a memory drawer for title, place, date, field note, and photographs;
-- search, filters, a memory tray, a journal, and a collection view;
+- search, filters, a memory tray, and the My Places collection;
 - private Vercel Blob media storage with ownership checks;
-- optimistic pin placement and autosaved memory edits.
+- optimistic pin placement with explicit, recoverable memory saves;
+- structured city, region, and country context from reverse geocoding;
+- photo-backed keepsake cards with collection thumbnails; and
+- My Chapters with ordered routes and revocable, unlisted sharing.
 
-The next product leap is semantic rather than cosmetic: Atlas must understand
-the place behind a coordinate and make the resulting memory feel finished.
+The current product loop is fully implemented from pin placement through
+keepsakes and chapters. The next leap is a stronger return loop, durable field
+capture, and more intentional sharing controls without weakening the private
+default.
 
 ## Priority roadmap
 
@@ -89,7 +94,8 @@ gives the map a narrative layer without turning Atlas into an itinerary planner.
 The production chapter experience now includes:
 
 - an accessible workshop for selecting up to fifty memories;
-- pointer, touch, keyboard, and explicit-button reordering;
+- explicit-button reordering that works consistently across pointer, touch, and
+  keyboard use;
 - a user-selected photographic cover with a sensible automatic fallback;
 - optional authored prose between individual memories;
 - an ordered, curved route and an editorial desktop/mobile reading experience;

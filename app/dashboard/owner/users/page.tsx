@@ -210,6 +210,8 @@ export default async function OwnerUsersPage({
                               />
                               <OwnerActionButton
                                 tone={nextRole === 'admin' ? 'strong' : 'quiet'}
+                                accessibleLabel={`Make ${user.name} (${user.email}) ${nextRole}`}
+                                confirmTitle={`Make ${user.name} ${nextRole}?`}
                                 confirmMessage={`Change ${user.email} to ${nextRole}? This will sign the account out everywhere.`}
                               >
                                 Make {nextRole}
@@ -224,6 +226,8 @@ export default async function OwnerUsersPage({
                                 value={user.id}
                               />
                               <OwnerActionButton
+                                accessibleLabel={`Revoke sessions for ${user.name} (${user.email})`}
+                                confirmTitle={`Sign ${user.name} out everywhere?`}
                                 confirmMessage={`Sign ${user.email} out on every device?`}
                               >
                                 Revoke sessions

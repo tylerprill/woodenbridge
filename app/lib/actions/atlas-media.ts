@@ -208,8 +208,7 @@ export async function registerAtlasMediaAction(
       await client.query('COMMIT');
 
       revalidatePath('/dashboard');
-      revalidatePath('/dashboard/users');
-      revalidatePath('/dashboard/journal');
+      revalidatePath('/dashboard/places');
       revalidatePath(`/dashboard/card/${mediaInput.entryId}`);
       return { ok: true, data: toAtlasMedia(inserted.rows[0]) };
     } catch (error) {
@@ -337,8 +336,7 @@ export async function deleteAtlasMediaAction(
     if (!removed.rows[0]) return failed();
 
     revalidatePath('/dashboard');
-    revalidatePath('/dashboard/users');
-    revalidatePath('/dashboard/journal');
+    revalidatePath('/dashboard/places');
     revalidatePath(`/dashboard/card/${row.entry_id}`);
     return { ok: true, data: { id: row.id, entryId: row.entry_id } };
   } catch (error) {

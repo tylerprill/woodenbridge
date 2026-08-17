@@ -62,6 +62,20 @@ describe('chapter route geometry', () => {
     expect(offsets[3]).toEqual([0, 0]);
   });
 
+  it('never fans world-route edge markers beyond the map frame', () => {
+    const offsets = createChapterMarkerOffsets([
+      { latitude: 0, longitude: -170 },
+      { latitude: 0, longitude: -169 },
+      { latitude: 0, longitude: 0 },
+      { latitude: 0, longitude: 1 },
+      { latitude: 0, longitude: 169 },
+      { latitude: 0, longitude: 170 },
+    ]);
+
+    expect(offsets[0][0]).toBeGreaterThanOrEqual(0);
+    expect(offsets[5][0]).toBeLessThanOrEqual(0);
+  });
+
   it('bows each leg away from the point behind it', () => {
     const route = createGentleChapterRoute([
       { longitude: 0, latitude: 0 },

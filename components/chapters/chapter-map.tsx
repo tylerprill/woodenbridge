@@ -17,6 +17,7 @@ import styles from './chapters.module.css';
 const DEFAULT_STYLE =
   process.env.NEXT_PUBLIC_ATLAS_STYLE_URL ??
   'https://tiles.openfreemap.org/styles/positron';
+const CHAPTER_MARKER_GUTTER = 12;
 
 type ChapterMapMemory = {
   id: string;
@@ -98,6 +99,31 @@ function createChapterMarkers(
   });
 }
 
+function keepMarkersInsideFrame(map: MapLibreMap, markers: Marker[]) {
+  const frame = map.getContainer().getBoundingClientRect();
+
+  markers.forEach((marker) => {
+    const markerBounds = marker.getElement().getBoundingClientRect();
+    const offset = marker.getOffset();
+    let x = offset.x;
+    let y = offset.y;
+
+    if (markerBounds.left < frame.left + CHAPTER_MARKER_GUTTER) {
+      x += frame.left + CHAPTER_MARKER_GUTTER - markerBounds.left;
+    } else if (markerBounds.right > frame.right - CHAPTER_MARKER_GUTTER) {
+      x -= markerBounds.right - (frame.right - CHAPTER_MARKER_GUTTER);
+    }
+
+    if (markerBounds.top < frame.top + CHAPTER_MARKER_GUTTER) {
+      y += frame.top + CHAPTER_MARKER_GUTTER - markerBounds.top;
+    } else if (markerBounds.bottom > frame.bottom - CHAPTER_MARKER_GUTTER) {
+      y -= markerBounds.bottom - (frame.bottom - CHAPTER_MARKER_GUTTER);
+    }
+
+    if (x !== offset.x || y !== offset.y) marker.setOffset([x, y]);
+  });
+}
+
 function fitChapter(
   map: MapLibreMap,
   entries: ChapterMapMemory[],
@@ -122,7 +148,9 @@ function fitChapter(
     bounds.extend(coordinates),
   );
   map.fitBounds(bounds, {
-    padding: window.innerWidth < 680 ? 52 : 88,
+    // Mobile markers have a visual radius plus an offset from their route
+    // coordinate. Give both room so the first and last stops stay in frame.
+    padding: window.innerWidth < 680 ? 92 : 96,
     maxZoom: 8.5,
     duration: duration ?? 900,
   });
@@ -171,6 +199,24 @@ export function ChapterMap({ entries }: { entries: ChapterMapMemory[] }) {
       });
     });
     resizeObserver.observe(containerRef.current);
+    let containmentFrame: number | null = null;
+    let containmentLayoutFrame: number | null = null;
+    let containmentTimer: number | null = null;
+    const containMarkers = () => {
+      if (containmentFrame !== null) cancelAnimationFrame(containmentFrame);
+      if (containmentLayoutFrame !== null) {
+        cancelAnimationFrame(containmentLayoutFrame);
+      }
+      containmentFrame = requestAnimationFrame(() => {
+        containmentLayoutFrame = requestAnimationFrame(() => {
+          containmentFrame = null;
+          containmentLayoutFrame = null;
+          keepMarkersInsideFrame(map, markersRef.current);
+        });
+      });
+    };
+    map.on('moveend', containMarkers);
+    map.once('idle', containMarkers);
 
     map.on('load', () => {
       const currentEntries = entriesRef.current;
@@ -203,11 +249,18 @@ export function ChapterMap({ entries }: { entries: ChapterMapMemory[] }) {
       });
       markersRef.current = createChapterMarkers(map, currentEntries, popup);
       fitChapter(map, currentEntries);
+      containmentTimer = window.setTimeout(containMarkers, 1100);
     });
 
     return () => {
       if (resizeFrame !== null) cancelAnimationFrame(resizeFrame);
+      if (containmentFrame !== null) cancelAnimationFrame(containmentFrame);
+      if (containmentLayoutFrame !== null) {
+        cancelAnimationFrame(containmentLayoutFrame);
+      }
+      if (containmentTimer !== null) window.clearTimeout(containmentTimer);
       resizeObserver.disconnect();
+      map.off('moveend', containMarkers);
       markersRef.current.forEach((marker) => marker.remove());
       markersRef.current = [];
       popup.remove();

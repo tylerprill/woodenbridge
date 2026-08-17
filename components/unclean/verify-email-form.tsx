@@ -97,7 +97,7 @@ function RequestCodeForm({ pendingEmail }: { pendingEmail?: string | null }) {
   );
 }
 
-function VerificationCodeForm({ codeSent }: { codeSent: boolean }) {
+export function VerificationCodeForm({ codeSent }: { codeSent: boolean }) {
   const [verifyState, verifyDispatch] = useActionState(
     submitEmailVerificationCode,
     undefined,

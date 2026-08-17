@@ -97,6 +97,20 @@ export function createChapterMarkerOffsets(
     }
   }
 
+  if (worldScale) {
+    const minimumLongitude = Math.min(...longitudes);
+    const maximumLongitude = Math.max(...longitudes);
+
+    coordinates.forEach(([longitude], index) => {
+      if (longitude === minimumLongitude) {
+        offsets[index] = [Math.max(0, offsets[index][0]), offsets[index][1]];
+      }
+      if (longitude === maximumLongitude) {
+        offsets[index] = [Math.min(0, offsets[index][0]), offsets[index][1]];
+      }
+    });
+  }
+
   return offsets;
 }
 

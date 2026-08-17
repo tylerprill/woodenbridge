@@ -176,8 +176,7 @@ export async function updateAtlasEntryAction(
     }
 
     revalidatePath('/dashboard');
-    revalidatePath('/dashboard/users');
-    revalidatePath('/dashboard/journal');
+    revalidatePath('/dashboard/places');
     revalidatePath(`/dashboard/card/${entry.id}`);
     return { ok: true, data: toAtlasEntry(result.rows[0]) };
   } catch (error) {
@@ -298,8 +297,7 @@ export async function resolveAtlasPlaceAction(
   }
 
   revalidatePath('/dashboard');
-  revalidatePath('/dashboard/users');
-  revalidatePath('/dashboard/journal');
+  revalidatePath('/dashboard/places');
   revalidatePath(`/dashboard/card/${parsed.data}`);
   return { ok: true, data: { entryId: updated.rows[0].id, place } };
 }
@@ -382,8 +380,7 @@ export async function archiveAtlasEntryAction(
     await client.query('COMMIT');
 
     revalidatePath('/dashboard');
-    revalidatePath('/dashboard/users');
-    revalidatePath('/dashboard/journal');
+    revalidatePath('/dashboard/places');
     revalidatePath(`/dashboard/card/${parsed.data}`);
     return { ok: true, data: result.rows[0] };
   } catch (error) {

@@ -49,7 +49,7 @@ export default async function KeepsakePage({
           </p>
         </div>
         <div className="keepsake-page-actions">
-          <Link className="dashboard-header-action" href="/dashboard/users">
+          <Link className="dashboard-header-action" href="/dashboard/places">
             <ArrowLeftIcon aria-hidden="true" />
             Back to collection
           </Link>

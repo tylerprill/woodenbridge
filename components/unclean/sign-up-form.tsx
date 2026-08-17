@@ -31,7 +31,7 @@ function SubmitButton() {
   );
 }
 
-function SignUpFieldsForm({
+export function SignUpFieldsForm({
   action,
   state,
 }: {

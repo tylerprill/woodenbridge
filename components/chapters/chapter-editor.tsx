@@ -501,6 +501,7 @@ export function ChapterEditor({
               <span>Chapter title</span>
               <input
                 name="title"
+                aria-label="Chapter title"
                 value={title}
                 onChange={(event) => setTitle(event.target.value)}
                 maxLength={CHAPTER_TITLE_MAX_LENGTH}
@@ -518,6 +519,7 @@ export function ChapterEditor({
               </span>
               <textarea
                 name="introduction"
+                aria-label="Chapter introduction"
                 value={introduction}
                 onChange={(event) => setIntroduction(event.target.value)}
                 maxLength={CHAPTER_INTRODUCTION_MAX_LENGTH}
