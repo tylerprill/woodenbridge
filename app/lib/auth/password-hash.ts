@@ -23,6 +23,23 @@ export function isLegacyPasswordHash(passwordHash: string) {
   return passwordHash.startsWith('$2a$') || passwordHash.startsWith('$2b$');
 }
 
+export function needsPasswordRehash(passwordHash: string) {
+  if (isLegacyPasswordHash(passwordHash)) return true;
+
+  const parameters = passwordHash.match(
+    /^\$argon2id\$v=(\d+)\$m=(\d+),t=(\d+),p=(\d+)\$/,
+  );
+
+  if (!parameters) return true;
+
+  return (
+    Number(parameters[1]) !== 19 ||
+    Number(parameters[2]) !== ARGON2_OPTIONS.memoryCost ||
+    Number(parameters[3]) !== ARGON2_OPTIONS.timeCost ||
+    Number(parameters[4]) !== ARGON2_OPTIONS.parallelism
+  );
+}
+
 export async function hashPassword(password: string) {
   return hash(normalizePasswordForHash(password), ARGON2_OPTIONS);
 }

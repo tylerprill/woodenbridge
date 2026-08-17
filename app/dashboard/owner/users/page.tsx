@@ -2,14 +2,17 @@ import type { Metadata } from 'next';
 import {
   CheckBadgeIcon,
   MagnifyingGlassIcon,
+  NoSymbolIcon,
   ShieldCheckIcon,
   UserGroupIcon,
 } from '@heroicons/react/24/outline';
 
 import {
   revokeManagedUserSessions,
+  setManagedUserAccountStatus,
   setManagedUserRole,
 } from '@/app/lib/actions/owner-users';
+import { requirePrivilegedStepUp } from '@/app/lib/auth/session';
 import { getManagedUsers } from '@/app/lib/owner/users';
 import { OwnerActionButton } from '@/components/dashboard/owner-action-button';
 
@@ -22,10 +25,14 @@ const messages = {
   'role-updated': 'The account role was updated and its sessions were revoked.',
   'no-change': 'That account already has the selected role.',
   'sessions-revoked': 'The account must sign in again on every device.',
+  'account-suspended':
+    'The account is suspended and has been signed out on every device.',
+  'account-reactivated': 'The account can sign in again.',
   'self-protected': 'You cannot change or revoke your current account.',
   'protected-owner': 'The Field Atlas owner account is immutable.',
   'owner-required': 'Only the owner can appoint or remove administrators.',
   'admin-peer-protected': 'Administrators cannot manage another administrator.',
+  'closed-account': 'A closed account cannot be reactivated here.',
   'not-found': 'That account no longer exists.',
   invalid: 'That account action was not valid.',
   failed: 'The account could not be updated. Please try again.',
@@ -46,6 +53,7 @@ export default async function OwnerUsersPage({
     error?: string | string[];
   }>;
 }) {
+  await requirePrivilegedStepUp();
   const params = await searchParams;
   const search = typeof params.q === 'string' ? params.q : '';
   const notice = getMessage(params.notice);
@@ -92,10 +100,10 @@ export default async function OwnerUsersPage({
           </span>
         </article>
         <article>
-          <ShieldCheckIcon aria-hidden="true" />
+          <NoSymbolIcon aria-hidden="true" />
           <span>
-            <strong>{counts.owners}</strong>
-            Protected owner
+            <strong>{counts.suspended}</strong>
+            Suspended
           </span>
         </article>
       </section>
@@ -135,7 +143,7 @@ export default async function OwnerUsersPage({
             <thead>
               <tr>
                 <th scope="col">Account</th>
-                <th scope="col">Verification</th>
+                <th scope="col">Status</th>
                 <th scope="col">Role</th>
                 <th scope="col">Gentle actions</th>
               </tr>
@@ -148,11 +156,16 @@ export default async function OwnerUsersPage({
                   currentRole === 'owner' &&
                   !isCurrentUser &&
                   !isProtectedOwner;
-                const canRevokeSessions =
+                const canManageAccess =
                   !isCurrentUser &&
                   !isProtectedOwner &&
                   (currentRole === 'owner' || user.role === 'user');
+                const canRevokeSessions =
+                  canManageAccess && user.accountStatus === 'active';
+                const canManageStatus = canManageAccess;
                 const nextRole = user.role === 'admin' ? 'user' : 'admin';
+                const nextStatus =
+                  user.accountStatus === 'suspended' ? 'active' : 'suspended';
 
                 return (
                   <tr key={user.id}>
@@ -168,12 +181,19 @@ export default async function OwnerUsersPage({
                       </span>
                     </td>
                     <td>
-                      <span
-                        className={`owner-user-status ${
-                          user.emailVerified ? 'is-verified' : 'is-pending'
-                        }`}
-                      >
-                        {user.emailVerified ? 'Verified' : 'Pending'}
+                      <span className="owner-user-statuses">
+                        <span
+                          className={`owner-user-status ${
+                            user.emailVerified ? 'is-verified' : 'is-pending'
+                          }`}
+                        >
+                          {user.emailVerified ? 'Verified' : 'Pending'}
+                        </span>
+                        <span
+                          className={`owner-user-status is-${user.accountStatus}`}
+                        >
+                          {user.accountStatus}
+                        </span>
                       </span>
                     </td>
                     <td>
@@ -190,7 +210,9 @@ export default async function OwnerUsersPage({
                         <span className="owner-current-user">
                           Current account
                         </span>
-                      ) : !canChangeRole && !canRevokeSessions ? (
+                      ) : !canChangeRole &&
+                        !canRevokeSessions &&
+                        !canManageStatus ? (
                         <span className="owner-current-user">
                           Owner managed
                         </span>
@@ -231,6 +253,46 @@ export default async function OwnerUsersPage({
                                 confirmMessage={`Sign ${user.email} out on every device?`}
                               >
                                 Revoke sessions
+                              </OwnerActionButton>
+                            </form>
+                          ) : null}
+                          {canManageStatus ? (
+                            <form action={setManagedUserAccountStatus}>
+                              <input
+                                type="hidden"
+                                name="targetUserId"
+                                value={user.id}
+                              />
+                              <input
+                                type="hidden"
+                                name="status"
+                                value={nextStatus}
+                              />
+                              <OwnerActionButton
+                                tone={
+                                  nextStatus === 'suspended'
+                                    ? 'warning'
+                                    : 'quiet'
+                                }
+                                accessibleLabel={`${
+                                  nextStatus === 'suspended'
+                                    ? 'Suspend'
+                                    : 'Reactivate'
+                                } ${user.name} (${user.email})`}
+                                confirmTitle={`${
+                                  nextStatus === 'suspended'
+                                    ? 'Suspend'
+                                    : 'Reactivate'
+                                } ${user.name}?`}
+                                confirmMessage={
+                                  nextStatus === 'suspended'
+                                    ? `${user.email} will be signed out everywhere and cannot sign in until reactivated.`
+                                    : `${user.email} will be allowed to sign in again. Existing sessions stay revoked.`
+                                }
+                              >
+                                {nextStatus === 'suspended'
+                                  ? 'Suspend'
+                                  : 'Reactivate'}
                               </OwnerActionButton>
                             </form>
                           ) : null}

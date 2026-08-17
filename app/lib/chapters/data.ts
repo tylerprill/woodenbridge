@@ -1,6 +1,6 @@
 import 'server-only';
 
-import { sql } from '@vercel/postgres';
+import { sql } from '@/app/lib/db';
 import { cache } from 'react';
 
 import { requireVerifiedSession } from '@/app/lib/auth/session';
@@ -18,6 +18,7 @@ import type {
   AtlasChapterEditorData,
   AtlasChapterSummary,
 } from './definitions';
+import { toSharedAtlasChapter } from './shared';
 import { atlasChapterIdSchema } from './validation';
 
 type ChapterRow = {
@@ -383,31 +384,7 @@ export const getSharedAtlasChapter = cache(async (shareId: string) => {
   });
   if (!chapter) return null;
 
-  const withShareAccess = (url: string) =>
-    `${url}${url.includes('?') ? '&' : '?'}share=${chapter.shareId}`;
-  const entries = chapter.entries.map((entry) => ({
-    ...entry,
-    latitude:
-      chapter.shareLocationPrecision === 'exact'
-        ? entry.latitude
-        : Number(entry.latitude.toFixed(1)),
-    longitude:
-      chapter.shareLocationPrecision === 'exact'
-        ? entry.longitude
-        : Number(entry.longitude.toFixed(1)),
-    media: entry.media.map((media) => ({
-      ...media,
-      deliveryUrl: withShareAccess(media.deliveryUrl),
-      thumbnailUrl: withShareAccess(media.thumbnailUrl),
-    })),
-  }));
-  const coverMedia = chapter.coverMedia
-    ? (entries
-        .flatMap((entry) => entry.media)
-        .find((media) => media.id === chapter.coverMedia?.id) ?? null)
-    : null;
-
-  return { ...chapter, entries, coverMedia } satisfies AtlasChapter;
+  return toSharedAtlasChapter(chapter);
 });
 
 export async function getAtlasChapterEditorData(

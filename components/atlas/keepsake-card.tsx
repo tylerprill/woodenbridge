@@ -5,7 +5,7 @@ import {
 } from '@heroicons/react/24/outline';
 import Link from 'next/link';
 
-import type { AtlasEntry } from '@/app/lib/atlas/definitions';
+import type { AtlasEntryPresentation } from '@/app/lib/atlas/definitions';
 import {
   formatAtlasDate,
   getAtlasPlaceContextLabel,
@@ -16,7 +16,7 @@ type KeepsakeTone = 'alpine' | 'cedar' | 'ember';
 type KeepsakeVariant = 'grid' | 'row' | 'feature';
 
 type KeepsakeCardProps = {
-  entry: AtlasEntry;
+  entry: AtlasEntryPresentation;
   tone?: KeepsakeTone;
   index?: string;
   variant?: KeepsakeVariant;
@@ -25,7 +25,7 @@ type KeepsakeCardProps = {
   showDescription?: boolean;
 };
 
-function getKeepsakeTone(entry: AtlasEntry): KeepsakeTone {
+function getKeepsakeTone(entry: AtlasEntryPresentation): KeepsakeTone {
   const placeKey =
     [
       entry.placeLocality,

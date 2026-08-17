@@ -4,6 +4,7 @@ import {
   BookOpenIcon,
   BookmarkIcon,
   GlobeAltIcon,
+  ShieldCheckIcon,
   UsersIcon,
 } from '@heroicons/react/24/outline';
 import clsx from 'clsx';
@@ -16,6 +17,7 @@ const links = [
   { name: 'Atlas', href: '/dashboard', icon: GlobeAltIcon },
   { name: 'My places', href: '/dashboard/places', icon: BookmarkIcon },
   { name: 'My Chapters', href: '/dashboard/chapters', icon: BookOpenIcon },
+  { name: 'Security', href: '/dashboard/security', icon: ShieldCheckIcon },
 ];
 
 const ownerLinks = [

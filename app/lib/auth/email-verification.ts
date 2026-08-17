@@ -2,8 +2,9 @@ import 'server-only';
 
 import { randomBytes, randomInt, timingSafeEqual } from 'node:crypto';
 
-import { db, sql } from '@vercel/postgres';
+import { db, sql, type VercelPoolClient } from '@/app/lib/db';
 
+import { normalizeEmail } from '@/app/lib/auth/password';
 import {
   hashEmailVerificationCode,
   hashRateLimitKey,
@@ -12,6 +13,7 @@ import {
 const VERIFICATION_CODE_TTL_MINUTES = 10;
 const VERIFICATION_CODE_PATTERN = /^\d{6}$/;
 const VERIFICATION_CHALLENGE_PATTERN = /^[A-Za-z0-9_-]{43}$/;
+const INVALIDATED_UNVERIFIED_PASSWORD = '!pending-registration-required!';
 
 export type EmailVerificationUser = {
   id: string;
@@ -20,8 +22,25 @@ export type EmailVerificationUser = {
   email_verified_at: Date | null;
 };
 
-type ChallengeRow = EmailVerificationUser & {
+export type PendingRegistrationProposal = {
+  email: string;
+  firstName: string;
+  lastName: string;
+  passwordHash: string;
+};
+
+export type PendingRegistration = PendingRegistrationProposal & {
+  challengeId: string;
+  emailHash: string;
+};
+
+type PendingRegistrationRow = {
   challenge_id: string;
+  email: string;
+  email_hash: string;
+  first_name: string;
+  last_name: string;
+  password_hash: string;
   code_digest: string;
   expires_at: Date;
   used_at: Date | null;
@@ -35,33 +54,42 @@ function generateVerificationCode() {
   return randomInt(0, 1_000_000).toString().padStart(6, '0');
 }
 
+function toPendingRegistration(row: PendingRegistrationRow) {
+  return {
+    challengeId: row.challenge_id,
+    email: row.email,
+    emailHash: row.email_hash,
+    firstName: row.first_name,
+    lastName: row.last_name,
+    passwordHash: row.password_hash,
+  } satisfies PendingRegistration;
+}
+
 export function createDecoyVerificationChallengeId() {
   return randomBytes(32).toString('base64url');
 }
 
-export async function findEmailVerificationUser(email: string) {
-  const result = await sql<EmailVerificationUser>`
-    SELECT id, email, first_name, email_verified_at
-    FROM users
-    WHERE LOWER(email) = ${email}
-    LIMIT 1
-  `;
-
-  return result.rows[0];
-}
-
-export async function findVerificationUserByChallenge(challengeId: string) {
+export async function findPendingRegistrationByChallenge(challengeId: string) {
   if (!VERIFICATION_CHALLENGE_PATTERN.test(challengeId)) return undefined;
 
-  const result = await sql<EmailVerificationUser>`
-    SELECT users.id, users.email, users.first_name, users.email_verified_at
-    FROM email_verification_challenges
-    INNER JOIN users ON users.id = email_verification_challenges.user_id
-    WHERE email_verification_challenges.challenge_id = ${challengeId}
+  const result = await sql<PendingRegistrationRow>`
+    SELECT
+      challenge_id,
+      email,
+      email_hash,
+      first_name,
+      last_name,
+      password_hash,
+      code_digest,
+      expires_at,
+      used_at
+    FROM pending_registrations
+    WHERE challenge_id = ${challengeId}
     LIMIT 1
   `;
 
-  return result.rows[0];
+  const row = result.rows[0];
+  return row ? toPendingRegistration(row) : undefined;
 }
 
 export async function recordEmailVerificationRequest(
@@ -85,12 +113,24 @@ export async function recordEmailVerificationRequest(
       seconds_since_last: string | null;
     }>`
       SELECT
-        COUNT(*) FILTER (WHERE email_hash = ${emailHash})::text AS email_count,
-        COUNT(*) FILTER (WHERE ip_hash = ${ipHash})::text AS ip_count,
-        EXTRACT(EPOCH FROM (NOW() - MAX(requested_at)
-          FILTER (WHERE email_hash = ${emailHash})))::text AS seconds_since_last
-      FROM email_verification_requests
-      WHERE requested_at > NOW() - INTERVAL '1 hour'
+        (
+          SELECT COUNT(*)::text
+          FROM email_verification_requests
+          WHERE email_hash = ${emailHash}
+            AND requested_at > NOW() - INTERVAL '1 hour'
+        ) AS email_count,
+        (
+          SELECT COUNT(*)::text
+          FROM email_verification_requests
+          WHERE ip_hash = ${ipHash}
+            AND requested_at > NOW() - INTERVAL '1 hour'
+        ) AS ip_count,
+        (
+          SELECT EXTRACT(EPOCH FROM (NOW() - MAX(requested_at)))::text
+          FROM email_verification_requests
+          WHERE email_hash = ${emailHash}
+            AND requested_at > NOW() - INTERVAL '1 hour'
+        ) AS seconds_since_last
     `;
 
     const counts = limits.rows[0];
@@ -117,8 +157,12 @@ export async function recordEmailVerificationRequest(
   }
 }
 
-export async function createEmailVerificationChallenge(userId: string) {
-  const challengeId = randomBytes(32).toString('base64url');
+export async function createPendingRegistrationChallenge(
+  proposal: PendingRegistrationProposal,
+) {
+  const email = normalizeEmail(proposal.email);
+  const emailHash = getEmailVerificationEmailHash(email);
+  const challengeId = createDecoyVerificationChallengeId();
   const code = generateVerificationCode();
   const codeDigest = hashEmailVerificationCode(challengeId, code);
   const client = await db.connect();
@@ -126,20 +170,72 @@ export async function createEmailVerificationChallenge(userId: string) {
   try {
     await client.sql`BEGIN`;
     await client.sql`
-      UPDATE email_verification_challenges
-      SET used_at = NOW()
-      WHERE user_id = ${userId} AND used_at IS NULL
+      SELECT pg_advisory_xact_lock(hashtextextended(${`pending-registration:${emailHash}`}, 0))
     `;
+
+    const existingUser = await client.sql<{
+      id: string;
+      email_verified_at: Date | null;
+    }>`
+      SELECT id, email_verified_at
+      FROM users
+      WHERE LOWER(email) = ${email}
+      LIMIT 1
+      FOR UPDATE
+    `;
+    const existing = existingUser.rows[0];
+
+    if (existing?.email_verified_at) {
+      await client.sql`COMMIT`;
+      return undefined;
+    }
+
     await client.sql`
-      INSERT INTO email_verification_challenges (
+      UPDATE pending_registrations
+      SET used_at = NOW()
+      WHERE email = ${email} AND used_at IS NULL
+    `;
+
+    if (existing) {
+      // Rows created by the legacy flow may contain a password selected before
+      // inbox ownership was proven. It must not remain usable while the new
+      // registration is pending, and any JWT minted from it must be revoked.
+      await client.sql`
+        UPDATE users
+        SET password = ${INVALIDATED_UNVERIFIED_PASSWORD},
+            session_version = session_version + 1
+        WHERE id = ${existing.id} AND email_verified_at IS NULL
+      `;
+      await client.sql`
+        UPDATE email_verification_challenges
+        SET used_at = NOW()
+        WHERE user_id = ${existing.id} AND used_at IS NULL
+      `;
+      await client.sql`
+        UPDATE password_reset_tokens
+        SET used_at = NOW()
+        WHERE user_id = ${existing.id} AND used_at IS NULL
+      `;
+    }
+
+    await client.sql`
+      INSERT INTO pending_registrations (
         challenge_id,
-        user_id,
+        email,
+        email_hash,
+        first_name,
+        last_name,
+        password_hash,
         code_digest,
         expires_at
       )
       VALUES (
         ${challengeId},
-        ${userId},
+        ${email},
+        ${emailHash},
+        ${proposal.firstName},
+        ${proposal.lastName},
+        ${proposal.passwordHash},
         ${codeDigest},
         NOW() + (${VERIFICATION_CODE_TTL_MINUTES} * INTERVAL '1 minute')
       )
@@ -155,19 +251,32 @@ export async function createEmailVerificationChallenge(userId: string) {
   }
 }
 
-export async function invalidateEmailVerificationChallenge(
+export async function invalidatePendingRegistrationChallenge(
   challengeId: string,
 ) {
   if (!VERIFICATION_CHALLENGE_PATTERN.test(challengeId)) return;
 
   await sql`
-    UPDATE email_verification_challenges
+    UPDATE pending_registrations
     SET used_at = NOW()
     WHERE challenge_id = ${challengeId} AND used_at IS NULL
   `;
 }
 
-export async function verifyEmailCode(
+async function preserveVerifiedAccount(
+  client: VercelPoolClient,
+  email: string,
+) {
+  await client.sql`
+    UPDATE pending_registrations
+    SET used_at = NOW()
+    WHERE email = ${email} AND used_at IS NULL
+  `;
+  await client.sql`COMMIT`;
+  return { status: 'invalid' } as const;
+}
+
+export async function verifyPendingRegistrationCode(
   challengeId: string,
   code: string,
   ipHash: string,
@@ -185,19 +294,19 @@ export async function verifyEmailCode(
   try {
     await client.sql`BEGIN`;
 
-    const initialChallenge = await client.sql<ChallengeRow>`
+    const initialChallenge = await client.sql<PendingRegistrationRow>`
       SELECT
-        email_verification_challenges.challenge_id,
-        email_verification_challenges.code_digest,
-        email_verification_challenges.expires_at,
-        email_verification_challenges.used_at,
-        users.id,
-        users.email,
-        users.first_name,
-        users.email_verified_at
-      FROM email_verification_challenges
-      INNER JOIN users ON users.id = email_verification_challenges.user_id
-      WHERE email_verification_challenges.challenge_id = ${challengeId}
+        challenge_id,
+        email,
+        email_hash,
+        first_name,
+        last_name,
+        password_hash,
+        code_digest,
+        expires_at,
+        used_at
+      FROM pending_registrations
+      WHERE challenge_id = ${challengeId}
       LIMIT 1
     `;
     const initialRow = initialChallenge.rows[0];
@@ -208,26 +317,26 @@ export async function verifyEmailCode(
     }
 
     await client.sql`
-      SELECT pg_advisory_xact_lock(hashtextextended(${`verify-user:${initialRow.id}`}, 0))
+      SELECT pg_advisory_xact_lock(hashtextextended(${`pending-registration:${initialRow.email_hash}`}, 0))
     `;
     await client.sql`
       SELECT pg_advisory_xact_lock(hashtextextended(${`verify-attempt-ip:${ipHash}`}, 0))
     `;
 
-    const challenge = await client.sql<ChallengeRow>`
+    const challenge = await client.sql<PendingRegistrationRow>`
       SELECT
-        email_verification_challenges.challenge_id,
-        email_verification_challenges.code_digest,
-        email_verification_challenges.expires_at,
-        email_verification_challenges.used_at,
-        users.id,
-        users.email,
-        users.first_name,
-        users.email_verified_at
-      FROM email_verification_challenges
-      INNER JOIN users ON users.id = email_verification_challenges.user_id
-      WHERE email_verification_challenges.challenge_id = ${challengeId}
-      FOR UPDATE OF email_verification_challenges
+        challenge_id,
+        email,
+        email_hash,
+        first_name,
+        last_name,
+        password_hash,
+        code_digest,
+        expires_at,
+        used_at
+      FROM pending_registrations
+      WHERE challenge_id = ${challengeId}
+      FOR UPDATE
     `;
     const row = challenge.rows[0];
 
@@ -237,20 +346,29 @@ export async function verifyEmailCode(
     }
 
     const attempts = await client.sql<{
-      user_count: string;
+      email_count: string;
       ip_count: string;
     }>`
       SELECT
-        COUNT(*) FILTER (WHERE user_id = ${row.id})::text AS user_count,
-        COUNT(*) FILTER (WHERE ip_hash = ${ipHash})::text AS ip_count
-      FROM email_verification_attempts
-      WHERE successful = FALSE
-        AND attempted_at > NOW() - INTERVAL '15 minutes'
+        (
+          SELECT COUNT(*)::text
+          FROM pending_registration_attempts
+          WHERE email_hash = ${row.email_hash}
+            AND successful = FALSE
+            AND attempted_at > NOW() - INTERVAL '15 minutes'
+        ) AS email_count,
+        (
+          SELECT COUNT(*)::text
+          FROM pending_registration_attempts
+          WHERE ip_hash = ${ipHash}
+            AND successful = FALSE
+            AND attempted_at > NOW() - INTERVAL '15 minutes'
+        ) AS ip_count
     `;
     const counts = attempts.rows[0];
 
     if (
-      Number(counts?.user_count ?? 0) >= 5 ||
+      Number(counts?.email_count ?? 0) >= 5 ||
       Number(counts?.ip_count ?? 0) >= 20
     ) {
       await client.sql`COMMIT`;
@@ -264,13 +382,13 @@ export async function verifyEmailCode(
       timingSafeEqual(expected, submitted);
 
     await client.sql`
-      INSERT INTO email_verification_attempts (
+      INSERT INTO pending_registration_attempts (
         challenge_id,
-        user_id,
+        email_hash,
         ip_hash,
         successful
       )
-      VALUES (${challengeId}, ${row.id}, ${ipHash}, ${matches})
+      VALUES (${challengeId}, ${row.email_hash}, ${ipHash}, ${matches})
     `;
 
     if (!matches) {
@@ -278,22 +396,107 @@ export async function verifyEmailCode(
       return { status: 'invalid' };
     }
 
+    let existingUser = await client.sql<EmailVerificationUser>`
+      SELECT id, email, first_name, email_verified_at
+      FROM users
+      WHERE LOWER(email) = ${row.email}
+      LIMIT 1
+      FOR UPDATE
+    `;
+    const existing = existingUser.rows[0];
+
+    if (existing?.email_verified_at) {
+      const preserved = await preserveVerifiedAccount(client, row.email);
+      return preserved;
+    }
+
+    let activatedUser: EmailVerificationUser | undefined;
+
+    if (existing) {
+      const updatedUser = await client.sql<EmailVerificationUser>`
+        UPDATE users
+        SET first_name = ${row.first_name},
+            last_name = ${row.last_name},
+            email = ${row.email},
+            password = ${row.password_hash},
+            email_verified_at = NOW(),
+            session_version = session_version + 1
+        WHERE id = ${existing.id} AND email_verified_at IS NULL
+        RETURNING id, email, first_name, email_verified_at
+      `;
+      activatedUser = updatedUser.rows[0];
+    } else {
+      const insertedUser = await client.sql<EmailVerificationUser>`
+        INSERT INTO users (
+          first_name,
+          last_name,
+          email,
+          password,
+          email_verified_at
+        )
+        VALUES (
+          ${row.first_name},
+          ${row.last_name},
+          ${row.email},
+          ${row.password_hash},
+          NOW()
+        )
+        ON CONFLICT DO NOTHING
+        RETURNING id, email, first_name, email_verified_at
+      `;
+      activatedUser = insertedUser.rows[0];
+
+      if (!activatedUser) {
+        // Defend against a user row being created by an administrative process
+        // between the initial lookup and insert. A verified account always wins;
+        // an unverified legacy row is safely replaced by this proven proposal.
+        existingUser = await client.sql<EmailVerificationUser>`
+          SELECT id, email, first_name, email_verified_at
+          FROM users
+          WHERE LOWER(email) = ${row.email}
+          LIMIT 1
+          FOR UPDATE
+        `;
+        const conflictingUser = existingUser.rows[0];
+
+        if (!conflictingUser || conflictingUser.email_verified_at) {
+          const preserved = await preserveVerifiedAccount(client, row.email);
+          return preserved;
+        }
+
+        const updatedUser = await client.sql<EmailVerificationUser>`
+          UPDATE users
+          SET first_name = ${row.first_name},
+              last_name = ${row.last_name},
+              email = ${row.email},
+              password = ${row.password_hash},
+              email_verified_at = NOW(),
+              session_version = session_version + 1
+          WHERE id = ${conflictingUser.id} AND email_verified_at IS NULL
+          RETURNING id, email, first_name, email_verified_at
+        `;
+        activatedUser = updatedUser.rows[0];
+      }
+    }
+
+    if (!activatedUser) {
+      await client.sql`ROLLBACK`;
+      return { status: 'invalid' };
+    }
+
     await client.sql`
-      UPDATE users
-      SET email_verified_at = COALESCE(email_verified_at, NOW())
-      WHERE id = ${row.id}
+      UPDATE pending_registrations
+      SET used_at = NOW()
+      WHERE email = ${row.email} AND used_at IS NULL
     `;
     await client.sql`
       UPDATE email_verification_challenges
       SET used_at = NOW()
-      WHERE user_id = ${row.id} AND used_at IS NULL
+      WHERE user_id = ${activatedUser.id} AND used_at IS NULL
     `;
     await client.sql`COMMIT`;
 
-    return {
-      status: 'verified',
-      user: { ...row, email_verified_at: row.email_verified_at ?? new Date() },
-    };
+    return { status: 'verified', user: activatedUser };
   } catch (error) {
     await client.sql`ROLLBACK`;
     throw error;
@@ -304,6 +507,10 @@ export async function verifyEmailCode(
 
 export async function deleteExpiredEmailVerificationData() {
   await Promise.all([
+    sql`
+      DELETE FROM pending_registrations
+      WHERE expires_at < NOW() - INTERVAL '1 day'
+    `,
     sql`
       DELETE FROM email_verification_challenges
       WHERE expires_at < NOW() - INTERVAL '1 day'
@@ -320,5 +527,5 @@ export async function deleteExpiredEmailVerificationData() {
 }
 
 export function getEmailVerificationEmailHash(email: string) {
-  return hashRateLimitKey(`email:${email}`);
+  return hashRateLimitKey(`email:${normalizeEmail(email)}`);
 }

@@ -1,327 +1,404 @@
-# Field Atlas authentication
+# Field Atlas authentication and privileged access
 
-This document describes the authentication system as implemented. It is the
-reference for account creation, email verification, credentials login, session
-authorization, password recovery, logout, and future feature gates.
+This document describes the authentication and authorization system that is
+implemented in Field Atlas. It is the reference for signup, email verification,
+credentials login, database-backed sessions, password recovery, roles, account
+status, passkey step-up, and privileged account recovery.
 
-## Flow overview
+## End-to-end flow
 
 ```mermaid
 flowchart TD
   Visitor["Anonymous visitor"]
 
-  Visitor -->|"Create account"| SignUp["Validate input and reserve email/IP signup capacity"]
-  SignUp --> Screen["Reject contextual or breached password"]
-  Screen --> Hash["Hash with Argon2id"]
-  Hash --> User["Create user with email_verified_at = null"]
-  User --> Challenge["Create six-digit verification challenge"]
-  Challenge --> MailCode["Queue verification email after response"]
-  MailCode --> Verify["Submit verification code"]
-  Verify -->|"Invalid, expired, or limited"| Retry["Retry or request a new code"]
+  Visitor -->|"Create account"| Signup["Validate profile, email, and matching passwords"]
+  Signup --> PasswordPolicy["Reject contextual, common, or breached password"]
+  PasswordPolicy --> Pending["Store browser-bound pending proposal and Argon2id hash"]
+  Pending --> VerificationMail["Send one-use verification code"]
+  VerificationMail --> Verify["Submit code from the same browser challenge"]
+  Verify -->|"Invalid, expired, or limited"| Retry["Generic retry or resend result"]
   Retry --> Verify
-  Verify -->|"Valid and unused"| MarkVerified["Set email_verified_at and consume challenges"]
-  MarkVerified --> Welcome["Send welcome email"]
-  MarkVerified --> LoginAgain["Sign in"]
+  Verify -->|"Valid"| Activate["Atomically create verified active user"]
+  Activate --> Welcome["Send welcome email"]
+  Activate --> LoginPage["Require a fresh sign-in"]
 
-  Visitor -->|"Sign in"| Login["Reserve email/IP login capacity"]
-  Login --> CheckPassword["Verify Argon2id or legacy bcrypt; always do hash work"]
-  CheckPassword -->|"Invalid credentials or limited"| LoginError["Return generic credentials error"]
-  CheckPassword -->|"Valid legacy hash"| MigrateHash["Upgrade hash to Argon2id"]
-  CheckPassword -->|"Valid Argon2id hash"| AccountState{"Email verified?"}
-  MigrateHash --> AccountState
-  AccountState -->|"No"| Pending["Issue restricted JWT session"]
-  AccountState -->|"Yes"| Session["Issue valid JWT session"]
-  Session --> Dashboard
+  Visitor -->|"Sign in"| Login["Reserve email/IP login attempt"]
+  Login --> CredentialCheck["Perform real or dummy password verification"]
+  CredentialCheck -->|"Invalid, unverified, suspended, closed, or limited"| GenericError["Generic credentials error"]
+  CredentialCheck -->|"Valid legacy hash"| Upgrade["Atomically upgrade to current Argon2id policy"]
+  CredentialCheck -->|"Valid current hash"| ServerSession["Create random server session; store only its SHA-256 hash"]
+  Upgrade --> ServerSession
+  ServerSession --> JWT["Issue Auth.js JWT containing the opaque session ID"]
+  JWT --> Dashboard["Dashboard"]
 
-  Visitor -->|"Forgot password"| Recovery["Return generic recovery response"]
-  Recovery --> Limits["Apply email and IP limits, then look up account"]
-  Limits -->|"Eligible account"| ResetMail["Send one-use reset link"]
+  Visitor -->|"Forgot password"| ResetRequest["Return generic recovery result"]
+  ResetRequest --> ResetLimits["Apply email/IP limits and check account eligibility"]
+  ResetLimits -->|"Eligible"| ResetMail["Send one-use 30-minute link"]
   ResetMail --> Reset["Validate token and screen new password"]
-  Reset -->|"Valid"| Revoke["Store Argon2id hash and increment session_version"]
-  Revoke --> ChangedMail["Send password-changed email"]
-  Revoke --> LoginAfterReset["Sign in again"]
-  LoginAfterReset --> Login
+  Reset -->|"Valid"| ResetCommit["Replace hash; consume tokens; revoke every session"]
+  ResetCommit --> ChangedMail["Send password-change notification"]
+  ResetCommit --> LoginPage
 
-  Dashboard -->|"Sign out"| Visitor
+  Dashboard -->|"Sign out"| RevokeCurrent["Revoke current server-session row"]
+  Dashboard -->|"Sign out every device"| RevokeAll["Revoke all rows and increment session version"]
+  RevokeCurrent --> Visitor
+  RevokeAll --> Visitor
+
+  Dashboard -->|"Owner/admin management"| StepUp{"Recent passkey proof?"}
+  StepUp -->|"Yes, within 10 minutes"| Protected["Run server-side protected action"]
+  StepUp -->|"No passkey"| Enroll["Confirm password and register passkey"]
+  StepUp -->|"Passkey available"| Assert["Verify WebAuthn assertion"]
+  Assert --> StepUp
+  Enroll --> Codes["Show one-time recovery codes once"]
+
+  Dashboard -->|"Lost passkey"| Recover["Confirm password plus one saved recovery code"]
+  Recover -->|"Valid"| Grant["Create current-session 10-minute replacement grant"]
+  Grant --> Replacement["Register replacement passkey"]
+  Replacement --> RecoveryCommit["Consume grant; revoke other sessions; rotate recovery codes"]
+  RecoveryCommit --> Protected
 ```
 
-Signup deliberately does not create a session. Every syntactically valid signup
-receives the same verification-page response whether the account is new,
-already verified, rate limited, or otherwise ineligible. This prevents the
-browser state and response text from becoming an account-enumeration oracle.
+Signup does not create a user or an authenticated session. It stores the
+normalized address, proposed profile, and proposed Argon2id hash in a
+short-lived pending registration bound to an HTTP-only browser challenge.
+Successful inbox proof creates the real account inside the same transaction that
+consumes the code. This prevents an attacker from pre-registering a victim's
+address with an attacker-controlled password.
 
-Email delivery is deliberately outside the authorization decision. A temporary
-welcome or password-change notification failure does not undo a successful
-verification or password update. A failed verification or reset email delivery,
-however, invalidates the newly created challenge or token.
+If a pre-migration unverified row exists, verification replaces its untrusted
+profile and credential and revokes its sessions. A verified row is never
+overwritten. Repeating signup rotates the entire pending proposal, so an older
+code cannot activate newer or attacker-selected credentials.
 
-## Authentication states
+## Effective authentication states
 
 ```mermaid
 stateDiagram-v2
   state "Anonymous" as Anonymous
-  state "Pending email verification" as Pending
-  state "Authenticated" as Authenticated
-  state "Invalid or revoked session" as Revoked
+  state "Pending registration (no user)" as Pending
+  state "Authenticated user" as Authenticated
+  state "Privileged, locked" as PrivilegedLocked
+  state "Privileged, passkey verified" as PrivilegedVerified
+  state "Replacement-passkey grant" as RecoveryGrant
+  state "Revoked or inactive" as Revoked
 
   [*] --> Anonymous
-  Anonymous --> Pending: Valid unverified login
-  Anonymous --> Authenticated: Valid verified login
-  Anonymous --> Anonymous: Signup and out-of-session email verification
-  Pending --> Authenticated: Correct verification code
-  Pending --> Anonymous: Sign out or JWT expiry
-  Authenticated --> Anonymous: Sign out or JWT expiry
-  Pending --> Revoked: Session version changes or account disappears
-  Authenticated --> Revoked: Password reset, version change, or account deletion
-  Revoked --> Pending: New login for an unverified account
-  Revoked --> Authenticated: New login for a verified account
+  Anonymous --> Pending: Valid signup proposal
+  Pending --> Anonymous: Inbox proof creates account
+  Anonymous --> Authenticated: Verified active login
+  Anonymous --> PrivilegedLocked: Verified active owner/admin login
+  PrivilegedLocked --> PrivilegedVerified: Valid passkey assertion
+  PrivilegedVerified --> PrivilegedLocked: 10-minute window expires
+  PrivilegedLocked --> RecoveryGrant: Password plus saved recovery code
+  RecoveryGrant --> PrivilegedVerified: Replacement passkey registered
+  RecoveryGrant --> PrivilegedLocked: Grant expires
+  Authenticated --> Revoked: Logout, reset, suspension, closure, role/session change, or expiry
+  PrivilegedLocked --> Revoked: Logout, reset, suspension, closure, role/session change, or expiry
+  PrivilegedVerified --> Revoked: Logout, reset, suspension, closure, role/session change, or expiry
+  Revoked --> Anonymous: Invalid browser session
 ```
 
-The effective state is derived on every session evaluation by comparing the JWT
-with current database state:
+Every session evaluation joins the JWT to current database state. Access is
+valid only when all of these are true:
 
-| State                | JWT user | `email_verified_at` | JWT version matches `session_version` | `sessionValid` | Effective access                   |
-| -------------------- | -------- | ------------------- | ------------------------------------- | -------------- | ---------------------------------- |
-| Anonymous            | No       | N/A                 | N/A                                   | `false`        | Public pages                       |
-| Pending verification | Yes      | `null`              | Yes                                   | `false`        | `/verify-email` only               |
-| Authenticated        | Yes      | Set                 | Yes                                   | `true`         | Public pages and `/dashboard/**`   |
-| Invalid or revoked   | Yes      | Any                 | No, or user missing                   | `false`        | No protected routes; sign in again |
+1. The JWT contains a valid random session ID and immutable authentication time.
+2. The SHA-256 hash of that ID resolves to a non-revoked server session.
+3. The server session has not passed its absolute expiration.
+4. Its authentication time and user session version match the JWT.
+5. The user still exists, has verified email, and has account status active.
+6. The current database role is used for authorization.
 
-`email_verified_at` is the durable proof that the address was verified.
-`session_version` is the revocation switch. `sessionValid` is the final access
-decision and must be true before a feature treats a request as authenticated.
-The current database role is also refreshed during session evaluation, so a
-JWT cannot preserve an old role after the database assignment changes.
+The JWT's raw opaque session ID is never stored in PostgreSQL. The
+sessionReference exposed to server code is its SHA-256 hash.
 
-For future feature gating, keep account policy separate from identity proof. For
-example, add an explicit `account_status` such as `active`, `suspended`, or
-`closed`, then require all three conditions:
+| State                | Durable account             | Server session                                   | Effective access                       |
+| -------------------- | --------------------------- | ------------------------------------------------ | -------------------------------------- |
+| Anonymous            | None or irrelevant          | None                                             | Public pages                           |
+| Pending registration | No user for new signup      | None                                             | Verification form only                 |
+| Authenticated user   | Verified and active         | Current and unexpired                            | Owned dashboard data and actions       |
+| Privileged, locked   | Verified active admin/owner | Current; no recent passkey proof                 | Ordinary dashboard plus security setup |
+| Privileged, verified | Verified active admin/owner | Current; passkey proof no older than 10 minutes  | Protected management actions           |
+| Replacement grant    | Verified active admin/owner | Current; no MFA elevation                        | Replacement-passkey enrollment only    |
+| Revoked/inactive     | Any                         | Missing, revoked, expired, or version-mismatched | No protected access                    |
 
-1. The session version is current.
-2. The email is verified.
-3. The account status permits the requested operation.
+## Routes and server boundaries
 
-Do not infer suspension or product entitlement from `email_verified_at`.
+| Route                                             | Anonymous           | Verified active session         |
+| ------------------------------------------------- | ------------------- | ------------------------------- |
+| /                                                 | Allowed             | Allowed with account navigation |
+| /sign-up, /login, /verify-email, /forgot-password | Allowed             | Redirected to /dashboard        |
+| /reset-password?token=...                         | Allowed             | Allowed                         |
+| /dashboard/**                                     | Redirected to login | Allowed                         |
+| /dashboard/security                               | Redirected to login | Session and credential controls |
+| /dashboard/owner/**                               | Redirected to login | Admin/owner navigation boundary |
 
-## Route behavior
+The route proxy is only the first boundary. Protected pages, route handlers,
+server actions, and data mutations must call requireVerifiedSession at the
+point of use. Role-sensitive code calls requireRole or
+requirePrivilegedStepUp, and every private record query still verifies resource
+ownership.
 
-| Route                       | Anonymous | Pending verification          | Authenticated                   |
-| --------------------------- | --------- | ----------------------------- | ------------------------------- |
-| `/`                         | Allowed   | Redirected to `/verify-email` | Allowed with account navigation |
-| `/sign-up`                  | Allowed   | Redirected to `/verify-email` | Redirected to `/dashboard`      |
-| `/login`                    | Allowed   | Redirected to `/verify-email` | Redirected to `/dashboard`      |
-| `/verify-email`             | Allowed   | Allowed                       | Redirected to `/dashboard`      |
-| `/forgot-password`          | Allowed   | Redirected to `/verify-email` | Redirected to `/dashboard`      |
-| `/reset-password?token=...` | Allowed   | Redirected to `/verify-email` | Allowed                         |
-| `/dashboard/**`             | Denied    | Denied                        | Allowed                         |
+Protected management actions require a recent passkey assertion inside the
+server action itself. Navigating to a management page is not authorization to
+mutate. Recovery codes never satisfy this check.
 
-`/dashboard/owner/**` adds a second server-side boundary and requires the
-current database role to be `admin` or `owner`. A verified `user` is redirected
-back to their dashboard even if they manually enter a management URL.
-
-The route proxy is a first boundary, not the only boundary. Protected pages,
-server actions, route handlers, and data mutations should call
-`requireVerifiedSession()` at the point of use before reading or changing
-private data. This helper requires a user, verified email, and current session
-version.
-
-## Authorization roles
+## Roles and account status
 
 Field Atlas has three hierarchical application roles:
 
-| Role    | Intended access                                                               |
-| ------- | ----------------------------------------------------------------------------- |
-| `user`  | Public features plus the verified user's own atlas, notes, and profile        |
-| `admin` | User features plus limited management of ordinary users                       |
-| `owner` | All features plus appointment and removal of administrators; exactly one user |
+| Role  | Access                                                                  |
+| ----- | ----------------------------------------------------------------------- |
+| user  | The verified user's own atlas, memories, chapters, and account controls |
+| admin | User access plus limited management of ordinary users                   |
+| owner | Administrator appointment/removal and the complete management surface   |
 
-New accounts always receive the database default of `user`; public signup does
-not accept a role field. Management code calls `requireRole('admin')`, which
-also permits the higher `owner` role. Owner-only server code must call
-`requireOwnerSession()` or `requireRole('owner')`. Role checks supplement, but
-never replace resource ownership checks such as matching a collection's
-`user_id` to `session.user.id` on every read and mutation.
+Public signup always creates role user. Admins cannot manage peer admins,
+appoint administrators, or alter the owner. Only the owner can promote or
+demote admins. The database enforces that the sole owner remains verified and
+active; application policy prevents editing, demoting, suspending, revoking, or
+deleting that account.
 
-Role assignment is an operator-only database action:
+Account status is independent from verification and role:
 
-```bash
-npm run role:set -- account@example.com admin
-```
+| Status    | Login and session behavior                                            |
+| --------- | --------------------------------------------------------------------- |
+| active    | May authenticate when email is verified                               |
+| suspended | Login denied; existing sessions and privileged recovery state revoked |
+| closed    | Login denied; treated as inactive                                     |
 
-Changing a role increments `session_version`, which revokes existing sessions.
-The next sign-in obtains the current role from the database. Admin demotion uses
-the same command with `user` and also revokes existing sessions. The database
-permits creation of an owner only when no owner exists; after that, the owner
-role and owner account cannot be changed or deleted.
+Role changes and management revocation revoke server sessions and increment
+session_version. Demotion from admin also invalidates privileged recovery codes
+and grants.
 
-The management user directory deliberately exposes only account identity,
-verification state, and application role. Its available mutations are limited
-to role assignment and session revocation. It does not reveal password hashes,
-mark email addresses verified, reset passwords, or delete accounts. Admins can
-revoke sessions only for ordinary users and cannot appoint admins. Only the
-owner can appoint or remove admins. No role can edit, demote, revoke, or delete
-the protected owner account.
+## Password and credential controls
 
-## Security controls
+| Control             | Implemented behavior                                                              |
+| ------------------- | --------------------------------------------------------------------------------- |
+| Password storage    | Argon2id; 19 MiB memory, 2 iterations, parallelism 1                              |
+| Hash migration      | bcrypt and older Argon2id parameters rehash after successful login                |
+| Password policy     | 15–128 Unicode characters; common, contextual, and breached values rejected       |
+| Breach screening    | HIBP k-anonymous range lookup; only five SHA-1 prefix characters leave the server |
+| Unknown-user timing | Dummy Argon2 verification keeps the credential path comparable                    |
+| Login limits        | 10 failures/email, 30 failures/IP, 20 total/email, and 60 total/IP per 15 minutes |
+| Signup limits       | 5 requests/email and 20 requests/IP per hour                                      |
+| Remember me         | Optional local-storage email only; never stores password or session material      |
+| Generic outcomes    | Signup, login, verification, resend, and reset avoid account-existence disclosure |
 
-| Control                | Current behavior                                                                                   |
-| ---------------------- | -------------------------------------------------------------------------------------------------- |
-| Password storage       | Argon2id, 19 MiB memory, 2 passes, parallelism 1                                                   |
-| Legacy password hashes | bcrypt is accepted on login and atomically upgraded after success                                  |
-| Password policy        | 15–128 Unicode characters; common, contextual, and breached passwords blocked                      |
-| Breach screening       | HIBP k-anonymous range API; only five SHA-1 prefix characters leave the server                     |
-| Email handling         | Trimmed/lowercased with a database-enforced unique `LOWER(email)` identity                         |
-| Session                | Auth.js signed JWT, 12-hour maximum age                                                            |
-| Session authorization  | Cached server-only DAL requires verified, current session state                                    |
-| Session revocation     | Password reset increments `users.session_version`; deleted users lose JWTs                         |
-| Login resistance       | Generic response; dummy hash work for unknown accounts; 10/email and 30/IP failures per 15 minutes |
-| Remembered login       | Opt-in local-storage email only; passwords and sessions are never stored                           |
-| Signup resistance      | Generic account result; 5/email and 20/IP requests per hour                                        |
-| Verification code      | Cryptographically random six-digit code, 10-minute expiry, one use                                 |
-| Verification storage   | HMAC-SHA-256 digest keyed by `AUTH_SECRET`; plaintext code is not stored                           |
-| Verification cookie    | HTTP-only, `SameSite=Lax`, secure in production, 10-minute lifetime                                |
-| Verification requests  | 3 per email per hour, 20 per IP per hour, 60-second resend cooldown                                |
-| Verification attempts  | 5 failed attempts per user and 20 per IP per 15 minutes                                            |
-| Reset token            | 32 random bytes encoded as base64url, 30-minute expiry, one use                                    |
-| Reset storage          | SHA-256 token hash; plaintext token is not stored                                                  |
-| Reset requests         | 3 per email and 20 per IP per hour                                                                 |
-| Reset attempts         | 5 per token and 20 per IP per 15 minutes                                                           |
-| Enumeration resistance | Signup, login, verification, resend, and recovery use generic outcomes                             |
-| Browser policy         | CSP, frame denial, MIME sniffing prevention, limited permissions, safe referrer policy             |
-| Security events        | Structured redacted server logs for auth outcomes and limit activation                             |
-| CI                     | Lint, formatting, types, auth tests, dependency audit, and production build                        |
-| Email URLs             | HTTPS is required outside local development                                                        |
-| Transactional email    | Resend in production; console delivery is rejected in production                                   |
+The HIBP check is availability-safe: provider failure is audited and local
+policy still applies. No plaintext password or full digest is sent to it.
 
-Rate-limit email addresses and client IPs are HMAC-hashed with `AUTH_SECRET`
-before storage. Database transactions and PostgreSQL advisory locks make limit
-checks and one-time token consumption safe under concurrent requests.
+## Email verification and password reset
 
-The compromised-password service is an availability-safe enhancement: a
-provider outage is recorded and the request continues through the local policy.
-The application never sends a plaintext password or complete password digest to
-the service.
+| Control               | Implemented behavior                                                        |
+| --------------------- | --------------------------------------------------------------------------- |
+| Verification code     | Cryptographically random six digits, 10-minute lifetime, one use            |
+| Verification binding  | Pending profile/hash plus HTTP-only challenge cookie; same browser required |
+| Verification storage  | HMAC-SHA-256 under AUTH_HMAC_SECRET; plaintext code is not stored           |
+| Verification requests | 3/email/hour, 20/IP/hour, 60-second resend cooldown                         |
+| Verification attempts | 5/email and 20/IP per 15 minutes                                            |
+| Reset token           | 32 random bytes encoded base64url; 30-minute lifetime; one use              |
+| Reset storage         | SHA-256 hash only                                                           |
+| Reset requests        | 3/email and 20/IP per hour                                                  |
+| Reset attempts        | 5/token and 20/IP per 15 minutes                                            |
+| Reset concurrency     | User-scoped advisory lock serializes issuance and consumption               |
+| Reset result          | New Argon2id hash, all reset tokens consumed, all sessions revoked          |
+| Email delivery        | Resend with 5-second timeout, bounded retry, and idempotency key            |
+
+An eligible reset requires a verified active account. Request responses remain
+generic. Reset and signup apply the same contextual/breached-password policy.
+
+## Session lifecycle
+
+Auth.js maintains a signed JWT with a 12-hour inactivity window. That JWT is not
+sufficient by itself. Each login creates an independently revocable PostgreSQL
+session row:
+
+| Role at login | Absolute server-session lifetime |
+| ------------- | -------------------------------- |
+| user          | 7 days                           |
+| admin         | 24 hours                         |
+| owner         | 24 hours                         |
+
+The earlier of JWT inactivity expiry, server absolute expiry, explicit
+revocation, account/role/version change, or user deletion ends access. Ordinary
+logout revokes the current server session before clearing the browser cookie.
+Sign out everywhere and password reset revoke every session. Session creation
+is serialized per user and keeps at most 10 active server sessions; an eleventh
+login atomically retires the oldest active row. For privileged accounts,
+sessions that have completed passkey step-up are retained before password-only
+sessions. If all 10 slots are passkey-protected, another password login is
+rejected without changing the protected session set.
+
+## Passkey step-up and recovery
+
+Passkeys protect privileged management; they are not currently a passwordless
+login method and they are not universal MFA for ordinary users.
+
+- Registration and assertions use WebAuthn with exact RP ID/origin validation
+  and required user verification.
+- Challenges are random, single-use, short-lived, server stored, and bound to
+  the current user, server session, and ceremony purpose.
+- Credential IDs are unique; public keys, counters, backup state, transports,
+  labels, and use time are stored server-side.
+- A privileged account may hold at most 10 credentials.
+- Adding another privileged credential requires an existing recent passkey
+  assertion plus the current password.
+- Removing a privileged credential requires recent passkey proof, and the final
+  privileged credential cannot be removed.
+- Successful assertion unlocks protected actions for 10 minutes in only the
+  current server session.
+
+Recovery codes are an offline emergency path:
+
+- Ten codes are generated from 120 random bits each and shown only once.
+- PostgreSQL stores only user-bound HMAC-SHA-256 digests.
+- Each code is single-use; replacing the set invalidates every prior code.
+- Redemption requires the current password and is rate limited by user,
+  session, and IP.
+- Redemption creates only a current-session, 10-minute grant to register a
+  replacement passkey. It does not set MFA and cannot authorize management.
+- Completion atomically consumes the grant, marks the current session as
+  passkey-verified, revokes other sessions, rotates codes, and writes a durable
+  audit event.
+- Code creation, code use, and completed recovery send out-of-band security
+  notifications that never contain recovery secrets.
+
+There is intentionally no password-only bypass after a privileged account has
+enrolled a passkey.
 
 ## Stored authentication data
 
-| Table                           | Purpose                                                   |
-| ------------------------------- | --------------------------------------------------------- |
-| `users`                         | Password hash, `email_verified_at`, and `session_version` |
-| `login_attempts`                | Hashed email/IP failed-login accounting                   |
-| `account_creation_requests`     | Hashed email/IP signup accounting                         |
-| `email_verification_challenges` | Active and consumed verification challenges               |
-| `email_verification_requests`   | Email and IP request-rate accounting                      |
-| `email_verification_attempts`   | User and IP code-attempt accounting                       |
-| `password_reset_tokens`         | Active and consumed reset-token hashes                    |
-| `password_reset_requests`       | Email and IP recovery-request accounting                  |
-| `password_reset_attempts`       | Token and IP reset-attempt accounting                     |
+| Table                                                     | Purpose                                                                 |
+| --------------------------------------------------------- | ----------------------------------------------------------------------- |
+| users                                                     | Identity, password hash, email proof, role, status, and session version |
+| pending_registrations                                     | Browser-bound proposed profile and password hash                        |
+| pending_registration_attempts                             | Verification abuse accounting                                           |
+| email_verification_requests                               | Verification/resend request limits                                      |
+| login_attempts                                            | Hashed email/IP login accounting                                        |
+| account_creation_requests                                 | Hashed email/IP signup accounting                                       |
+| password_reset_tokens                                     | Active and consumed reset-token hashes                                  |
+| password_reset_requests                                   | Hashed email/IP reset-request accounting                                |
+| password_reset_attempts                                   | Token/IP reset-attempt accounting                                       |
+| auth_sessions                                             | Hashed session IDs, absolute expiry, revocation, and passkey proof      |
+| user_passkeys                                             | WebAuthn credential public material and metadata                        |
+| webauthn_challenges                                       | Session-bound registration/step-up challenges                           |
+| passkey_reauth_attempts                                   | Password confirmation abuse accounting                                  |
+| privileged_recovery_code_sets / privileged_recovery_codes | Hashed offline recovery material                                        |
+| privileged_passkey_recovery_grants                        | One-purpose replacement-passkey grants                                  |
+| privileged_recovery_attempts                              | Recovery abuse accounting                                               |
+| auth_security_events                                      | Durable redacted audit events                                           |
+| security_notification_outbox                              | Transactional leased security-email delivery and retry state            |
 
-Old request, attempt, and expired challenge records are retained briefly for
-rate limiting and deleted by opportunistic cleanup after authentication events.
+Expired challenge, token, session, attempt, upload-intent, and audit data is
+removed by the authenticated daily cleanup route. WebAuthn challenges and
+passkey reauthentication attempts receive an explicit 24-hour retention grace
+before deletion. Expiration is enforced in the authorization query itself;
+cleanup is retention, not the security boundary.
 
-## Operational boundaries
+## Secrets, database roles, and migrations
 
-The application controls are sufficient for the current low-risk feature set,
-but deployment policy remains part of authentication security:
-
-- Keep production, preview, and development secrets separate in Vercel and
-  restrict who can read or change them.
-- Alert on sustained `*.rate_limited`, repeated failure, and compromised-check
-  outage events in the platform logs.
-- Enable Vercel's edge firewall or bot controls if traffic becomes hostile; the
-  database limits remain the authoritative fallback.
-- Add passkeys or another phishing-resistant second factor before introducing
-  privileged administration, payments, or materially sensitive user data.
-- Add an explicit `account_status` policy field when suspension, closure, or
-  entitlement gating becomes a product requirement. Do not overload
-  `email_verified_at` for those states.
-
-MFA/passkeys are therefore a future assurance-level feature, not a blocker for
-the present field-atlas application. The first private-data mutation added to
-the product must use `requireVerifiedSession()` and authorize ownership of the
-specific record being changed.
-
-## Configuration and migrations
-
-Copy `.env.example` to a local ignored environment file and provide:
+Required production configuration includes:
 
 ```dotenv
 APP_URL=https://your-production-origin.example
-AUTH_SECRET=<high-entropy-auth-secret>
-DATABASE_URL=<postgres-connection-string>
-RESEND_API_KEY=<resend-api-key>
+AUTH_SECRET=<independent-authjs-secret-at-least-32-bytes>
+AUTH_HMAC_SECRET=<independent-auth-pseudonym-secret-at-least-32-bytes>
+MEDIA_GRANT_SECRET=<independent-private-media-signing-secret-at-least-32-bytes>
+DATABASE_URL=<pooled-least-privilege-runtime-connection>
+MIGRATION_DATABASE_URL=<direct-schema-owner-connection>
+CRON_SECRET=<independent-maintenance-secret-at-least-32-bytes>
+NEXT_SERVER_ACTIONS_ENCRYPTION_KEY=<stable-server-action-key>
+PASSKEY_ORIGIN=https://your-production-origin.example
+PASSKEY_RP_ID=your-production-origin.example
+RESEND_API_KEY=<provider-key>
 RESEND_FROM_EMAIL=Field Atlas <account@your-verified-domain.example>
+RESEND_REPLY_TO_EMAIL=<monitored-security-contact>
 ```
 
-For local development only, `EMAIL_DELIVERY=console` writes verification codes
-and reset links to the server terminal. It cannot be used in production.
+AUTH_SECRET, AUTH_HMAC_SECRET, and MEDIA_GRANT_SECRET must be independent in
+production. Rotating AUTH_SECRET signs users out. Rotating AUTH_HMAC_SECRET
+invalidates pending codes, rate-limit pseudonyms, and recovery-code digests.
+Rotating MEDIA_GRANT_SECRET invalidates outstanding private-image grants.
 
-Apply every authentication migration, in lexical order, to the target database:
+The deployed app receives the least-privilege runtime DATABASE_URL. Only
+migration automation or an operator receives MIGRATION_DATABASE_URL. The
+runtime role may perform required row CRUD and sequence use but cannot create or
+truncate schema objects, create roles/databases, bypass row security, or access
+the migration checksum ledger.
+
+Apply every migration before deploying dependent application code:
 
 ```bash
 npm run migrate:auth
 ```
 
-Run migrations before deploying code that depends on new auth columns or tables.
-Never commit a populated `.env` file, and rotate `AUTH_SECRET` only with the
-understanding that existing signed sessions and HMAC-derived rate-limit data will
-no longer validate as before.
+Never edit an applied migration. The runner records filename and SHA-256
+checksum and rejects drift. See the
+[deployment security runbook](../operations/deployment-security.md).
 
-## Manual verification checklist
+## Automated assurance
 
-Use a unique email address for each clean signup test.
+The local suite covers validation, policy helpers, server-action authorization,
+session behavior, concurrency SQL shape, UI recovery states, CSP, upload
+authorization, and privacy DTOs. CI adds real PostgreSQL 16/PostGIS coverage:
 
-- Create an account and confirm the browser lands on `/verify-email?sent=1`.
-- Enter mismatched signup passwords and confirm account creation is rejected
-  before verification begins.
-- Confirm no authenticated session exists before the email is verified.
-- Enter an incorrect code and confirm the account remains unverified.
-- Enter the emailed code and confirm the browser lands on
-  `/login?verified=success`, then sign in and confirm the dashboard is the
-  landing page.
-- Sign in to an unverified account and confirm every route redirects the
-  restricted session back to `/verify-email`.
-- Submit an incorrect password and confirm the email remains while the password
-  clears. Enable Remember me, reload `/login`, and confirm only the email is
-  restored; disable it and confirm the stored email is removed.
-- Request a password reset and confirm the response does not reveal whether an
-  account exists.
-- Use the reset link once, then confirm reuse fails.
-- Confirm the old password fails, the new password works, and sessions open in
-  other browsers are rejected after the reset.
-- Confirm verification, welcome, reset, and password-change messages appear in
-  the email provider logs with the configured verified sender.
-- Submit repeated bad logins and confirm the generic error remains unchanged
-  when the server-side email/IP limit activates.
-- Try a known breached password and confirm signup/reset asks for a different
-  password without exposing it in logs.
-- Run `npm run lint`, `npm run prettier:check`, `npm run typecheck`,
-  `npm run test:ci`, `npm audit`, and `npm run build`.
+- all migrations applied twice to prove idempotency;
+- runtime-role provisioning and denied DDL/TRUNCATE;
+- pending-registration pre-hijack and concurrent verification;
+- verified/active credential login and hashed session creation;
+- single/all-session revocation and absolute expiry;
+- concurrent reset issuance and one-use consumption;
+- the reset issuance-versus-redemption shared-lock race;
+- recovery grants rejected as privileged step-up.
+
+The integration job refuses non-loopback databases and requires the dedicated
+field_atlas_ci database name.
+
+## Release verification checklist
+
+- Apply every unapplied migration to a backed-up preview database before code.
+- Provision and verify the least-privilege runtime role.
+- Create an account; verify that no users row/session exists before inbox proof.
+- Repeat signup with a different password; verify only the newest proposal can
+  activate and a verified existing account is never overwritten.
+- Verify login rejects unknown, unverified, suspended, and closed accounts with
+  the same generic outcome.
+- Verify current logout, sign out everywhere, role/status changes, and password
+  reset invalidate the expected sessions.
+- Enroll two passkeys for a privileged test account and test step-up expiry,
+  final-passkey removal protection, demotion, and suspension.
+- Download recovery codes once; redeem one with the current password; verify
+  management remains locked until replacement WebAuthn succeeds.
+- Confirm recovery completion revokes every other session, rotates codes, and
+  sends all three no-secret security notifications.
+- Confirm WebAuthn RP ID and origin exactly match production and each preview
+  hostname.
+- Confirm verification, welcome, reset, password-change, account-status,
+  passkey, and recovery messages appear with the verified sender/reply-to.
+- Run npm run prettier:check, npm run lint, npm run typecheck,
+  npm run test:ci, npm run test:integration:auth, npm audit, and npm run build.
 
 ## Code map
 
-- [`auth.ts`](../../auth.ts) — credentials authorization and database-backed JWT
-  validation.
-- [`auth.config.ts`](../../auth.config.ts) and [`proxy.ts`](../../proxy.ts) —
-  route authorization and redirects.
-- [`app/lib/actions.ts`](../../app/lib/actions.ts) — login and signup actions.
-- [`app/lib/actions/email-verification.ts`](../../app/lib/actions/email-verification.ts)
-  — verification request, resend, submission, and restart actions.
-- [`app/lib/auth/email-verification.ts`](../../app/lib/auth/email-verification.ts)
-  — challenge creation, verification, limits, and consumption.
-- [`app/lib/auth/auth-rate-limit.ts`](../../app/lib/auth/auth-rate-limit.ts) —
-  transactional login and signup abuse controls.
-- [`app/lib/auth/password-hash.ts`](../../app/lib/auth/password-hash.ts) and
-  [`app/lib/auth/compromised-password.ts`](../../app/lib/auth/compromised-password.ts)
-  — password hashing, legacy migration, and breach screening.
-- [`app/lib/auth/session.ts`](../../app/lib/auth/session.ts) — verified-session
-  data-access boundary for protected reads and mutations.
-- [`app/lib/actions/password-reset.ts`](../../app/lib/actions/password-reset.ts)
-  — recovery request and password replacement actions.
-- [`app/lib/auth/reset-password.ts`](../../app/lib/auth/reset-password.ts) —
-  reset-token creation, limits, and atomic consumption.
-- [`app/lib/auth/recovery-email.ts`](../../app/lib/auth/recovery-email.ts) —
-  transactional email delivery.
-- [`migrations`](../../migrations) — authentication schema migrations.
-- [`.github/workflows/ci.yml`](../../.github/workflows/ci.yml) — automated
-  security and quality gates.
+- [auth.ts](../../auth.ts) and
+  [credentials.ts](../../app/lib/auth/credentials.ts) — credential login,
+  signed JWT callbacks, and database-backed session validation.
+- [actions.ts](../../app/lib/actions.ts) and
+  [email-verification.ts](../../app/lib/auth/email-verification.ts) — pending
+  signup, verification limits, and atomic activation.
+- [session-record.ts](../../app/lib/auth/session-record.ts) and
+  [session.ts](../../app/lib/auth/session.ts) — session persistence and
+  authorization boundaries.
+- [reset-password.ts](../../app/lib/auth/reset-password.ts) — reset issuance,
+  shared locking, one-time consumption, and global revocation.
+- [passkeys.ts](../../app/lib/auth/passkeys.ts) and
+  [passkeys actions](../../app/lib/actions/passkeys.ts) — WebAuthn ceremonies
+  and privileged step-up.
+- [recovery-codes.ts](../../app/lib/auth/recovery-codes.ts) and
+  [recovery actions](../../app/lib/actions/recovery-codes.ts) — offline codes
+  and replacement-passkey grants.
+- [recovery-email.ts](../../app/lib/auth/recovery-email.ts) — transactional and
+  security notifications.
+- [migrations](../../migrations) — schema, constraints, indexes, and guards.
+- [CI workflow](../../.github/workflows/ci.yml) — independent quality and real
+  PostgreSQL authorization gates.

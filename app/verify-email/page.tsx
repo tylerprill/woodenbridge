@@ -1,7 +1,6 @@
 import type { Metadata } from 'next';
 import Link from 'next/link';
 
-import { auth } from '@/auth';
 import { getEmailVerificationChallengeCookie } from '@/app/lib/auth/email-verification-cookie';
 import { AuthShell } from '@/components/clean/auth-shell';
 import VerifyEmailForm from '@/components/unclean/verify-email-form';
@@ -21,13 +20,8 @@ export default async function VerifyEmailPage({
   searchParams: Promise<{ sent?: string | string[] }>;
 }) {
   const params = await searchParams;
-  const session = await auth();
   const challengeId = await getEmailVerificationChallengeCookie();
   const hasChallenge = Boolean(challengeId);
-  const pendingEmail =
-    session?.user && session.emailVerified === false
-      ? session.user.email
-      : undefined;
 
   return (
     <AuthShell
@@ -35,7 +29,7 @@ export default async function VerifyEmailPage({
       panelDescription={
         hasChallenge
           ? 'Enter the short code we sent to prove this inbox belongs to you.'
-          : 'Request a secure, single-use code to confirm your email address.'
+          : 'Begin at create account. We will hold the proposed account safely until this browser confirms the one-time code.'
       }
       panelEyebrow="One last step"
       panelTitle={hasChallenge ? 'Check your email' : 'Verify your email'}
@@ -52,7 +46,6 @@ export default async function VerifyEmailPage({
       <VerifyEmailForm
         hasChallenge={hasChallenge}
         codeSent={params.sent === '1'}
-        pendingEmail={pendingEmail}
       />
     </AuthShell>
   );

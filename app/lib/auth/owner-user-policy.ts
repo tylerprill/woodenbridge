@@ -1,4 +1,5 @@
 import type { AppRole } from './roles';
+import type { AccountStatus } from './account-status';
 
 export type RoleChangeBlock =
   'self-protected' | 'protected-owner' | 'owner-required' | undefined;
@@ -40,6 +41,36 @@ export function getSessionRevocationBlock({
 }): SessionRevocationBlock {
   if (targetRole === 'owner') return 'protected-owner';
   if (actorUserId === targetUserId) return 'self-protected';
+  if (actorRole === 'admin' && targetRole === 'admin') {
+    return 'admin-peer-protected';
+  }
+
+  return undefined;
+}
+
+export type AccountStatusChangeBlock =
+  | 'self-protected'
+  | 'protected-owner'
+  | 'admin-peer-protected'
+  | 'closed-account'
+  | undefined;
+
+export function getAccountStatusChangeBlock({
+  actorUserId,
+  actorRole,
+  targetUserId,
+  targetRole,
+  currentStatus,
+}: {
+  actorUserId: string;
+  actorRole: AppRole;
+  targetUserId: string;
+  targetRole: AppRole;
+  currentStatus: AccountStatus;
+}): AccountStatusChangeBlock {
+  if (targetRole === 'owner') return 'protected-owner';
+  if (actorUserId === targetUserId) return 'self-protected';
+  if (currentStatus === 'closed') return 'closed-account';
   if (actorRole === 'admin' && targetRole === 'admin') {
     return 'admin-peer-protected';
   }

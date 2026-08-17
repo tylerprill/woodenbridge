@@ -7,7 +7,10 @@ import {
 import Image from 'next/image';
 import Link from 'next/link';
 
-import type { AtlasChapter } from '@/app/lib/chapters/definitions';
+import type {
+  AtlasChapter,
+  SharedAtlasChapter,
+} from '@/app/lib/chapters/definitions';
 import {
   chapterMemoryLabel,
   formatChapterDateRange,
@@ -26,22 +29,31 @@ export function ChapterReader({
   mode,
   saveNotice,
 }: {
-  chapter: AtlasChapter;
+  chapter: AtlasChapter | SharedAtlasChapter;
   mode: 'owner' | 'shared';
   saveNotice?: ChapterSaveNoticeKind;
 }) {
   const places = chapter.entries
     .map((entry) => entry.placeLabel || entry.placeName)
     .filter((place): place is string => Boolean(place));
-  const mapEntries = chapter.entries.map((entry) => ({
-    id: entry.id,
-    title: entry.title,
-    placeLabel: entry.placeLabel,
-    placeName: entry.placeName,
-    latitude: entry.latitude,
-    longitude: entry.longitude,
-  }));
   const showMap = mode === 'owner' || chapter.shareMap;
+  const mapEntries = showMap
+    ? chapter.entries.flatMap((entry) =>
+        typeof entry.latitude === 'number' &&
+        typeof entry.longitude === 'number'
+          ? [
+              {
+                id: entry.id,
+                title: entry.title,
+                placeLabel: entry.placeLabel,
+                placeName: entry.placeName,
+                latitude: entry.latitude,
+                longitude: entry.longitude,
+              },
+            ]
+          : [],
+      )
+    : [];
 
   return (
     <article className={styles.chapterDetail} data-reader-mode={mode}>

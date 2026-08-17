@@ -3,14 +3,13 @@
 import {
   ArrowPathIcon,
   ArrowRightIcon,
-  EnvelopeIcon,
   KeyIcon,
 } from '@heroicons/react/24/outline';
+import Link from 'next/link';
 import { useActionState } from 'react';
 import { useFormStatus } from 'react-dom';
 
 import {
-  requestEmailVerification,
   resendEmailVerification,
   restartEmailVerification,
   submitEmailVerificationCode,
@@ -51,49 +50,23 @@ function FormMessage({ state }: { state: EmailVerificationState }) {
   );
 }
 
-function RequestCodeForm({ pendingEmail }: { pendingEmail?: string | null }) {
-  const [state, dispatch] = useActionState(requestEmailVerification, undefined);
-
+function StartRegistration() {
   return (
-    <form className="auth-form" action={dispatch}>
-      {pendingEmail ? (
-        <p className="auth-notice" role="status">
-          Continue verifying <strong>{pendingEmail}</strong>, or switch accounts
-          below.
-        </p>
-      ) : (
-        <div className="auth-field">
-          <label htmlFor="verification-email">Email address</label>
-          <div className="auth-input-wrap">
-            <EnvelopeIcon aria-hidden="true" />
-            <input
-              id="verification-email"
-              name="email"
-              type="email"
-              autoComplete="email"
-              placeholder="you@example.com"
-              required
-            />
-          </div>
-        </div>
-      )}
-
-      <FormMessage state={state} />
-      <SubmitButton
-        idleLabel="Send verification code"
-        pendingLabel="Sending code…"
-      />
-
-      {pendingEmail ? (
-        <button
-          className="auth-text-button auth-centered-text-button"
-          formAction={restartEmailVerification}
-          type="submit"
-        >
-          Use another account
-        </button>
-      ) : null}
-    </form>
+    <div className="auth-form">
+      <p className="auth-notice" role="status">
+        Verification starts on the create account page. Your proposed account
+        stays separate from active accounts until this browser confirms the code
+        sent to your inbox.
+      </p>
+      <Link className="auth-submit" href="/sign-up">
+        <span>Return to create account</span>
+        <ArrowRightIcon aria-hidden="true" />
+      </Link>
+      <p className="auth-field-help">
+        Started earlier? Create the account again with the details and password
+        you want to keep.
+      </p>
+    </div>
   );
 }
 
@@ -168,15 +141,13 @@ export function VerificationCodeForm({ codeSent }: { codeSent: boolean }) {
 export default function VerifyEmailForm({
   hasChallenge,
   codeSent,
-  pendingEmail,
 }: {
   hasChallenge: boolean;
   codeSent: boolean;
-  pendingEmail?: string | null;
 }) {
   return hasChallenge ? (
     <VerificationCodeForm codeSent={codeSent} />
   ) : (
-    <RequestCodeForm pendingEmail={pendingEmail} />
+    <StartRegistration />
   );
 }

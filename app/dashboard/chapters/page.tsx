@@ -40,7 +40,10 @@ export default async function ChaptersPage({
               {data.total === 1 ? 'chapter' : 'chapters'}
             </span>
           </p>
-          <Link href="/dashboard/chapters/new" className={styles.newChapterButton}>
+          <Link
+            href="/dashboard/chapters/new"
+            className={styles.newChapterButton}
+          >
             <PlusIcon aria-hidden="true" />
             New chapter
           </Link>
@@ -59,7 +62,10 @@ export default async function ChaptersPage({
           ))}
         </section>
       ) : (
-        <section className={styles.chaptersEmpty} aria-labelledby="empty-chapters-title">
+        <section
+          className={styles.chaptersEmpty}
+          aria-labelledby="empty-chapters-title"
+        >
           <div className={styles.emptyChapterArt} aria-hidden="true">
             <span />
             <span />
@@ -68,8 +74,8 @@ export default async function ChaptersPage({
           <p className="section-kicker">A story waiting to be told</p>
           <h2 id="empty-chapters-title">Bring a journey into focus.</h2>
           <p>
-            Select memories from your atlas, arrange the route, and preserve them
-            together as one chapter.
+            Select memories from your atlas, arrange the route, and preserve
+            them together as one chapter.
           </p>
           <Link href="/dashboard/chapters/new">
             <PlusIcon aria-hidden="true" />

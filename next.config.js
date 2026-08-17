@@ -1,47 +1,8 @@
-const isDevelopment = process.env.NODE_ENV === 'development';
-const contentSecurityPolicy = [
-  "default-src 'self'",
-  `script-src 'self' 'unsafe-inline'${isDevelopment ? " 'unsafe-eval'" : ''}`,
-  "style-src 'self' 'unsafe-inline'",
-  "img-src 'self' blob: data: https://tiles.openfreemap.org",
-  "font-src 'self'",
-  `connect-src 'self' https://tiles.openfreemap.org https://vercel.com/api/blob/ https://*.blob.vercel-storage.com${isDevelopment ? ' ws: wss:' : ''}`,
-  "worker-src 'self' blob:",
-  "child-src 'self' blob:",
-  "object-src 'none'",
-  "base-uri 'self'",
-  "form-action 'self'",
-  "frame-ancestors 'none'",
-  ...(isDevelopment ? [] : ['upgrade-insecure-requests']),
-].join('; ');
+const { createSecurityHeaders } = require('./config/security-headers');
 
-const securityHeaders = [
-  {
-    key: 'Content-Security-Policy',
-    value: contentSecurityPolicy,
-  },
-  {
-    key: 'Cross-Origin-Opener-Policy',
-    value: 'same-origin',
-  },
-  {
-    key: 'Permissions-Policy',
-    value:
-      'camera=(), microphone=(), geolocation=(), payment=(), browsing-topics=()',
-  },
-  {
-    key: 'Referrer-Policy',
-    value: 'strict-origin-when-cross-origin',
-  },
-  {
-    key: 'X-Content-Type-Options',
-    value: 'nosniff',
-  },
-  {
-    key: 'X-Frame-Options',
-    value: 'DENY',
-  },
-];
+const securityHeaders = createSecurityHeaders({
+  isProduction: process.env.NODE_ENV === 'production',
+});
 
 /** @type {import('next').NextConfig} */
 const nextConfig = {
@@ -52,6 +13,16 @@ const nextConfig = {
       {
         source: '/(.*)',
         headers: securityHeaders,
+      },
+      {
+        source: '/api/:path*',
+        headers: [
+          {
+            key: 'Content-Security-Policy',
+            value:
+              "default-src 'none'; base-uri 'none'; form-action 'none'; frame-ancestors 'none'; sandbox",
+          },
+        ],
       },
       {
         source: '/reset-password',

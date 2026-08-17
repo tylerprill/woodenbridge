@@ -6,8 +6,25 @@ type EmailMessage = {
   idempotencyKey: string;
 };
 
+const RESEND_ENDPOINT = 'https://api.resend.com/emails';
+const RESEND_TIMEOUT_MS = 5_000;
+const RESEND_MAX_ATTEMPTS = 2;
+
+function isRetryableDeliveryStatus(status: number) {
+  return status === 408 || status === 429 || status >= 500;
+}
+
+function waitBeforeDeliveryRetry(attempt: number) {
+  return new Promise((resolve) => setTimeout(resolve, attempt * 250));
+}
+
 function getAppUrl() {
+  const vercelPreviewUrl =
+    process.env.VERCEL_ENV === 'preview' && process.env.VERCEL_URL
+      ? `https://${process.env.VERCEL_URL}`
+      : undefined;
   const configuredUrl =
+    vercelPreviewUrl ??
     process.env.APP_URL ??
     process.env.AUTH_URL ??
     (process.env.VERCEL_PROJECT_PRODUCTION_URL
@@ -81,31 +98,63 @@ async function deliverEmail(message: EmailMessage) {
   }
 
   const from = getBrandedSender(configuredFrom);
-
-  const response = await fetch('https://api.resend.com/emails', {
-    method: 'POST',
-    headers: {
-      Authorization: `Bearer ${apiKey}`,
-      'Content-Type': 'application/json',
-      'Idempotency-Key': message.idempotencyKey,
-      'User-Agent': 'wooden-bridge-transactional-email/1.0',
-    },
-    body: JSON.stringify({
-      from,
-      to: [message.to],
-      subject: message.subject,
-      text: message.text,
-      html: message.html,
-    }),
-    cache: 'no-store',
+  const replyTo = process.env.RESEND_REPLY_TO_EMAIL;
+  const body = JSON.stringify({
+    from,
+    to: [message.to],
+    subject: message.subject,
+    text: message.text,
+    html: message.html,
+    ...(replyTo ? { reply_to: replyTo } : {}),
   });
 
-  if (!response.ok) {
-    const errorBody = await response.text();
-    throw new Error(
-      `Transactional email failed (${response.status}): ${errorBody.slice(0, 300)}`,
+  let lastFailure: unknown;
+
+  for (let attempt = 1; attempt <= RESEND_MAX_ATTEMPTS; attempt += 1) {
+    let response: Response;
+
+    try {
+      response = await fetch(RESEND_ENDPOINT, {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${apiKey}`,
+          'Content-Type': 'application/json',
+          'Idempotency-Key': message.idempotencyKey,
+          'User-Agent': 'field-atlas-transactional-email/1.0',
+        },
+        body,
+        cache: 'no-store',
+        signal: AbortSignal.timeout(RESEND_TIMEOUT_MS),
+      });
+    } catch (error) {
+      lastFailure = error;
+
+      if (attempt === RESEND_MAX_ATTEMPTS) break;
+
+      await waitBeforeDeliveryRetry(attempt);
+      continue;
+    }
+
+    if (response.ok) return;
+
+    lastFailure = new Error(
+      `Transactional email provider returned HTTP ${response.status}.`,
     );
+
+    if (
+      !isRetryableDeliveryStatus(response.status) ||
+      attempt === RESEND_MAX_ATTEMPTS
+    ) {
+      break;
+    }
+
+    await response.body?.cancel().catch(() => undefined);
+    await waitBeforeDeliveryRetry(attempt);
   }
+
+  throw new Error('Transactional email delivery failed.', {
+    cause: lastFailure,
+  });
 }
 
 export async function sendWelcomeEmail({
@@ -221,12 +270,14 @@ export async function sendPasswordChangedEmail({
   changeId: string;
 }) {
   const safeName = escapeHtml(firstName || 'there');
+  const recoveryUrl = new URL('/forgot-password', getAppUrl());
+  const safeRecoveryUrl = escapeHtml(recoveryUrl.toString());
 
   await deliverEmail({
     to,
     subject: 'Your Field Atlas password was changed',
     idempotencyKey: `password-changed-${changeId}`,
-    text: `Hello ${firstName || 'there'},\n\nYour Field Atlas password was changed successfully. All existing sessions have been revoked. If you did not make this change, contact the site owner immediately.`,
+    text: `Hello ${firstName || 'there'},\n\nYour Field Atlas password was changed successfully. All existing sessions have been revoked.\n\nIf you did not make this change, secure your account immediately:\n${recoveryUrl.toString()}`,
     html: `
       <div style="background:#f5f2e9;padding:32px;font-family:Arial,sans-serif;color:#10231d">
         <div style="max-width:560px;margin:0 auto;background:#fbfaf5;border:1px solid #d8d8cd;border-radius:18px;padding:32px">
@@ -234,7 +285,148 @@ export async function sendPasswordChangedEmail({
           <h1 style="font-family:Georgia,serif;font-size:32px;font-weight:400;margin:18px 0">Password changed</h1>
           <p>Hello ${safeName},</p>
           <p>Your Field Atlas password was changed successfully. All existing sessions have been revoked.</p>
-          <p style="font-size:13px;line-height:1.6;color:#4c6a5b">If you did not make this change, contact the site owner immediately.</p>
+          <p style="font-size:13px;line-height:1.6;color:#4c6a5b">If you did not make this change, <a href="${safeRecoveryUrl}" style="color:#10231d;font-weight:700">secure your account immediately</a>.</p>
+        </div>
+      </div>
+    `,
+  });
+}
+
+export async function sendPasskeyChangedEmail({
+  to,
+  firstName,
+  passkeyLabel,
+  changeId,
+  action,
+}: {
+  to: string;
+  firstName: string;
+  passkeyLabel: string;
+  changeId: string;
+  action: 'added' | 'removed';
+}) {
+  const securityUrl = new URL('/dashboard/security', getAppUrl());
+  const recoveryUrl = new URL('/forgot-password', getAppUrl());
+  const safeName = escapeHtml(firstName || 'there');
+  const safeLabel = escapeHtml(passkeyLabel);
+  const safeSecurityUrl = escapeHtml(securityUrl.toString());
+  const safeRecoveryUrl = escapeHtml(recoveryUrl.toString());
+  const actionLabel = action === 'added' ? 'added to' : 'removed from';
+
+  await deliverEmail({
+    to,
+    subject: `A passkey was ${action} on your Field Atlas account`,
+    idempotencyKey: `passkey-${action}-${changeId}`,
+    text: `Hello ${firstName || 'there'},\n\nThe passkey “${passkeyLabel}” was ${actionLabel} your Field Atlas account.\n\nReview account security:\n${securityUrl.toString()}\n\nIf this was not you, reset your password immediately to revoke every session:\n${recoveryUrl.toString()}`,
+    html: `
+      <div style="background:#f5f2e9;padding:32px;font-family:Arial,sans-serif;color:#10231d">
+        <div style="max-width:560px;margin:0 auto;background:#fbfaf5;border:1px solid #d8d8cd;border-radius:18px;padding:32px">
+          <p style="font-size:12px;letter-spacing:.14em;text-transform:uppercase;color:#4c6a5b;font-weight:700">Field Atlas security</p>
+          <h1 style="font-family:Georgia,serif;font-size:32px;font-weight:400;margin:18px 0">Passkey ${action}</h1>
+          <p>Hello ${safeName},</p>
+          <p>The passkey <strong>${safeLabel}</strong> was ${actionLabel} your Field Atlas account.</p>
+          <p style="margin:28px 0"><a href="${safeSecurityUrl}" style="display:inline-block;background:#10231d;color:#fbfaf5;text-decoration:none;padding:14px 20px;border-radius:12px;font-weight:700">Review account security</a></p>
+          <p style="font-size:13px;line-height:1.6;color:#4c6a5b">If this was not you, <a href="${safeRecoveryUrl}" style="color:#10231d;font-weight:700">reset your password immediately</a> to revoke every session.</p>
+        </div>
+      </div>
+    `,
+  });
+}
+
+export async function sendAccountStatusChangedEmail({
+  to,
+  firstName,
+  status,
+  changeId,
+}: {
+  to: string;
+  firstName: string;
+  status: 'active' | 'suspended';
+  changeId: string;
+}) {
+  const safeName = escapeHtml(firstName || 'there');
+  const isSuspended = status === 'suspended';
+  const heading = isSuspended ? 'Account access paused' : 'Account reactivated';
+  const explanation = isSuspended
+    ? 'Your Field Atlas account was suspended and every signed-in session was revoked. You will not be able to sign in until an administrator reactivates it.'
+    : 'Your Field Atlas account was reactivated. You can sign in again; previously revoked sessions remain signed out.';
+
+  await deliverEmail({
+    to,
+    subject: `${heading} — Field Atlas`,
+    idempotencyKey: `account-status-${changeId}-${status}`,
+    text: `Hello ${firstName || 'there'},\n\n${explanation}\n\nIf this change is unexpected, contact the Field Atlas owner.`,
+    html: `
+      <div style="background:#f5f2e9;padding:32px;font-family:Arial,sans-serif;color:#10231d">
+        <div style="max-width:560px;margin:0 auto;background:#fbfaf5;border:1px solid #d8d8cd;border-radius:18px;padding:32px">
+          <p style="font-size:12px;letter-spacing:.14em;text-transform:uppercase;color:#4c6a5b;font-weight:700">Field Atlas security</p>
+          <h1 style="font-family:Georgia,serif;font-size:32px;font-weight:400;margin:18px 0">${heading}</h1>
+          <p>Hello ${safeName},</p>
+          <p>${explanation}</p>
+          <p style="font-size:13px;line-height:1.6;color:#4c6a5b">If this change is unexpected, contact the Field Atlas owner.</p>
+        </div>
+      </div>
+    `,
+  });
+}
+
+export async function sendPrivilegedRecoveryEmail({
+  to,
+  firstName,
+  event,
+  changeId,
+  remainingCodes,
+}: {
+  to: string;
+  firstName: string;
+  event: 'codes-created' | 'code-used' | 'recovery-completed';
+  changeId: string;
+  remainingCodes?: number;
+}) {
+  const securityUrl = new URL('/dashboard/security', getAppUrl());
+  const recoveryUrl = new URL('/forgot-password', getAppUrl());
+  const safeName = escapeHtml(firstName || 'there');
+  const safeSecurityUrl = escapeHtml(securityUrl.toString());
+  const safeRecoveryUrl = escapeHtml(recoveryUrl.toString());
+  const content =
+    event === 'codes-created'
+      ? {
+          subject: 'New recovery codes were created — Field Atlas',
+          heading: 'Recovery codes created',
+          explanation:
+            'A new offline recovery-code set was created for protected management. Every previous code is now invalid.',
+        }
+      : event === 'code-used'
+        ? {
+            subject: 'A recovery code was used — Field Atlas',
+            heading: 'Recovery code used',
+            explanation: `A saved recovery code and the account password opened a 10-minute window to add a replacement passkey.${
+              typeof remainingCodes === 'number'
+                ? ` ${remainingCodes} unused recovery codes remain.`
+                : ''
+            }`,
+          }
+        : {
+            subject: 'Passkey recovery completed — Field Atlas',
+            heading: 'Passkey recovery completed',
+            explanation:
+              'A replacement passkey was added, every other browser session was revoked, and a new recovery-code set was created.',
+          };
+
+  await deliverEmail({
+    to,
+    subject: content.subject,
+    idempotencyKey: `privileged-recovery-${event}-${changeId}`,
+    text: `Hello ${firstName || 'there'},\n\n${content.explanation}\n\nReview account security:\n${securityUrl.toString()}\n\nIf this was not you, reset your password immediately to revoke the active recovery session:\n${recoveryUrl.toString()}`,
+    html: `
+      <div style="background:#f5f2e9;padding:32px;font-family:Arial,sans-serif;color:#10231d">
+        <div style="max-width:560px;margin:0 auto;background:#fbfaf5;border:1px solid #d8d8cd;border-radius:18px;padding:32px">
+          <p style="font-size:12px;letter-spacing:.14em;text-transform:uppercase;color:#4c6a5b;font-weight:700">Field Atlas security</p>
+          <h1 style="font-family:Georgia,serif;font-size:32px;font-weight:400;margin:18px 0">${content.heading}</h1>
+          <p>Hello ${safeName},</p>
+          <p>${content.explanation}</p>
+          <p style="margin:28px 0"><a href="${safeSecurityUrl}" style="display:inline-block;background:#10231d;color:#fbfaf5;text-decoration:none;padding:14px 20px;border-radius:12px;font-weight:700">Review account security</a></p>
+          <p style="font-size:13px;line-height:1.6;color:#4c6a5b">If this was not you, <a href="${safeRecoveryUrl}" style="color:#10231d;font-weight:700">reset your password immediately</a> to revoke the active recovery session.</p>
         </div>
       </div>
     `,

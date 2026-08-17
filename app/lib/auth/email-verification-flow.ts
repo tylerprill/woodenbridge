@@ -4,44 +4,50 @@ import { after } from 'next/server';
 
 import {
   createDecoyVerificationChallengeId,
-  createEmailVerificationChallenge,
+  createPendingRegistrationChallenge,
   getEmailVerificationEmailHash,
-  invalidateEmailVerificationChallenge,
+  invalidatePendingRegistrationChallenge,
   recordEmailVerificationRequest,
-  type EmailVerificationUser,
+  type PendingRegistrationProposal,
 } from '@/app/lib/auth/email-verification';
 import { sendEmailVerificationEmail } from '@/app/lib/auth/recovery-email';
 
-export async function issueEmailVerification({
-  email,
+export async function issuePendingRegistrationVerification({
+  registration,
   ipHash,
-  user,
   fallbackChallengeId,
 }: {
-  email: string;
+  registration: PendingRegistrationProposal;
   ipHash: string;
-  user?: EmailVerificationUser;
   fallbackChallengeId?: string;
 }) {
-  const emailHash = getEmailVerificationEmailHash(email);
+  const emailHash = getEmailVerificationEmailHash(registration.email);
   const allowed = await recordEmailVerificationRequest(emailHash, ipHash);
 
-  if (!allowed || !user || user.email_verified_at) {
+  if (!allowed) {
     return fallbackChallengeId ?? createDecoyVerificationChallengeId();
   }
 
-  const { challengeId, code } = await createEmailVerificationChallenge(user.id);
+  const challenge = await createPendingRegistrationChallenge(registration);
+
+  // A verified account is deliberately indistinguishable from an unknown
+  // address at the HTTP layer, and its credential is never replaced.
+  if (!challenge) {
+    return fallbackChallengeId ?? createDecoyVerificationChallengeId();
+  }
+
+  const { challengeId, code } = challenge;
 
   after(async () => {
     try {
       await sendEmailVerificationEmail({
-        to: user.email,
-        firstName: user.first_name,
+        to: registration.email,
+        firstName: registration.firstName,
         code,
         challengeId,
       });
     } catch (error) {
-      await invalidateEmailVerificationChallenge(challengeId);
+      await invalidatePendingRegistrationChallenge(challengeId);
       console.error('Email verification delivery failed:', error);
     }
   });

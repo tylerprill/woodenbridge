@@ -5,14 +5,13 @@ import { AuthError } from 'next-auth';
 import { redirect } from 'next/navigation';
 import { after } from 'next/server';
 
-import { getUser, addUser } from './data';
 import { NewUser } from './definitions';
 import {
   createDecoyVerificationChallengeId,
   deleteExpiredEmailVerificationData,
 } from './auth/email-verification';
 import { setEmailVerificationChallengeCookie } from './auth/email-verification-cookie';
-import { issueEmailVerification } from './auth/email-verification-flow';
+import { issuePendingRegistrationVerification } from './auth/email-verification-flow';
 import { getClientIpHash, hashRateLimitKey } from './auth/security';
 import {
   deleteExpiredAuthRateLimitData,
@@ -120,23 +119,17 @@ export async function createUser(
 
   try {
     const passwordHash = await hashPassword(user.password);
-    const createdUser = await addUser(user, passwordHash);
-    const verificationUser = createdUser
-      ? {
-          id: createdUser.id,
-          email: user.email,
-          first_name: user.first_name,
-          email_verified_at: null,
-        }
-      : await getUser(user.email);
-
-    challengeId = await issueEmailVerification({
-      email: user.email,
+    challengeId = await issuePendingRegistrationVerification({
+      registration: {
+        email: user.email,
+        firstName: user.first_name,
+        lastName: user.last_name,
+        passwordHash,
+      },
       ipHash,
-      user: verificationUser,
     });
     recordSecurityEvent('signup.attempt', 'success', {
-      accountCreated: Boolean(createdUser),
+      registrationPending: true,
     });
   } catch (error) {
     console.error('Account creation failed:', error);

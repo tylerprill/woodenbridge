@@ -1,6 +1,7 @@
 import 'server-only';
 
 import { createHmac, timingSafeEqual } from 'node:crypto';
+import { getMediaGrantSecret } from '@/app/lib/auth/secrets';
 
 import {
   areAtlasMediaPathsPaired,
@@ -33,20 +34,14 @@ type MediaGrantPayload = {
   x: number;
 };
 
-function getSecret() {
-  const secret = process.env.AUTH_SECRET;
-  if (!secret) throw new Error('AUTH_SECRET is not configured.');
-  return secret;
-}
-
 function sign(value: string) {
-  return createHmac('sha256', getSecret())
+  return createHmac('sha256', getMediaGrantSecret())
     .update(`field-atlas:media-grant:v${MEDIA_GRANT_VERSION}:${value}`)
     .digest();
 }
 
 function subjectForUser(userId: string) {
-  return createHmac('sha256', getSecret())
+  return createHmac('sha256', getMediaGrantSecret())
     .update(`field-atlas:media-subject:v${MEDIA_GRANT_VERSION}:${userId}`)
     .digest('base64url');
 }
@@ -133,6 +128,7 @@ export function verifyAtlasMediaGrant(
     const suppliedSignature = Buffer.from(encodedSignature, 'base64url');
     const expectedSignature = sign(encoded);
     if (
+      suppliedSignature.toString('base64url') !== encodedSignature ||
       suppliedSignature.length !== expectedSignature.length ||
       !timingSafeEqual(suppliedSignature, expectedSignature)
     ) {

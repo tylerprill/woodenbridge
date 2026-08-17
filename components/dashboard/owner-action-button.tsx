@@ -22,7 +22,7 @@ export function OwnerActionButton({
   accessibleLabel: string;
   confirmMessage: string;
   confirmTitle: string;
-  tone?: 'quiet' | 'strong';
+  tone?: 'quiet' | 'strong' | 'warning';
 }) {
   const { pending } = useFormStatus();
   const [open, setOpen] = useState(false);

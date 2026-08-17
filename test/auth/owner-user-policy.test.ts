@@ -1,4 +1,5 @@
 import {
+  getAccountStatusChangeBlock,
   getRoleChangeBlock,
   getSessionRevocationBlock,
 } from '@/app/lib/auth/owner-user-policy';
@@ -79,5 +80,56 @@ describe('management user policy', () => {
         targetRole: 'owner',
       }),
     ).toBe('protected-owner');
+  });
+
+  it('allows administrators to suspend users but not peer administrators', () => {
+    expect(
+      getAccountStatusChangeBlock({
+        actorUserId: 'admin-a',
+        actorRole: 'admin',
+        targetUserId: 'user-b',
+        targetRole: 'user',
+        currentStatus: 'active',
+      }),
+    ).toBeUndefined();
+    expect(
+      getAccountStatusChangeBlock({
+        actorUserId: 'admin-a',
+        actorRole: 'admin',
+        targetUserId: 'admin-b',
+        targetRole: 'admin',
+        currentStatus: 'active',
+      }),
+    ).toBe('admin-peer-protected');
+  });
+
+  it('allows the owner to manage admins while protecting owner and closed accounts', () => {
+    expect(
+      getAccountStatusChangeBlock({
+        actorUserId: 'owner-a',
+        actorRole: 'owner',
+        targetUserId: 'admin-b',
+        targetRole: 'admin',
+        currentStatus: 'suspended',
+      }),
+    ).toBeUndefined();
+    expect(
+      getAccountStatusChangeBlock({
+        actorUserId: 'owner-a',
+        actorRole: 'owner',
+        targetUserId: 'owner-a',
+        targetRole: 'owner',
+        currentStatus: 'active',
+      }),
+    ).toBe('protected-owner');
+    expect(
+      getAccountStatusChangeBlock({
+        actorUserId: 'owner-a',
+        actorRole: 'owner',
+        targetUserId: 'user-b',
+        targetRole: 'user',
+        currentStatus: 'closed',
+      }),
+    ).toBe('closed-account');
   });
 });

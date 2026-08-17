@@ -1,9 +1,11 @@
 import 'server-only';
 
-import { db, sql } from '@vercel/postgres';
+import { db, sql } from '@/app/lib/db';
 
 export const LOGIN_LIMITS = {
+  emailAttempts: 20,
   emailFailures: 10,
+  ipAttempts: 60,
   ipFailures: 30,
   windowMinutes: 15,
 } as const;
@@ -17,10 +19,14 @@ export const SIGNUP_LIMITS = {
 export function isLoginAttemptAllowed(
   emailFailures: number,
   ipFailures: number,
+  emailAttempts: number,
+  ipAttempts: number,
 ) {
   return (
     emailFailures < LOGIN_LIMITS.emailFailures &&
-    ipFailures < LOGIN_LIMITS.ipFailures
+    ipFailures < LOGIN_LIMITS.ipFailures &&
+    emailAttempts < LOGIN_LIMITS.emailAttempts &&
+    ipAttempts < LOGIN_LIMITS.ipAttempts
   );
 }
 
@@ -47,20 +53,49 @@ export async function reserveLoginAttempt(emailHash: string, ipHash: string) {
     `;
 
     const attempts = await client.sql<{
+      email_attempt_count: string;
       email_count: string;
+      ip_attempt_count: string;
       ip_count: string;
     }>`
       SELECT
-        COUNT(*) FILTER (WHERE email_hash = ${emailHash})::text AS email_count,
-        COUNT(*) FILTER (WHERE ip_hash = ${ipHash})::text AS ip_count
-      FROM login_attempts
-      WHERE successful = FALSE
-        AND attempted_at > NOW() - (${LOGIN_LIMITS.windowMinutes} * INTERVAL '1 minute')
+        (
+          SELECT COUNT(*)::text
+          FROM login_attempts
+          WHERE email_hash = ${emailHash}
+            AND successful = FALSE
+            AND completed_at IS NOT NULL
+            AND failure_cleared_at IS NULL
+            AND attempted_at > NOW() - (${LOGIN_LIMITS.windowMinutes} * INTERVAL '1 minute')
+        ) AS email_count,
+        (
+          SELECT COUNT(*)::text
+          FROM login_attempts
+          WHERE ip_hash = ${ipHash}
+            AND successful = FALSE
+            AND completed_at IS NOT NULL
+            AND failure_cleared_at IS NULL
+            AND attempted_at > NOW() - (${LOGIN_LIMITS.windowMinutes} * INTERVAL '1 minute')
+        ) AS ip_count,
+        (
+          SELECT COUNT(*)::text
+          FROM login_attempts
+          WHERE email_hash = ${emailHash}
+            AND attempted_at > NOW() - (${LOGIN_LIMITS.windowMinutes} * INTERVAL '1 minute')
+        ) AS email_attempt_count,
+        (
+          SELECT COUNT(*)::text
+          FROM login_attempts
+          WHERE ip_hash = ${ipHash}
+            AND attempted_at > NOW() - (${LOGIN_LIMITS.windowMinutes} * INTERVAL '1 minute')
+        ) AS ip_attempt_count
     `;
     const counts = attempts.rows[0];
     const allowed = isLoginAttemptAllowed(
       Number(counts?.email_count ?? 0),
       Number(counts?.ip_count ?? 0),
+      Number(counts?.email_attempt_count ?? 0),
+      Number(counts?.ip_attempt_count ?? 0),
     );
 
     if (!allowed) {
@@ -96,18 +131,29 @@ export async function completeLoginAttempt({
 
   try {
     await client.sql`BEGIN`;
+    await client.sql`
+      SELECT pg_advisory_xact_lock(hashtextextended(${`login-email:${emailHash}`}, 0))
+    `;
 
-    if (successful) {
-      await client.sql`
-        DELETE FROM login_attempts
-        WHERE (email_hash = ${emailHash} AND successful = FALSE)
-          OR id = ${attemptId}
-      `;
-    } else {
+    const completed = await client.sql<{ id: string }>`
+      UPDATE login_attempts
+      SET
+        successful = ${successful},
+        completed_at = clock_timestamp()
+      WHERE id = ${attemptId}
+        AND email_hash = ${emailHash}
+        AND completed_at IS NULL
+      RETURNING id::text
+    `;
+
+    if (successful && completed.rows[0]) {
       await client.sql`
         UPDATE login_attempts
-        SET successful = FALSE
-        WHERE id = ${attemptId}
+        SET failure_cleared_at = clock_timestamp()
+        WHERE email_hash = ${emailHash}
+          AND successful = FALSE
+          AND completed_at IS NOT NULL
+          AND failure_cleared_at IS NULL
       `;
     }
 
@@ -140,10 +186,18 @@ export async function recordAccountCreationRequest(
       ip_count: string;
     }>`
       SELECT
-        COUNT(*) FILTER (WHERE email_hash = ${emailHash})::text AS email_count,
-        COUNT(*) FILTER (WHERE ip_hash = ${ipHash})::text AS ip_count
-      FROM account_creation_requests
-      WHERE requested_at > NOW() - (${SIGNUP_LIMITS.windowMinutes} * INTERVAL '1 minute')
+        (
+          SELECT COUNT(*)::text
+          FROM account_creation_requests
+          WHERE email_hash = ${emailHash}
+            AND requested_at > NOW() - (${SIGNUP_LIMITS.windowMinutes} * INTERVAL '1 minute')
+        ) AS email_count,
+        (
+          SELECT COUNT(*)::text
+          FROM account_creation_requests
+          WHERE ip_hash = ${ipHash}
+            AND requested_at > NOW() - (${SIGNUP_LIMITS.windowMinutes} * INTERVAL '1 minute')
+        ) AS ip_count
     `;
     const counts = requests.rows[0];
     const allowed = isAccountCreationAllowed(

@@ -5,6 +5,7 @@ function authorize(
   auth?: {
     emailVerified: boolean;
     sessionValid: boolean;
+    accountStatus: 'active' | 'suspended' | 'closed';
     user: { id: string };
   },
 ) {
@@ -20,18 +21,17 @@ describe('route authorization states', () => {
     expect(authorize('/dashboard')).toBe(false);
   });
 
-  it('routes a pending session only to email verification', () => {
+  it('treats an unverified session as unauthenticated', () => {
     const pending = {
       user: { id: 'pending-user' },
       emailVerified: false,
       sessionValid: false,
+      accountStatus: 'active' as const,
     };
 
     expect(authorize('/verify-email', pending)).toBe(true);
-    expect(authorize('/dashboard', pending)).toBeInstanceOf(Response);
-    expect((authorize('/', pending) as Response).headers.get('location')).toBe(
-      'https://woodenbridge.example/verify-email',
-    );
+    expect(authorize('/dashboard', pending)).toBe(false);
+    expect(authorize('/', pending)).toBe(true);
   });
 
   it('allows a valid verified session and redirects auth pages', () => {
@@ -39,6 +39,7 @@ describe('route authorization states', () => {
       user: { id: 'verified-user' },
       emailVerified: true,
       sessionValid: true,
+      accountStatus: 'active' as const,
     };
 
     expect(authorize('/dashboard', authenticated)).toBe(true);
@@ -52,8 +53,22 @@ describe('route authorization states', () => {
       user: { id: 'stale-user' },
       emailVerified: true,
       sessionValid: false,
+      accountStatus: 'active' as const,
     };
 
     expect(authorize('/dashboard', stale)).toBe(false);
+  });
+
+  it('rejects suspended and closed accounts even with otherwise valid claims', () => {
+    for (const accountStatus of ['suspended', 'closed'] as const) {
+      expect(
+        authorize('/dashboard', {
+          user: { id: `${accountStatus}-user` },
+          emailVerified: true,
+          sessionValid: true,
+          accountStatus,
+        }),
+      ).toBe(false);
+    }
   });
 });

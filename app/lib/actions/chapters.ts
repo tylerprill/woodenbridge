@@ -1,6 +1,6 @@
 'use server';
 
-import { db, type VercelPoolClient } from '@vercel/postgres';
+import { db, type VercelPoolClient } from '@/app/lib/db';
 import { revalidatePath } from 'next/cache';
 
 import { requireVerifiedSession } from '@/app/lib/auth/session';

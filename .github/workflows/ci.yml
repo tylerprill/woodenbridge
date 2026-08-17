@@ -8,25 +8,153 @@ on:
 permissions:
   contents: read
 
+env:
+  APP_URL: https://field-atlas.example.test
+  AUTH_SECRET: ci-only-auth-secret-that-is-not-used-in-production
+  AUTH_HMAC_SECRET: ci-only-hmac-secret-that-is-not-used-in-production
+  MEDIA_GRANT_SECRET: ci-only-media-secret-that-is-not-used-in-production
+  DATABASE_URL: postgresql://ci:ci@127.0.0.1:5432/ci
+  EMAIL_DELIVERY: console
+
 jobs:
-  verify:
+  quality:
+    name: Lint and formatting
     runs-on: ubuntu-latest
-    timeout-minutes: 15
-    env:
-      APP_URL: http://localhost:3000
-      AUTH_SECRET: ci-only-auth-secret-that-is-not-used-in-production
-      DATABASE_URL: postgresql://ci:ci@127.0.0.1:5432/ci
-      EMAIL_DELIVERY: console
+    timeout-minutes: 10
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - name: Check out repository
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+      - name: Set up Node.js
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
         with:
-          node-version: 22
+          node-version-file: .nvmrc
           cache: npm
       - run: npm ci
       - run: npm run lint
       - run: npm run prettier:check
+
+  typecheck:
+    name: TypeScript
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+      - name: Set up Node.js
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+      - run: npm ci
       - run: npm run typecheck
+
+  unit-tests:
+    name: Unit and component tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+      - name: Set up Node.js
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+      - run: npm ci
       - run: npm run test:ci
+
+  dependency-audit:
+    name: Dependency audit
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+      - name: Set up Node.js
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+      - run: npm ci
       - run: npm audit --audit-level=high
+
+  build:
+    name: Production build
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+      - name: Set up Node.js
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+      - run: npm ci
       - run: npm run build
+
+  database-integration:
+    name: PostgreSQL migrations and authorization
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    services:
+      postgres:
+        image: postgis/postgis:16-3.5
+        env:
+          POSTGRES_DB: field_atlas_ci
+          POSTGRES_PASSWORD: migration-owner-password
+          POSTGRES_USER: migration_owner
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready --username=migration_owner --dbname=field_atlas_ci"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+    env:
+      DATABASE_URL: postgresql://field_atlas_runtime:runtime-only-ci-password@127.0.0.1:5432/field_atlas_ci
+      POSTGRES_URL: postgresql://field_atlas_runtime:runtime-only-ci-password@127.0.0.1:5432/field_atlas_ci
+      MIGRATION_DATABASE_URL: postgresql://migration_owner:migration-owner-password@127.0.0.1:5432/field_atlas_ci
+      FIELD_ATLAS_RUNTIME_DATABASE_PASSWORD: runtime-only-ci-password
+      AUTH_INTEGRATION_TESTS: '1'
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+      - name: Set up Node.js
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+      - run: npm ci
+      - name: Create the pre-migration application schema
+        run: psql "$MIGRATION_DATABASE_URL" --set=ON_ERROR_STOP=1 --file=test/integration/bootstrap.sql
+      - name: Apply migrations twice to prove idempotency
+        run: |
+          for pass in 1 2; do
+            echo "Migration pass ${pass}"
+            for migration in migrations/*.sql; do
+              psql "$MIGRATION_DATABASE_URL" --set=ON_ERROR_STOP=1 --file="$migration"
+            done
+          done
+      - name: Verify authentication database policy
+        run: psql "$MIGRATION_DATABASE_URL" --set=ON_ERROR_STOP=1 --file=test/integration/auth-database.sql
+      - name: Provision a least-privilege runtime role
+        run: >-
+          psql "$MIGRATION_DATABASE_URL"
+          --set=ON_ERROR_STOP=1
+          --set=runtime_role=field_atlas_runtime
+          --file=scripts/provision-runtime-database-role.sql
+      - name: Exercise production authentication flows against PostgreSQL
+        run: npm run test:integration:auth
+      - name: Verify runtime data access
+        run: psql "$DATABASE_URL" --set=ON_ERROR_STOP=1 --command='SELECT COUNT(*) FROM users;'
+      - name: Verify runtime DDL is denied
+        run: |
+          if psql "$DATABASE_URL" --set=ON_ERROR_STOP=1 --command='CREATE TABLE forbidden_runtime_ddl (id INTEGER);'; then
+            echo 'Runtime role unexpectedly has schema CREATE permission.' >&2
+            exit 1
+          fi
+          if psql "$DATABASE_URL" --set=ON_ERROR_STOP=1 --command='TRUNCATE TABLE users;'; then
+            echo 'Runtime role unexpectedly has TRUNCATE permission.' >&2
+            exit 1
+          fi

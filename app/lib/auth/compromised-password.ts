@@ -90,11 +90,11 @@ export async function getNewPasswordRejection(
       return 'That password appears in known data breaches. Choose a different password.';
     }
   } catch {
-    // Availability wins over an optional external lookup; local policy still applies.
     recordSecurityEvent(
       'password.compromised_check_unavailable',
       'unavailable',
     );
+    return 'We could not safely check that password right now. Please try again shortly.';
   }
 
   return undefined;

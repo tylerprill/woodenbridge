@@ -71,6 +71,7 @@ describe('atlas media policy', () => {
   it('constrains image dimensions and metadata', () => {
     const input = {
       entryId,
+      mediaId: photoId,
       pathname: createAtlasMediaPath(entryId, photoId, 'image/png'),
       thumbnailPathname: createAtlasThumbnailPath(entryId, photoId),
       width: 2048,

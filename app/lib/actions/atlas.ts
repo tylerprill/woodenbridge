@@ -1,7 +1,7 @@
 'use server';
 
 import { del } from '@vercel/blob';
-import { db, sql } from '@vercel/postgres';
+import { db, sql } from '@/app/lib/db';
 import { revalidatePath } from 'next/cache';
 
 import { requireVerifiedSession } from '@/app/lib/auth/session';

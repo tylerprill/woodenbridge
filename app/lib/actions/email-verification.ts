@@ -4,28 +4,25 @@ import { after } from 'next/server';
 import { redirect } from 'next/navigation';
 import { z } from 'zod';
 
-import { auth, signOut } from '@/auth';
+import { signOut } from '@/auth';
 import {
   clearEmailVerificationChallengeCookie,
   getEmailVerificationChallengeCookie,
   setEmailVerificationChallengeCookie,
 } from '@/app/lib/auth/email-verification-cookie';
 import {
-  createDecoyVerificationChallengeId,
   deleteExpiredEmailVerificationData,
-  findEmailVerificationUser,
-  findVerificationUserByChallenge,
-  verifyEmailCode,
+  findPendingRegistrationByChallenge,
+  verifyPendingRegistrationCode,
   type EmailVerificationUser,
 } from '@/app/lib/auth/email-verification';
-import { issueEmailVerification } from '@/app/lib/auth/email-verification-flow';
-import { normalizeEmail } from '@/app/lib/auth/password';
+import { issuePendingRegistrationVerification } from '@/app/lib/auth/email-verification-flow';
 import { sendWelcomeEmail } from '@/app/lib/auth/recovery-email';
 import { getClientIpHash } from '@/app/lib/auth/security';
 import { recordSecurityEvent } from '@/app/lib/auth/security-events';
 
 const GENERIC_VERIFICATION_MESSAGE =
-  'If that address has an unverified account, a new code is on its way.';
+  'If this registration can be continued, a new code is on its way.';
 
 export type EmailVerificationState =
   { status: 'error' | 'success'; message: string } | undefined;
@@ -36,46 +33,6 @@ function scheduleVerificationCleanup() {
       console.error('Email verification cleanup failed:', error);
     });
   });
-}
-
-export async function requestEmailVerification(
-  previousState: EmailVerificationState,
-  formData: FormData,
-): Promise<EmailVerificationState> {
-  const session = await auth();
-  const pendingSessionEmail =
-    session?.user && session.emailVerified === false
-      ? session.user.email
-      : undefined;
-  const parsedEmail = z
-    .string()
-    .trim()
-    .max(254)
-    .email('Enter a valid email address.')
-    .safeParse(pendingSessionEmail ?? formData.get('email'));
-
-  if (!parsedEmail.success) {
-    return {
-      status: 'error',
-      message:
-        parsedEmail.error.issues[0]?.message ?? 'Check your email address.',
-    };
-  }
-
-  const email = normalizeEmail(parsedEmail.data);
-  const ipHash = await getClientIpHash();
-  let challengeId = createDecoyVerificationChallengeId();
-
-  try {
-    const user = await findEmailVerificationUser(email);
-    challengeId = await issueEmailVerification({ email, ipHash, user });
-  } catch (error) {
-    console.error('Email verification delivery failed:', error);
-  }
-
-  await setEmailVerificationChallengeCookie(challengeId);
-  scheduleVerificationCleanup();
-  redirect('/verify-email?sent=1');
 }
 
 export async function resendEmailVerification(
@@ -92,14 +49,14 @@ export async function resendEmailVerification(
   }
 
   try {
-    const user = await findVerificationUserByChallenge(currentChallengeId);
+    const registration =
+      await findPendingRegistrationByChallenge(currentChallengeId);
 
-    if (user) {
+    if (registration) {
       const ipHash = await getClientIpHash();
-      const nextChallengeId = await issueEmailVerification({
-        email: normalizeEmail(user.email),
+      const nextChallengeId = await issuePendingRegistrationVerification({
+        registration,
         ipHash,
-        user,
         fallbackChallengeId: currentChallengeId,
       });
       await setEmailVerificationChallengeCookie(nextChallengeId);
@@ -145,7 +102,11 @@ export async function submitEmailVerificationCode(
 
   try {
     const ipHash = await getClientIpHash();
-    const result = await verifyEmailCode(challengeId, parsedCode.data, ipHash);
+    const result = await verifyPendingRegistrationCode(
+      challengeId,
+      parsedCode.data,
+      ipHash,
+    );
 
     if (result.status !== 'verified') {
       recordSecurityEvent(
@@ -191,16 +152,10 @@ export async function submitEmailVerificationCode(
     }
   });
 
-  const session = await auth();
-  const hasMatchingPendingSession = session?.user?.id === verifiedUser.id;
-  redirect(
-    hasMatchingPendingSession
-      ? '/dashboard?verified=success'
-      : '/login?verified=success',
-  );
+  redirect('/login?verified=success');
 }
 
 export async function restartEmailVerification() {
   await clearEmailVerificationChallengeCookie();
-  await signOut({ redirectTo: '/verify-email' });
+  await signOut({ redirectTo: '/sign-up' });
 }

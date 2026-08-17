@@ -1,7 +1,7 @@
 'use server';
 
 import { del, head } from '@vercel/blob';
-import { db, sql } from '@vercel/postgres';
+import { db, sql } from '@/app/lib/db';
 import { revalidatePath } from 'next/cache';
 
 import { requireVerifiedSession } from '@/app/lib/auth/session';
@@ -19,10 +19,16 @@ import {
   areAtlasMediaPathsPaired,
   atlasMediaDiscardSchema,
   atlasMediaRegistrationSchema,
+  getAtlasMediaPathId,
   isAllowedAtlasMediaType,
 } from '@/app/lib/atlas/media-policy';
 import { getAtlasBlobToken } from '@/app/lib/atlas/media-storage';
 import { type AtlasMediaRow, toAtlasMedia } from '@/app/lib/atlas/rows';
+import {
+  consumeAtlasMediaUploadIntent,
+  discardAtlasMediaUploadIntent,
+  lockAtlasMediaUploadIntentForRegistration,
+} from '@/app/lib/atlas/upload-intents';
 import { atlasEntryIdSchema } from '@/app/lib/atlas/validation';
 
 function failed(message = 'The photo could not be saved. Please try again.') {
@@ -83,7 +89,8 @@ export async function registerAtlasMediaAction(
       parsed.data.pathname,
       parsed.data.thumbnailPathname,
       parsed.data.entryId,
-    )
+    ) ||
+    getAtlasMediaPathId(parsed.data.pathname) !== parsed.data.mediaId
   ) {
     return { ok: false, error: 'invalid', message: 'Invalid photo.' };
   }
@@ -92,6 +99,42 @@ export async function registerAtlasMediaAction(
   const token = getAtlasBlobToken();
 
   try {
+    // Reject foreign or fabricated Blob paths before making storage requests.
+    // The transaction below repeats and locks these checks to close races.
+    const preflight = await sql<{ id: string }>`
+      SELECT entry.id
+      FROM atlas_entries AS entry
+      WHERE entry.id = ${mediaInput.entryId}
+        AND entry.user_id = ${session.user.id}
+        AND entry.deleted_at IS NULL
+        AND (
+          EXISTS (
+            SELECT 1
+            FROM atlas_media_upload_intents AS intent
+            WHERE intent.media_id = ${mediaInput.mediaId}
+              AND intent.user_id = ${session.user.id}
+              AND intent.entry_id = ${mediaInput.entryId}
+              AND intent.original_path = ${mediaInput.pathname}
+              AND intent.thumbnail_path = ${mediaInput.thumbnailPathname}
+              AND intent.consumed_at IS NULL
+              AND intent.cleanup_started_at IS NULL
+          )
+          OR EXISTS (
+            SELECT 1
+            FROM atlas_media AS media
+            WHERE media.id = ${mediaInput.mediaId}
+              AND media.user_id = ${session.user.id}
+              AND media.entry_id = ${mediaInput.entryId}
+              AND media.storage_path = ${mediaInput.pathname}
+              AND media.thumbnail_path = ${mediaInput.thumbnailPathname}
+          )
+        )
+      LIMIT 1
+    `;
+    if (!preflight.rows[0]) {
+      return { ok: false, error: 'invalid', message: 'Invalid photo.' };
+    }
+
     const [blob, thumbnail] = await Promise.all([
       head(mediaInput.pathname, { token }),
       head(mediaInput.thumbnailPathname, { token }),
@@ -142,12 +185,20 @@ export async function registerAtlasMediaAction(
             id, entry_id, storage_path, thumbnail_path, mime_type, width,
             height, byte_size, alt_text, sort_order, created_at
           FROM atlas_media
-          WHERE storage_path = $1
-            AND entry_id = $2
-            AND user_id = $3
+          WHERE id = $1
+            AND storage_path = $2
+            AND thumbnail_path = $3
+            AND entry_id = $4
+            AND user_id = $5
           LIMIT 1
         `,
-        [mediaInput.pathname, mediaInput.entryId, session.user.id],
+        [
+          mediaInput.mediaId,
+          mediaInput.pathname,
+          mediaInput.thumbnailPathname,
+          mediaInput.entryId,
+          session.user.id,
+        ],
       );
 
       if (existing.rows[0]) {
@@ -158,6 +209,22 @@ export async function registerAtlasMediaAction(
         };
       }
 
+      const uploadIntent = {
+        userId: session.user.id,
+        entryId: mediaInput.entryId,
+        mediaId: mediaInput.mediaId,
+        pathname: mediaInput.pathname,
+        thumbnailPathname: mediaInput.thumbnailPathname,
+      };
+      const hasUploadIntent = await lockAtlasMediaUploadIntentForRegistration(
+        client,
+        uploadIntent,
+      );
+      if (!hasUploadIntent) {
+        await client.query('ROLLBACK');
+        return { ok: false, error: 'invalid', message: 'Invalid photo.' };
+      }
+
       const count = await client.query<{ count: number | string }>(
         'SELECT COUNT(*)::int AS count FROM atlas_media WHERE entry_id = $1',
         [mediaInput.entryId],
@@ -166,9 +233,6 @@ export async function registerAtlasMediaAction(
 
       if (sortOrder >= ATLAS_MEDIA_MAX_FILES) {
         await client.query('ROLLBACK');
-        await del([mediaInput.pathname, mediaInput.thumbnailPathname], {
-          token,
-        }).catch(() => undefined);
         return {
           ok: false,
           error: 'invalid',
@@ -183,6 +247,7 @@ export async function registerAtlasMediaAction(
       const inserted = await client.query<AtlasMediaRow>(
         `
           INSERT INTO atlas_media (
+            id,
             entry_id,
             user_id,
             storage_path,
@@ -191,15 +256,17 @@ export async function registerAtlasMediaAction(
             width,
             height,
             byte_size,
+            thumbnail_byte_size,
             alt_text,
             sort_order
           )
-          VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
+          VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
           RETURNING
             id, entry_id, storage_path, thumbnail_path, mime_type, width,
             height, byte_size, alt_text, sort_order, created_at
         `,
         [
+          mediaInput.mediaId,
           mediaInput.entryId,
           session.user.id,
           mediaInput.pathname,
@@ -208,10 +275,19 @@ export async function registerAtlasMediaAction(
           mediaInput.width,
           mediaInput.height,
           blob.size,
+          thumbnail.size,
           mediaInput.altText || fallbackAlt,
           sortOrder,
         ],
       );
+      const consumed = await consumeAtlasMediaUploadIntent(
+        client,
+        uploadIntent,
+      );
+      if (!consumed) {
+        await client.query('ROLLBACK');
+        return { ok: false, error: 'invalid', message: 'Invalid photo.' };
+      }
       await client.query('COMMIT');
 
       revalidatePath('/dashboard');
@@ -244,7 +320,8 @@ export async function discardAtlasMediaUploadAction(
       parsed.data.pathname,
       parsed.data.thumbnailPathname,
       parsed.data.entryId,
-    )
+    ) ||
+    getAtlasMediaPathId(parsed.data.pathname) !== parsed.data.mediaId
   ) {
     return { ok: false, error: 'invalid', message: 'Invalid photo.' };
   }
@@ -271,17 +348,20 @@ export async function discardAtlasMediaUploadAction(
       SELECT id
       FROM atlas_media
       WHERE user_id = ${session.user.id}
-        AND (
-          storage_path = ${mediaInput.pathname}
-          OR thumbnail_path = ${mediaInput.thumbnailPathname}
-        )
+        AND id = ${mediaInput.mediaId}
+        AND storage_path = ${mediaInput.pathname}
+        AND thumbnail_path = ${mediaInput.thumbnailPathname}
       LIMIT 1
     `;
 
     if (!registered.rows[0]) {
-      await del([mediaInput.pathname, mediaInput.thumbnailPathname], {
-        token: getAtlasBlobToken(),
-      }).catch(() => undefined);
+      await discardAtlasMediaUploadIntent({
+        userId: session.user.id,
+        entryId: mediaInput.entryId,
+        mediaId: mediaInput.mediaId,
+        pathname: mediaInput.pathname,
+        thumbnailPathname: mediaInput.thumbnailPathname,
+      });
     }
 
     return { ok: true, data: { discarded: true } };

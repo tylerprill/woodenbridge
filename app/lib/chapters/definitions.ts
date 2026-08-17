@@ -37,6 +37,25 @@ export type AtlasChapter = AtlasChapterSummary & {
   entries: AtlasChapterEntry[];
 };
 
+type SharedAtlasChapterEntryWithoutCoordinates = Omit<
+  AtlasChapterEntry,
+  'latitude' | 'longitude'
+> & {
+  latitude?: never;
+  longitude?: never;
+};
+
+export type SharedAtlasChapter =
+  | (Omit<AtlasChapter, 'entries' | 'shareMap'> & {
+      shareMap: true;
+      entries: AtlasChapterEntry[];
+    })
+  | (Omit<AtlasChapter, 'entries' | 'shareMap' | 'shareLocationPrecision'> & {
+      shareMap: false;
+      shareLocationPrecision: 'approximate';
+      entries: SharedAtlasChapterEntryWithoutCoordinates[];
+    });
+
 export type AtlasChapterEditorChapter = Pick<
   AtlasChapter,
   | 'id'

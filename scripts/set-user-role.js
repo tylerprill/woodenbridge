@@ -1,4 +1,6 @@
-const { db } = require('@vercel/postgres');
+const { randomUUID } = require('node:crypto');
+
+const { createClient } = require('@vercel/postgres');
 
 const APP_ROLES = new Set(['user', 'admin', 'owner']);
 
@@ -11,48 +13,123 @@ async function main() {
     throw new Error('Usage: npm run role:set -- <email> <user|admin|owner>');
   }
 
-  const client = await db.connect();
+  const connectionString = process.env.MIGRATION_DATABASE_URL;
+
+  if (!connectionString) {
+    throw new Error(
+      'Set MIGRATION_DATABASE_URL to the direct operator connection before changing roles.',
+    );
+  }
+
+  const client = createClient({ connectionString });
+  await client.connect();
 
   try {
-    const result = await client.query(
+    await client.query('BEGIN');
+
+    const existing = await client.query(
+      `
+        SELECT id, email, role, email_verified_at
+        FROM users
+        WHERE LOWER(email) = $1
+        FOR UPDATE
+      `,
+      [email],
+    );
+    const account = existing.rows[0];
+
+    if (!account) {
+      throw new Error(`No account exists for ${email}.`);
+    }
+
+    if (account.role === role) {
+      await client.query('COMMIT');
+      console.log(`${account.email} is already assigned ${role}.`);
+      return;
+    }
+
+    const changed = await client.query(
       `
         UPDATE users
         SET role = $2::user_role,
             session_version = session_version + 1
-        WHERE LOWER(email) = $1
-          AND role <> $2::user_role
+        WHERE id = $1
         RETURNING email, role, email_verified_at
       `,
-      [email, role],
+      [account.id, role],
     );
 
-    if (result.rowCount === 0) {
-      const existing = await client.query(
-        'SELECT email, role, email_verified_at FROM users WHERE LOWER(email) = $1 LIMIT 1',
-        [email],
+    await client.query(
+      `
+        UPDATE auth_sessions
+        SET revoked_at = COALESCE(revoked_at, clock_timestamp())
+        WHERE user_id = $1
+          AND revoked_at IS NULL
+      `,
+      [account.id],
+    );
+
+    if (role === 'user') {
+      await client.query(
+        `
+          UPDATE privileged_recovery_code_sets
+          SET revoked_at = COALESCE(revoked_at, clock_timestamp())
+          WHERE user_id = $1
+            AND revoked_at IS NULL
+        `,
+        [account.id],
       );
-
-      if (existing.rowCount === 0) {
-        throw new Error(`No account exists for ${email}.`);
-      }
-
-      console.log(`${existing.rows[0].email} is already assigned ${role}.`);
-      return;
+      await client.query(
+        `
+          UPDATE privileged_passkey_recovery_grants
+          SET consumed_at = COALESCE(consumed_at, clock_timestamp())
+          WHERE user_id = $1
+            AND consumed_at IS NULL
+        `,
+        [account.id],
+      );
     }
 
-    const account = result.rows[0];
-    console.log(
-      `${account.email} is now ${account.role}. Existing sessions were revoked.`,
+    await client.query(
+      `
+        INSERT INTO auth_security_events (
+          event_id,
+          category,
+          event,
+          outcome,
+          target_user_id,
+          details
+        )
+        VALUES ($1, 'authentication', 'management.user_role_changed', 'success', $2, $3::jsonb)
+      `,
+      [
+        randomUUID(),
+        account.id,
+        JSON.stringify({
+          source: 'operator-script',
+          previousRole: account.role,
+          targetRole: role,
+        }),
+      ],
     );
 
-    if (!account.email_verified_at) {
+    await client.query('COMMIT');
+
+    const updatedAccount = changed.rows[0];
+    console.log(
+      `${updatedAccount.email} is now ${updatedAccount.role}. Existing sessions were revoked.`,
+    );
+
+    if (!updatedAccount.email_verified_at) {
       console.log(
         'This account must still verify its email before signing in.',
       );
     }
+  } catch (error) {
+    await client.query('ROLLBACK').catch(() => undefined);
+    throw error;
   } finally {
-    client.release();
-    await db.end();
+    await client.end();
   }
 }
 

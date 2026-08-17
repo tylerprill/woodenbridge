@@ -1,6 +1,6 @@
 import 'server-only';
 
-import { sql } from '@vercel/postgres';
+import { sql } from '@/app/lib/db';
 
 import { requireVerifiedSession } from '@/app/lib/auth/session';
 import type { AtlasData, AtlasEntry, JourneyState } from './definitions';

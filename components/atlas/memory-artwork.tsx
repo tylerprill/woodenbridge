@@ -4,12 +4,12 @@ import { ChevronLeftIcon, ChevronRightIcon } from '@heroicons/react/24/outline';
 import Image from 'next/image';
 import { useRef, useState } from 'react';
 
-import type { AtlasEntry } from '@/app/lib/atlas/definitions';
+import type { AtlasEntryPresentation } from '@/app/lib/atlas/definitions';
 import { getAtlasPlaceContextLabel } from '@/app/lib/atlas/place';
 import { BridgeScene } from '@/components/clean/bridge-scene';
 
 type MemoryArtworkProps = {
-  entry: AtlasEntry;
+  entry: AtlasEntryPresentation;
   index?: string;
   tone: 'alpine' | 'cedar' | 'ember';
   sizes?: string;

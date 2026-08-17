@@ -6,14 +6,15 @@ import { render, screen } from '@testing-library/react';
 
 import type { SignUpState } from '@/app/lib/auth/sign-up';
 import { SignUpFieldsForm } from '@/components/unclean/sign-up-form';
-import { VerificationCodeForm } from '@/components/unclean/verify-email-form';
+import VerifyEmailForm, {
+  VerificationCodeForm,
+} from '@/components/unclean/verify-email-form';
 
 jest.mock('@/app/lib/actions', () => ({
   createUser: jest.fn(),
 }));
 
 jest.mock('@/app/lib/actions/email-verification', () => ({
-  requestEmailVerification: jest.fn(),
   resendEmailVerification: jest.fn(),
   restartEmailVerification: jest.fn(),
   submitEmailVerificationCode: jest.fn(),
@@ -58,5 +59,17 @@ describe('account creation and verification UI', () => {
       screen.getByRole('button', { name: 'Send another code' }),
     ).toBeEnabled();
     expect(screen.getByText(/expires in 10 minutes/i)).toBeVisible();
+  });
+
+  it('returns a browser without a challenge to account creation', () => {
+    render(<VerifyEmailForm hasChallenge={false} codeSent={false} />);
+
+    expect(
+      screen.getByRole('link', { name: 'Return to create account' }),
+    ).toHaveAttribute('href', '/sign-up');
+    expect(
+      screen.getByText(/stays separate from active accounts/i),
+    ).toBeVisible();
+    expect(screen.queryByLabelText('Email address')).not.toBeInTheDocument();
   });
 });

@@ -1,0 +1,11 @@
+\set ON_ERROR_STOP on
+
+CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
+
+CREATE TABLE IF NOT EXISTS users (
+  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  first_name VARCHAR(255) NOT NULL,
+  last_name VARCHAR(255) NOT NULL,
+  email TEXT NOT NULL UNIQUE,
+  password TEXT NOT NULL
+);

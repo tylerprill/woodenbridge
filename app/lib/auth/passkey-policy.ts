@@ -1,0 +1,1 @@
+export const PASSKEY_CHALLENGE_TTL_SECONDS = 5 * 60;

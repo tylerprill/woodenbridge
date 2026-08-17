@@ -88,6 +88,16 @@ describe('photo upload UI', () => {
     // The thumbnail request starts before the unresolved original finishes.
     await waitFor(() => expect(upload).toHaveBeenCalledTimes(2));
     expect(registerAtlasMediaAction).not.toHaveBeenCalled();
+    const originalOptions = jest.mocked(upload).mock.calls[0][2];
+    const thumbnailOptions = jest.mocked(upload).mock.calls[1][2];
+    const originalPayload = JSON.parse(originalOptions.clientPayload ?? '{}');
+    expect(originalPayload).toMatchObject({
+      entryId: 'memory-1',
+      mediaId: '00000000-0000-4000-8000-000000000001',
+    });
+    expect(originalPayload).toEqual(
+      JSON.parse(thumbnailOptions.clientPayload ?? '{}'),
+    );
     resolveOriginal({ pathname: 'atlas/memory-1/photo.png' });
     resolveThumbnail({ pathname: 'atlas/memory-1/photo.thumb.webp' });
     await uploadInteraction;
@@ -95,6 +105,7 @@ describe('photo upload UI', () => {
     expect(registerAtlasMediaAction).toHaveBeenCalledWith(
       expect.objectContaining({
         entryId: 'memory-1',
+        mediaId: '00000000-0000-4000-8000-000000000001',
         width: 1200,
         height: 800,
         altText: 'Kyoto at dusk',

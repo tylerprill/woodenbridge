@@ -715,7 +715,13 @@ export function ChapterEditor({
                   <input
                     type="checkbox"
                     checked={shareMap}
-                    onChange={(event) => setShareMap(event.target.checked)}
+                    onChange={(event) => {
+                      const nextShareMap = event.target.checked;
+                      setShareMap(nextShareMap);
+                      if (!nextShareMap) {
+                        setShareLocationPrecision('approximate');
+                      }
+                    }}
                   />
                   <span
                     className={styles.chapterShareToggle}

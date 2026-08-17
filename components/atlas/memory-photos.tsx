@@ -157,6 +157,7 @@ export function MemoryPhotos({
     setMessage('');
 
     let pendingUpload: {
+      mediaId: string;
       pathname: string;
       thumbnailPathname: string;
     } | null = null;
@@ -175,7 +176,13 @@ export function MemoryPhotos({
           file.type as (typeof ATLAS_MEDIA_ALLOWED_TYPES)[number],
         );
         const thumbnailPathname = createAtlasThumbnailPath(entryId, mediaId);
-        pendingUpload = { pathname, thumbnailPathname };
+        pendingUpload = { mediaId, pathname, thumbnailPathname };
+        const clientPayload = JSON.stringify({
+          entryId,
+          mediaId,
+          pathname,
+          thumbnailPathname,
+        });
         const operationProgress = [0, 0];
         const reportProgress = (operation: 0 | 1, percentage: number) => {
           operationProgress[operation] = percentage / 100;
@@ -191,14 +198,14 @@ export function MemoryPhotos({
           upload(pathname, file, {
             access: 'private',
             handleUploadUrl: '/api/atlas/media/upload',
-            clientPayload: JSON.stringify({ entryId }),
+            clientPayload,
             multipart: true,
             onUploadProgress: ({ percentage }) => reportProgress(0, percentage),
           }),
           upload(thumbnailPathname, thumbnail, {
             access: 'private',
             handleUploadUrl: '/api/atlas/media/upload',
-            clientPayload: JSON.stringify({ entryId }),
+            clientPayload,
             multipart: false,
             onUploadProgress: ({ percentage }) => reportProgress(1, percentage),
           }),
@@ -211,6 +218,7 @@ export function MemoryPhotos({
         const thumbnailBlob = thumbnailResult.value;
         const result = await registerAtlasMediaAction({
           entryId,
+          mediaId,
           pathname: blob.pathname,
           thumbnailPathname: thumbnailBlob.pathname,
           width: dimensions.width,
@@ -221,6 +229,7 @@ export function MemoryPhotos({
         if (!result.ok) {
           await discardAtlasMediaUploadAction({
             entryId,
+            mediaId,
             pathname,
             thumbnailPathname,
           });

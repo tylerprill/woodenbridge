@@ -5,14 +5,12 @@ import { after } from 'next/server';
 
 import { z } from 'zod';
 
-import {
-  sendPasswordChangedEmail,
-  sendPasswordResetEmail,
-} from '@/app/lib/auth/recovery-email';
+import { sendPasswordResetEmail } from '@/app/lib/auth/recovery-email';
 import {
   consumePasswordResetToken,
   createPasswordResetToken,
   deleteExpiredPasswordResetData,
+  findPasswordResetContext,
   findRecoveryUser,
   hashResetToken,
   invalidatePasswordResetToken,
@@ -24,6 +22,7 @@ import { getClientIpHash, hashRateLimitKey } from '@/app/lib/auth/security';
 import { getNewPasswordRejection } from '@/app/lib/auth/compromised-password';
 import { hashPassword } from '@/app/lib/auth/password-hash';
 import { recordSecurityEvent } from '@/app/lib/auth/security-events';
+import { scheduleSecurityNotificationDelivery } from '@/app/lib/auth/security-notification-scheduler';
 
 const GENERIC_RECOVERY_MESSAGE =
   'If an account exists for that address, a password reset link is on its way. It will expire in 30 minutes.';
@@ -63,9 +62,14 @@ export async function requestPasswordReset(
           const user = await findRecoveryUser(email);
 
           if (user) {
-            const { token, tokenHash } = await createPasswordResetToken(
-              user.id,
-            );
+            const resetToken = await createPasswordResetToken(user.id);
+
+            // Eligibility is rechecked under the account-scoped issuance
+            // lock. A concurrent suspension intentionally turns this into the
+            // same generic no-delivery outcome as an unknown address.
+            if (!resetToken) return;
+
+            const { token, tokenHash } = resetToken;
 
             try {
               await sendPasswordResetEmail({
@@ -138,7 +142,21 @@ export async function resetPassword(
       };
     }
 
-    const passwordRejection = await getNewPasswordRejection(password);
+    const resetContext = await findPasswordResetContext(token);
+
+    if (!resetContext) {
+      recordSecurityEvent('password.reset', 'failure');
+      return {
+        status: 'error',
+        message: 'This reset link is invalid or expired. Request a new one.',
+      };
+    }
+
+    const passwordRejection = await getNewPasswordRejection(password, {
+      email: resetContext.email,
+      firstName: resetContext.first_name,
+      lastName: resetContext.last_name,
+    });
 
     if (passwordRejection) {
       return { status: 'error', message: passwordRejection };
@@ -155,15 +173,7 @@ export async function resetPassword(
       };
     }
 
-    try {
-      await sendPasswordChangedEmail({
-        to: user.email,
-        firstName: user.first_name,
-        changeId: tokenHash,
-      });
-    } catch (error) {
-      console.error('Password change confirmation email failed:', error);
-    }
+    scheduleSecurityNotificationDelivery();
     recordSecurityEvent('password.reset', 'success');
   } catch (error) {
     console.error('Password reset failed:', error);

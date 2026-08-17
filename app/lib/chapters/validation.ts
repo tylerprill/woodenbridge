@@ -43,7 +43,7 @@ const chapterMemoriesSchema = z
     },
   );
 
-export const atlasChapterInputSchema = z.object({
+const atlasChapterInputFields = {
   title: z
     .string()
     .trim()
@@ -64,9 +64,31 @@ export const atlasChapterInputSchema = z.object({
   visibility: z.enum(CHAPTER_VISIBILITIES),
   shareMap: z.boolean(),
   shareLocationPrecision: z.enum(CHAPTER_LOCATION_PRECISIONS),
-});
+} satisfies z.ZodRawShape;
 
-export const atlasChapterUpdateSchema = atlasChapterInputSchema.extend({
-  id: atlasChapterIdSchema,
-  version: z.number().int().positive(),
-});
+function enforceEffectiveSharePrecision<
+  T extends {
+    shareMap: boolean;
+    shareLocationPrecision: (typeof CHAPTER_LOCATION_PRECISIONS)[number];
+  },
+>(
+  chapter: T,
+): Omit<T, 'shareLocationPrecision'> & {
+  shareLocationPrecision: (typeof CHAPTER_LOCATION_PRECISIONS)[number];
+} {
+  const shareLocationPrecision: (typeof CHAPTER_LOCATION_PRECISIONS)[number] =
+    chapter.shareMap ? chapter.shareLocationPrecision : 'approximate';
+  return { ...chapter, shareLocationPrecision };
+}
+
+export const atlasChapterInputSchema = z
+  .object(atlasChapterInputFields)
+  .transform(enforceEffectiveSharePrecision);
+
+export const atlasChapterUpdateSchema = z
+  .object({
+    ...atlasChapterInputFields,
+    id: atlasChapterIdSchema,
+    version: z.number().int().positive(),
+  })
+  .transform(enforceEffectiveSharePrecision);

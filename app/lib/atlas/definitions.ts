@@ -27,6 +27,15 @@ export type AtlasEntry = {
   media: AtlasMedia[];
 };
 
+// Card and chapter presentation surfaces do not require coordinates. Shared
+// chapters use this shape so disabling the map can omit location coordinates
+// from the serialized server-component payload altogether.
+export type AtlasEntryPresentation = Omit<
+  AtlasEntry,
+  'latitude' | 'longitude'
+> &
+  Partial<Pick<AtlasEntry, 'latitude' | 'longitude'>>;
+
 export type AtlasMedia = {
   id: string;
   entryId: string;
@@ -80,6 +89,7 @@ export type AtlasViewInput = AtlasView;
 
 export type AtlasMediaRegistrationInput = {
   entryId: string;
+  mediaId: string;
   pathname: string;
   thumbnailPathname: string;
   width: number;
@@ -89,5 +99,5 @@ export type AtlasMediaRegistrationInput = {
 
 export type AtlasMediaDiscardInput = Pick<
   AtlasMediaRegistrationInput,
-  'entryId' | 'pathname' | 'thumbnailPathname'
+  'entryId' | 'mediaId' | 'pathname' | 'thumbnailPathname'
 >;

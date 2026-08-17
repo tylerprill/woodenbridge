@@ -5,6 +5,8 @@ import { redirect } from 'next/navigation';
 
 import { auth } from '@/auth';
 import { hasRequiredRole, type AppRole } from './roles';
+import { hasUserPasskey } from './passkey-state';
+import { isPasskeyVerificationRecent } from './session-policy';
 
 export const getVerifiedSession = cache(async () => {
   const session = await auth();
@@ -12,6 +14,7 @@ export const getVerifiedSession = cache(async () => {
   if (
     !session?.user?.id ||
     session.emailVerified !== true ||
+    session.accountStatus !== 'active' ||
     session.sessionValid !== true
   ) {
     return null;
@@ -38,4 +41,33 @@ export async function requireRole(requiredRole: AppRole) {
 
 export function requireOwnerSession() {
   return requireRole('owner');
+}
+
+export async function requirePrivilegedStepUp(
+  returnTo = '/dashboard/owner/users',
+) {
+  return requireRecentPasskeyStepUp(returnTo, '/dashboard/owner/users');
+}
+
+export async function requireRecentPasskeyStepUp(
+  returnTo = '/dashboard/security',
+  fallbackReturnTo = '/dashboard/security',
+) {
+  const session = await requireRole('admin');
+  const safeReturnTo =
+    returnTo.startsWith('/dashboard/') && !returnTo.startsWith('//')
+      ? returnTo
+      : fallbackReturnTo;
+  const hasPasskey = await hasUserPasskey(session.user.id);
+
+  if (
+    !hasPasskey ||
+    !isPasskeyVerificationRecent(session.mfaVerifiedAt, session.mfaMethod)
+  ) {
+    redirect(
+      `/dashboard/security?required=passkey&returnTo=${encodeURIComponent(safeReturnTo)}`,
+    );
+  }
+
+  return session;
 }

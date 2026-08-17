@@ -114,6 +114,19 @@ describe('chapter validation', () => {
     ).toBe(false);
   });
 
+  it('cannot retain exact sharing precision while the map is disabled', () => {
+    const parsed = atlasChapterInputSchema.parse(
+      chapterInput({
+        visibility: 'shared',
+        shareMap: false,
+        shareLocationPrecision: 'exact',
+      }),
+    );
+
+    expect(parsed.shareMap).toBe(false);
+    expect(parsed.shareLocationPrecision).toBe('approximate');
+  });
+
   it('caps prose between memories', () => {
     const parsed = atlasChapterInputSchema.safeParse(
       chapterInput({

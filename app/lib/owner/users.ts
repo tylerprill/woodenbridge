@@ -1,7 +1,8 @@
 import 'server-only';
 
-import { sql } from '@vercel/postgres';
+import { sql } from '@/app/lib/db';
 
+import type { AccountStatus } from '@/app/lib/auth/account-status';
 import { requireRole } from '@/app/lib/auth/session';
 import type { AppRole } from '@/app/lib/auth/roles';
 
@@ -12,13 +13,14 @@ type OwnerUserRow = {
   email: string;
   email_verified_at: Date | null;
   role: AppRole;
+  account_status: AccountStatus;
 };
 
 type OwnerUserCounts = {
   total: number;
   verified: number;
   admins: number;
-  owners: number;
+  suspended: number;
 };
 
 export type ManagedUser = {
@@ -27,6 +29,7 @@ export type ManagedUser = {
   email: string;
   emailVerified: boolean;
   role: AppRole;
+  accountStatus: AccountStatus;
 };
 
 export async function getManagedUsers(searchInput = '') {
@@ -37,7 +40,7 @@ export async function getManagedUsers(searchInput = '') {
   const [usersResult, countsResult] = await Promise.all([
     search
       ? sql<OwnerUserRow>`
-          SELECT id, first_name, last_name, email, email_verified_at, role
+          SELECT id, first_name, last_name, email, email_verified_at, role, account_status
           FROM users
           WHERE email ILIKE ${pattern}
              OR CONCAT_WS(' ', first_name, last_name) ILIKE ${pattern}
@@ -45,7 +48,7 @@ export async function getManagedUsers(searchInput = '') {
           LIMIT 100
         `
       : sql<OwnerUserRow>`
-          SELECT id, first_name, last_name, email, email_verified_at, role
+          SELECT id, first_name, last_name, email, email_verified_at, role, account_status
           FROM users
           ORDER BY LOWER(email)
           LIMIT 100
@@ -55,7 +58,7 @@ export async function getManagedUsers(searchInput = '') {
         COUNT(*)::integer AS total,
         COUNT(*) FILTER (WHERE email_verified_at IS NOT NULL)::integer AS verified,
         COUNT(*) FILTER (WHERE role = 'admin')::integer AS admins,
-        COUNT(*) FILTER (WHERE role = 'owner')::integer AS owners
+        COUNT(*) FILTER (WHERE account_status = 'suspended')::integer AS suspended
       FROM users
     `,
   ]);
@@ -64,7 +67,7 @@ export async function getManagedUsers(searchInput = '') {
     total: 0,
     verified: 0,
     admins: 0,
-    owners: 0,
+    suspended: 0,
   };
 
   return {
@@ -79,6 +82,7 @@ export async function getManagedUsers(searchInput = '') {
       email: user.email,
       emailVerified: Boolean(user.email_verified_at),
       role: user.role,
+      accountStatus: user.account_status,
     })),
   };
 }

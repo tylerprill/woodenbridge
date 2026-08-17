@@ -15,12 +15,14 @@
     "migrate:auth": "node -r dotenv/config ./scripts/migrate-auth.js",
     "prettier": "prettier --write --ignore-unknown .",
     "prettier:check": "prettier --check --ignore-unknown .",
+    "database:provision-runtime": "node -r dotenv/config ./scripts/provision-runtime-database-role.js",
     "role:set": "node -r dotenv/config ./scripts/set-user-role.js",
     "seed": "node -r dotenv/config ./scripts/seed.js",
     "start": "next start",
     "start80": "next start -p 80",
     "test": "jest",
     "test:ci": "jest --runInBand",
+    "test:integration:auth": "jest --config jest.integration.config.js --runInBand",
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
@@ -40,6 +42,8 @@
     "react": "19.2.8",
     "react-dom": "19.2.8",
     "sharp": "0.35.3",
+    "simplewebauthn-browser": "npm:@simplewebauthn/browser@13.3.0",
+    "simplewebauthn-server": "npm:@simplewebauthn/server@13.3.2",
     "tailwindcss": "3.4.19",
     "zod": "^3.22.2"
   },
@@ -48,7 +52,8 @@
     "@testing-library/react": "16.3.2",
     "@testing-library/user-event": "14.6.4",
     "@types/jest": "30.0.0",
-    "@types/node": "24.13.3",
+    "@types/node": "22.20.1",
+    "@types/pg": "8.23.0",
     "@types/react": "19.2.18",
     "@types/react-dom": "19.2.4",
     "dotenv": "17.4.2",
@@ -57,11 +62,12 @@
     "eslint-config-prettier": "10.1.8",
     "jest": "30.4.2",
     "jest-environment-jsdom": "30.4.1",
+    "pg": "8.23.0",
     "prettier": "3.9.6",
     "prettier-plugin-tailwindcss": "0.8.1",
     "typescript": "5.9.3"
   },
   "engines": {
-    "node": ">=20.9.0"
+    "node": "22.x"
   }
 }

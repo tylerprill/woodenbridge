@@ -1,3 +1,6 @@
+import { headers } from 'next/headers';
+
+import { CSP_NONCE_HEADER } from '@/app/lib/security/content-security-policy';
 import {
   SITE_DESCRIPTION,
   SITE_NAME,
@@ -16,9 +19,12 @@ const websiteJsonLd = {
   inLanguage: 'en-US',
 };
 
-export function WebsiteJsonLd() {
+export async function WebsiteJsonLd() {
+  const nonce = (await headers()).get(CSP_NONCE_HEADER) ?? undefined;
+
   return (
     <script
+      nonce={nonce}
       type="application/ld+json"
       dangerouslySetInnerHTML={{
         __html: JSON.stringify(websiteJsonLd).replace(/</g, '\\u003c'),

@@ -10,6 +10,7 @@ import {
   DUMMY_PASSWORD_HASH,
   hashPassword,
   isLegacyPasswordHash,
+  needsPasswordRehash,
   verifyPassword,
 } from '@/app/lib/auth/password-hash';
 
@@ -52,12 +53,25 @@ describe('password policy and storage', () => {
     );
 
     expect(isLegacyPasswordHash(legacyHash)).toBe(true);
+    expect(needsPasswordRehash(legacyHash)).toBe(true);
     await expect(
       verifyPassword(legacyHash, 'a sufficiently long old password'),
     ).resolves.toBe(true);
     await expect(
       verifyPassword(legacyHash, 'incorrect password'),
     ).resolves.toBe(false);
+  });
+
+  it('identifies Argon2 hashes that need the current work-factor policy', async () => {
+    const currentHash = await hashPassword('a sufficiently long new password');
+
+    expect(needsPasswordRehash(currentHash)).toBe(false);
+    expect(
+      needsPasswordRehash(
+        currentHash.replace('m=19456,t=2,p=1', 'm=12288,t=3,p=1'),
+      ),
+    ).toBe(true);
+    expect(needsPasswordRehash('not-a-supported-password-hash')).toBe(true);
   });
 
   it('uses a valid dummy hash for unknown-account timing work', async () => {

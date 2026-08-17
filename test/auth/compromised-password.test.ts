@@ -44,12 +44,12 @@ describe('compromised-password screening', () => {
     expect(options?.headers).toMatchObject({ 'Add-Padding': 'true' });
   });
 
-  it('fails open when the range service is unavailable', async () => {
+  it('fails safely when the range service is unavailable', async () => {
     jest.spyOn(global, 'fetch').mockRejectedValue(new Error('offline'));
     jest.spyOn(console, 'warn').mockImplementation(() => undefined);
 
     await expect(
       getNewPasswordRejection('this is an unusual offline test password'),
-    ).resolves.toBeUndefined();
+    ).resolves.toMatch(/could not safely check/i);
   });
 });

@@ -2,25 +2,16 @@ import 'server-only';
 
 import { createHmac } from 'node:crypto';
 import { headers } from 'next/headers';
-
-function getAuthSecret() {
-  const secret = process.env.AUTH_SECRET;
-
-  if (!secret) {
-    throw new Error('AUTH_SECRET is required for authentication security.');
-  }
-
-  return secret;
-}
+import { getAuthenticationHmacSecret } from './secrets';
 
 export function hashRateLimitKey(value: string) {
-  return createHmac('sha256', getAuthSecret())
+  return createHmac('sha256', getAuthenticationHmacSecret())
     .update(`rate-limit:v1:${value}`)
     .digest('hex');
 }
 
 export function hashEmailVerificationCode(challengeId: string, code: string) {
-  return createHmac('sha256', getAuthSecret())
+  return createHmac('sha256', getAuthenticationHmacSecret())
     .update(`verify-email:v1:${challengeId}:${code}`)
     .digest('hex');
 }

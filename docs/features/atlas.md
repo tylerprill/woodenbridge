@@ -31,7 +31,8 @@ The first Atlas release already provides the essential surface:
 - visited and ahead journey states;
 - a memory drawer for title, place, date, field note, and photographs;
 - search, filters, a memory tray, and the My Places collection;
-- private Vercel Blob media storage with ownership checks;
+- private Vercel Blob media storage with ownership checks, upload-intent
+  reservations, and bounded per-account storage;
 - optimistic pin placement with explicit, recoverable memory saves;
 - structured city, region, and country context from reverse geocoding;
 - photo-backed keepsake cards with collection thumbnails; and
@@ -101,8 +102,11 @@ The production chapter experience now includes:
 - an ordered, curved route and an editorial desktop/mobile reading experience;
 - private-by-default chapters and unlisted read-only links;
 - revocable sharing links that rotate when sharing is re-enabled;
-- optional maps and approximate shared coordinates by default;
-- ownership-checked private media delivery for shared chapter photographs; and
+- optional maps and approximate shared coordinates by default, with coordinates
+  omitted entirely from public chapter data when a map is disabled;
+- ownership-checked private originals, with public chapters restricted to
+  metadata-stripped WebP derivatives so EXIF data cannot bypass map privacy;
+  and
 - lazy thumbnails, bounded editor rendering, and off-screen content containment
   for responsive long chapters.
 

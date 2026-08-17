@@ -7,6 +7,9 @@ export const ATLAS_THUMBNAIL_MAX_BYTES = 2 * 1024 * 1024;
 export const ATLAS_THUMBNAIL_MAX_DIMENSION = 1024;
 export const ATLAS_THUMBNAIL_MIME_TYPE = 'image/webp';
 export const ATLAS_THUMBNAIL_QUALITY = 0.82;
+export const ATLAS_MEDIA_PAIR_RESERVED_BYTES =
+  ATLAS_MEDIA_MAX_BYTES + ATLAS_THUMBNAIL_MAX_BYTES;
+export const ATLAS_MEDIA_USER_STORAGE_MAX_BYTES = 512 * 1024 * 1024;
 export const ATLAS_MEDIA_ALLOWED_TYPES = [
   'image/jpeg',
   'image/png',
@@ -21,10 +24,14 @@ const extensionByType = {
 
 export const atlasMediaClientPayloadSchema = z.object({
   entryId: z.string().uuid(),
+  mediaId: z.string().uuid(),
+  pathname: z.string().min(1).max(512),
+  thumbnailPathname: z.string().min(1).max(512),
 });
 
 export const atlasMediaRegistrationSchema = z.object({
   entryId: z.string().uuid(),
+  mediaId: z.string().uuid(),
   pathname: z.string().min(1).max(512),
   thumbnailPathname: z.string().min(1).max(512),
   width: z.number().int().positive().max(ATLAS_MEDIA_MAX_DIMENSION),
@@ -34,6 +41,7 @@ export const atlasMediaRegistrationSchema = z.object({
 
 export const atlasMediaDiscardSchema = z.object({
   entryId: z.string().uuid(),
+  mediaId: z.string().uuid(),
   pathname: z.string().min(1).max(512),
   thumbnailPathname: z.string().min(1).max(512),
 });
@@ -73,8 +81,10 @@ export function isAtlasMediaUploadPath(pathname: string, entryId: string) {
   );
 }
 
-function mediaPathId(pathname: string) {
-  return pathname.split('/').at(-1)?.split('.')[0] ?? null;
+export function getAtlasMediaPathId(pathname: string) {
+  const candidate = pathname.split('/').at(-1)?.split('.')[0];
+  const parsed = z.string().uuid().safeParse(candidate);
+  return parsed.success ? parsed.data : null;
 }
 
 export function areAtlasMediaPathsPaired(
@@ -82,10 +92,12 @@ export function areAtlasMediaPathsPaired(
   thumbnailPathname: string,
   entryId: string,
 ) {
+  const mediaId = getAtlasMediaPathId(pathname);
   return (
     isAtlasMediaPath(pathname, entryId) &&
     isAtlasThumbnailPath(thumbnailPathname, entryId) &&
-    mediaPathId(pathname) === mediaPathId(thumbnailPathname)
+    mediaId !== null &&
+    mediaId === getAtlasMediaPathId(thumbnailPathname)
   );
 }
 

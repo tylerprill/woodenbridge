@@ -110,7 +110,7 @@ describe('authenticated Atlas media delivery', () => {
 
     const response = await GET(
       new Request(
-        `https://fieldatlas.test/api/atlas/media/${mediaId}?share=${shareId}`,
+        `https://fieldatlas.test/api/atlas/media/${mediaId}?variant=thumbnail&share=${shareId}`,
       ),
       { params: Promise.resolve({ mediaId }) },
     );
@@ -118,5 +118,24 @@ describe('authenticated Atlas media delivery', () => {
     expect(response.status).toBe(200);
     expect(getVerifiedSession).not.toHaveBeenCalled();
     expect(sql).toHaveBeenCalledTimes(1);
+    expect(get).toHaveBeenCalledWith(
+      source.thumbnailPath,
+      expect.objectContaining({ access: 'private' }),
+    );
+  });
+
+  it('never exposes an original upload through an unlisted share', async () => {
+    const shareId = '7d7762db-25db-4887-8a87-04ce90df1db3';
+    const response = await GET(
+      new Request(
+        `https://fieldatlas.test/api/atlas/media/${mediaId}?share=${shareId}`,
+      ),
+      { params: Promise.resolve({ mediaId }) },
+    );
+
+    expect(response.status).toBe(404);
+    expect(getVerifiedSession).not.toHaveBeenCalled();
+    expect(sql).not.toHaveBeenCalled();
+    expect(get).not.toHaveBeenCalled();
   });
 });

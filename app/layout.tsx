@@ -1,4 +1,5 @@
 import type { Metadata, Viewport } from 'next';
+import { connection } from 'next/server';
 
 import '@/app/global.css';
 import 'maplibre-gl/dist/maplibre-gl.css';
@@ -29,11 +30,16 @@ export const viewport: Viewport = {
   themeColor: '#f5f2e9',
 };
 
-export default function RootLayout({
+export default async function RootLayout({
   children,
 }: Readonly<{
   children: React.ReactNode;
 }>) {
+  // A fresh CSP nonce is generated in Proxy for every document request.
+  // Waiting for the request is required for Next.js to nonce its framework
+  // scripts; without this, statically generated auth pages would be blocked.
+  await connection();
+
   return (
     <html lang="en" data-scroll-behavior="smooth">
       <body>{children}</body>

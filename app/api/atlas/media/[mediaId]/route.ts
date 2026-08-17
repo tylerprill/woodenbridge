@@ -1,5 +1,5 @@
 import { get } from '@vercel/blob';
-import { sql } from '@vercel/postgres';
+import { sql } from '@/app/lib/db';
 
 import { getVerifiedSession } from '@/app/lib/auth/session';
 import { verifyAtlasMediaGrant } from '@/app/lib/atlas/media-grant';
@@ -29,6 +29,14 @@ export async function GET(
   const parsedShareId = atlasChapterIdSchema.safeParse(
     searchParams.get('share'),
   );
+  const isSharedAccess = parsedShareId.success;
+
+  // Unlisted chapter viewers receive only the canvas-transcoded WebP
+  // derivative. Original uploads can retain EXIF/location metadata and remain
+  // available exclusively through an authenticated owner path.
+  if (isSharedAccess && variant !== 'thumbnail') {
+    return new Response(null, { status: 404 });
+  }
   let row: MediaPathRow | undefined;
 
   if (parsedShareId.success) {
@@ -83,6 +91,9 @@ export async function GET(
   }
 
   if (!row) return new Response(null, { status: 404 });
+  if (isSharedAccess && !row.thumbnail_path) {
+    return new Response(null, { status: 404 });
+  }
 
   const thumbnailPath = variant === 'thumbnail' ? row.thumbnail_path : null;
   const storagePath = thumbnailPath ?? row.storage_path;
