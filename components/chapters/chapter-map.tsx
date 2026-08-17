@@ -147,7 +147,7 @@ export function ChapterMap({ entries }: { entries: ChapterMapMemory[] }) {
       center: [initialEntries[0].longitude, initialEntries[0].latitude],
       zoom: 3,
       attributionControl: false,
-      cooperativeGestures: true,
+      interactive: false,
       pitchWithRotate: false,
     });
     mapRef.current = map;
@@ -243,7 +243,7 @@ export function ChapterMap({ entries }: { entries: ChapterMapMemory[] }) {
         role="region"
         aria-label={`Map of ${entries.length} ordered chapter memories`}
       />
-      <p className={styles.chapterMapHint}>Hold ⌘ / Ctrl to zoom</p>
+      <p className={styles.chapterMapHint}>Fixed route view</p>
     </div>
   );
 }
