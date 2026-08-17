@@ -151,10 +151,6 @@ export function ChapterMap({ entries }: { entries: ChapterMapMemory[] }) {
       pitchWithRotate: false,
     });
     mapRef.current = map;
-    map.addControl(
-      new maplibregl.NavigationControl({ showCompass: false }),
-      'top-right',
-    );
     map.addControl(new maplibregl.AttributionControl({ compact: true }));
 
     const popup = new maplibregl.Popup({

@@ -163,18 +163,28 @@ export default function AtlasMap({
       style: process.env.NEXT_PUBLIC_ATLAS_STYLE_URL || DEFAULT_STYLE,
       center: [initialView.longitude, initialView.latitude],
       zoom: initialView.zoom,
-      bearing: initialView.bearing,
-      pitch: initialView.pitch,
+      bearing: 0,
+      pitch: 0,
       minZoom: 1,
       maxZoom: 18,
-      maxPitch: 65,
+      maxPitch: 0,
       attributionControl: false,
       cooperativeGestures: true,
+      boxZoom: false,
+      doubleClickZoom: false,
+      dragPan: false,
+      dragRotate: false,
+      keyboard: false,
+      pitchWithRotate: false,
+      scrollZoom: { around: 'center' },
+      touchPitch: false,
+      touchZoomRotate: { around: 'center' },
       canvasContextAttributes: { antialias: true },
       fadeDuration: 180,
     });
 
     mapRef.current = map;
+    map.touchZoomRotate.disableRotation();
     map.addControl(
       new maplibregl.AttributionControl({ compact: true }),
       'bottom-right',

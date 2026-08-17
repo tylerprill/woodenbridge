@@ -1935,19 +1935,6 @@
   transform: scale(1.08);
 }
 
-.chapterMapFrame :global(.maplibregl-ctrl-group) {
-  overflow: hidden;
-  border: 1px solid rgba(16, 35, 29, 0.15);
-  border-radius: 0.8rem;
-  background: rgba(251, 250, 245, 0.94);
-  box-shadow: 0 0.45rem 1.5rem rgba(16, 35, 29, 0.1);
-}
-
-.chapterMapFrame :global(.maplibregl-ctrl-group button) {
-  width: 2.35rem;
-  height: 2.35rem;
-}
-
 .chapterMapFrame :global(.maplibregl-ctrl-attrib) {
   color: var(--forest-600);
   font-size: 0.55rem;
