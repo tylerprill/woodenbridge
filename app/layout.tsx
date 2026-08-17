@@ -1,6 +1,7 @@
 import type { Metadata, Viewport } from 'next';
 
 import '@/app/global.css';
+import 'maplibre-gl/dist/maplibre-gl.css';
 import {
   SITE_DESCRIPTION,
   SITE_NAME,

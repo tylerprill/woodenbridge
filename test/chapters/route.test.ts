@@ -1,4 +1,5 @@
 import {
+  createChapterMarkerOffsets,
   createGentleChapterRoute,
   unwrapChapterCoordinates,
 } from '@/app/lib/chapters/route-geometry';
@@ -16,6 +17,49 @@ describe('chapter route geometry', () => {
     expect(route[18]).toEqual([-83, 43]);
     expect(route.at(-1)).toEqual([-82.5, 42.4]);
     expect(route[9][1]).not.toBe(43);
+  });
+
+  it('separates nearby stops without moving isolated markers', () => {
+    const offsets = createChapterMarkerOffsets([
+      { latitude: 41.8902, longitude: 12.4922 },
+      { latitude: 29.9792, longitude: 31.1342 },
+      { latitude: 30.3285, longitude: 35.4444 },
+      { latitude: 27.1751, longitude: 78.0421 },
+    ]);
+
+    expect(offsets).toEqual([
+      [0, 0],
+      [-13, 0],
+      [13, 0],
+      [0, 0],
+    ]);
+  });
+
+  it('fans out several stops that share the same area', () => {
+    const offsets = createChapterMarkerOffsets([
+      { latitude: 0, longitude: 0 },
+      { latitude: 0, longitude: 0 },
+      { latitude: 0, longitude: 0 },
+    ]);
+
+    expect(new Set(offsets.map((offset) => offset.join(','))).size).toBe(3);
+    expect(offsets.every((offset) => offset.some(Boolean))).toBe(true);
+  });
+
+  it('gives nearby stops more room on a world-spanning route', () => {
+    const offsets = createChapterMarkerOffsets([
+      { latitude: 41.8902, longitude: 12.4922 },
+      { latitude: 29.9792, longitude: 31.1342 },
+      { latitude: 30.3285, longitude: 35.4444 },
+      { latitude: -27.1259, longitude: -109.2766 },
+    ]);
+
+    expect(offsets.slice(0, 3)).toEqual([
+      [0, -18],
+      [16, 9],
+      [-16, 9],
+    ]);
+    expect(offsets[3]).toEqual([0, 0]);
   });
 
   it('bows each leg away from the point behind it', () => {

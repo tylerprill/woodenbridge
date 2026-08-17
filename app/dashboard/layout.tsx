@@ -1,5 +1,4 @@
 import type { Metadata } from 'next';
-import 'maplibre-gl/dist/maplibre-gl.css';
 import { getAccountDisplayName } from '@/app/lib/auth/account-display';
 import { requireVerifiedSession } from '@/app/lib/auth/session';
 import SideNav from '@/components/unclean/dashboard/sidenav';

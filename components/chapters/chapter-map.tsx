@@ -8,6 +8,7 @@ import maplibregl, {
 } from 'maplibre-gl';
 
 import {
+  createChapterMarkerOffsets,
   createGentleChapterRoute,
   unwrapChapterCoordinates,
 } from '@/app/lib/chapters/route-geometry';
@@ -64,6 +65,7 @@ function createChapterMarkers(
   popup: maplibregl.Popup,
 ) {
   const coordinates = unwrapChapterCoordinates(entries);
+  const offsets = createChapterMarkerOffsets(entries);
   return entries.map((entry, index) => {
     const element = document.createElement('button');
     element.type = 'button';
@@ -86,7 +88,11 @@ function createChapterMarkers(
     element.addEventListener('focus', showPopup);
     element.addEventListener('blur', hidePopup);
 
-    return new maplibregl.Marker({ element, anchor: 'center' })
+    return new maplibregl.Marker({
+      element,
+      anchor: 'center',
+      offset: offsets[index],
+    })
       .setLngLat(coordinates[index])
       .addTo(map);
   });
