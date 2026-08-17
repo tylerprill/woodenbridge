@@ -22,6 +22,7 @@ type KeepsakeCardProps = {
   variant?: KeepsakeVariant;
   href?: string;
   eager?: boolean;
+  showDescription?: boolean;
 };
 
 function getKeepsakeTone(entry: AtlasEntry): KeepsakeTone {
@@ -49,6 +50,7 @@ function CardContents({
   variant,
   href,
   eager,
+  showDescription,
 }: Omit<KeepsakeCardProps, 'tone'> & {
   tone: KeepsakeTone;
   variant: KeepsakeVariant;
@@ -70,6 +72,9 @@ function CardContents({
             <MapPinIcon aria-hidden="true" />
             <span>{place}</span>
           </p>
+          {showDescription && entry.description ? (
+            <p className="keepsake-card-row-description">{description}</p>
+          ) : null}
           <div className="keepsake-card-meta-main">
             <span>
               <CalendarDaysIcon aria-hidden="true" />
@@ -78,10 +83,12 @@ function CardContents({
             <small>{status}</small>
           </div>
         </div>
-        <ArrowUpRightIcon
-          className="keepsake-card-row-arrow"
-          aria-hidden="true"
-        />
+        {href ? (
+          <ArrowUpRightIcon
+            className="keepsake-card-row-arrow"
+            aria-hidden="true"
+          />
+        ) : null}
       </>
     );
 
@@ -169,6 +176,7 @@ export function KeepsakeCard({
   variant = 'grid',
   href,
   eager,
+  showDescription,
 }: KeepsakeCardProps) {
   const className = `keepsake-card keepsake-card-${variant}`;
   const resolvedTone = tone ?? getKeepsakeTone(entry);
@@ -180,6 +188,7 @@ export function KeepsakeCard({
       variant={variant}
       href={href}
       eager={eager}
+      showDescription={showDescription}
     />
   );
 

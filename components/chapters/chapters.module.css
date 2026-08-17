@@ -2110,6 +2110,16 @@
   font-size: 0.7rem;
 }
 
+.chapterStop :global(.keepsake-card-row-description) {
+  max-width: 42rem;
+  margin-top: 1rem;
+  color: var(--forest-600);
+  font-size: clamp(0.74rem, 1.15vw, 0.86rem);
+  line-height: 1.7;
+  text-wrap: pretty;
+  white-space: pre-wrap;
+}
+
 .chapterStop :global(.keepsake-card-row .keepsake-card-meta-main) {
   margin-top: 1.05rem;
   font-size: 0.62rem;
@@ -2468,6 +2478,12 @@
   .chapterStop :global(.keepsake-card-location) {
     margin-top: 0.45rem;
     font-size: 0.65rem;
+  }
+
+  .chapterStop :global(.keepsake-card-row-description) {
+    margin-top: 0.75rem;
+    font-size: 0.72rem;
+    line-height: 1.65;
   }
 
   .chapterStop :global(.keepsake-card-row .keepsake-card-meta-main) {

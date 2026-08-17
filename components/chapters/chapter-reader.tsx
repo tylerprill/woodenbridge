@@ -182,6 +182,7 @@ export function ChapterReader({
                     mode === 'owner' ? `/dashboard/card/${entry.id}` : undefined
                   }
                   eager={false}
+                  showDescription
                 />
               </div>
             </div>
