@@ -80,9 +80,7 @@ function NavigationSection({
 
 export default function NavLinks({ role }: { role: AppRole }) {
   const pathname = usePathname();
-  const visibleAccountLinks = hasRequiredRole(role, 'admin')
-    ? [...accountLinks, ...managementLinks]
-    : accountLinks;
+  const canManageAccounts = hasRequiredRole(role, 'admin');
 
   return (
     <div className="dashboard-nav-sections">
@@ -92,12 +90,14 @@ export default function NavLinks({ role }: { role: AppRole }) {
         links={atlasLinks}
         pathname={pathname}
       />
-      <NavigationSection
-        id="dashboard-account-navigation"
-        label="Account"
-        links={visibleAccountLinks}
-        pathname={pathname}
-      />
+      {canManageAccounts ? (
+        <NavigationSection
+          id="dashboard-account-navigation"
+          label="Account"
+          links={[...accountLinks, ...managementLinks]}
+          pathname={pathname}
+        />
+      ) : null}
     </div>
   );
 }

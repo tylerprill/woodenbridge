@@ -19,7 +19,7 @@ function renderNavigation(role: AppRole, pathname = '/dashboard') {
   render(<NavLinks role={role} />);
 }
 
-function getNavigationGroups() {
+function getPrivilegedNavigationGroups() {
   return {
     account: screen.getByRole('group', { name: 'Account' }),
     atlas: screen.getByRole('group', { name: 'Your atlas' }),
@@ -27,9 +27,9 @@ function getNavigationGroups() {
 }
 
 describe('dashboard navigation', () => {
-  it('separates atlas links from the account links available to every user', () => {
+  it('shows only atlas navigation to a standard user', () => {
     renderNavigation('user');
-    const { account, atlas } = getNavigationGroups();
+    const atlas = screen.getByRole('group', { name: 'Your atlas' });
 
     expect(within(atlas).getByRole('link', { name: 'Atlas' })).toHaveAttribute(
       'href',
@@ -42,8 +42,11 @@ describe('dashboard navigation', () => {
       within(atlas).getByRole('link', { name: 'My Chapters' }),
     ).toHaveAttribute('href', '/dashboard/chapters');
     expect(
-      within(account).getByRole('link', { name: 'Security' }),
-    ).toHaveAttribute('href', '/dashboard/security');
+      screen.queryByRole('group', { name: 'Account' }),
+    ).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole('link', { name: 'Security' }),
+    ).not.toBeInTheDocument();
     expect(
       screen.queryByRole('link', { name: 'Users' }),
     ).not.toBeInTheDocument();
@@ -53,7 +56,7 @@ describe('dashboard navigation', () => {
     'shows the Users account link to the %s role',
     (role) => {
       renderNavigation(role);
-      const { account } = getNavigationGroups();
+      const { account } = getPrivilegedNavigationGroups();
 
       expect(
         within(account).getByRole('link', { name: 'Security' }),
