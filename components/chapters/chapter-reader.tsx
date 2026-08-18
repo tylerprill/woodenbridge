@@ -1,5 +1,4 @@
 import {
-  ArrowDownIcon,
   ArrowLeftIcon,
   ArrowRightIcon,
   CalendarDaysIcon,
@@ -18,6 +17,7 @@ import {
   formatChapterDateRange,
 } from '@/app/lib/chapters/format';
 import { KeepsakeCard } from '@/components/atlas/keepsake-card';
+import { ChapterJumpLink } from './chapter-jump-link';
 import { ChapterMapLoader } from './chapter-map-loader';
 import {
   ChapterSaveNotice,
@@ -38,6 +38,11 @@ export function ChapterReader({
   const places = chapter.entries
     .map((entry) => entry.placeLabel || entry.placeName)
     .filter((place): place is string => Boolean(place));
+  const journeyStart = places[0];
+  const journeyEnd =
+    places.length > 1 && places.some((place) => place !== journeyStart)
+      ? places[places.length - 1]
+      : null;
   const showMap = mode === 'owner' || chapter.shareMap;
   const mapEntries = showMap
     ? chapter.entries.flatMap((entry) =>
@@ -56,7 +61,7 @@ export function ChapterReader({
           : [],
       )
     : [];
-  const sharedChapterStart = chapter.introduction
+  const chapterStart = chapter.introduction
     ? '#chapter-story'
     : showMap
       ? '#chapter-route'
@@ -142,9 +147,6 @@ export function ChapterReader({
               : 'A chapter from your atlas'}
           </p>
           <h1>{chapter.title}</h1>
-          {mode === 'owner' && chapter.introduction ? (
-            <p className={styles.chapterIntroduction}>{chapter.introduction}</p>
-          ) : null}
           <div className={styles.chapterHeroMeta}>
             <span>
               <CalendarDaysIcon aria-hidden="true" />
@@ -155,29 +157,49 @@ export function ChapterReader({
               {chapterMemoryLabel(chapter.memoryCount)}
             </span>
           </div>
-          {places.length ? (
-            <p className={styles.chapterPlaces}>
-              {places.slice(0, 4).join(' · ')}
-              {places.length > 4 ? ` · +${places.length - 4} more` : ''}
+          {journeyStart ? (
+            <p
+              className={styles.chapterPlaces}
+              aria-label={
+                journeyEnd
+                  ? `From ${journeyStart} to ${journeyEnd}`
+                  : journeyStart
+              }
+            >
+              <span>{journeyStart}</span>
+              {journeyEnd ? (
+                <>
+                  <ArrowRightIcon aria-hidden="true" />
+                  <span>{journeyEnd}</span>
+                </>
+              ) : null}
             </p>
           ) : null}
-          {mode === 'shared' ? (
-            <a className={styles.chapterHeroBegin} href={sharedChapterStart}>
-              Begin the journey
-              <ArrowDownIcon aria-hidden="true" />
-            </a>
-          ) : null}
+          <ChapterJumpLink
+            className={styles.chapterHeroBegin}
+            href={chapterStart}
+            label={
+              mode === 'shared' ? 'Begin the journey' : 'Read your chapter'
+            }
+          />
         </div>
       </header>
 
-      {mode === 'shared' && chapter.introduction ? (
+      {chapter.introduction ? (
         <section
           id="chapter-story"
-          className={styles.sharedChapterPrologue}
+          className={styles.chapterPrologue}
           aria-label="Chapter introduction"
+          tabIndex={-1}
         >
           <div>
-            <p className="section-kicker">The field note</p>
+            <p
+              className={`${styles.chapterFocusTarget} section-kicker`}
+              data-chapter-focus-target
+              tabIndex={-1}
+            >
+              The field note
+            </p>
             <span aria-hidden="true" />
           </div>
           <p>{chapter.introduction}</p>
@@ -189,11 +211,17 @@ export function ChapterReader({
           id="chapter-route"
           className={styles.routeSection}
           aria-labelledby="chapter-route-heading"
+          tabIndex={-1}
         >
           <div className={styles.chapterSectionHeading}>
             <div>
               <p className="section-kicker">The path between</p>
-              <h2 id="chapter-route-heading">
+              <h2
+                id="chapter-route-heading"
+                className={styles.chapterFocusTarget}
+                data-chapter-focus-target
+                tabIndex={-1}
+              >
                 {mode === 'shared'
                   ? 'The route, remembered.'
                   : 'Your route, remembered.'}
@@ -214,21 +242,35 @@ export function ChapterReader({
         id="chapter-memories"
         className={styles.chapterMemories}
         aria-labelledby="chapter-memories-heading"
+        tabIndex={-1}
       >
         <div className={styles.chapterSectionHeading}>
           <div>
             <p className="section-kicker">The chapter</p>
-            <h2 id="chapter-memories-heading">Memory by memory.</h2>
+            <h2
+              id="chapter-memories-heading"
+              className={styles.chapterFocusTarget}
+              data-chapter-focus-target
+              tabIndex={-1}
+            >
+              Memory by memory.
+            </h2>
           </div>
           <p>{chapterMemoryLabel(chapter.memoryCount)}, held in sequence.</p>
         </div>
-        <div className={styles.chapterTimeline}>
+        <ol
+          className={styles.chapterTimeline}
+          aria-label="Chapter memories in journey order"
+        >
           {chapter.entries.map((entry, index) => (
-            <div className={styles.chapterStopGroup} key={entry.id}>
+            <li className={styles.chapterStopGroup} key={entry.id}>
               {index > 0 && entry.transitionNote ? (
                 <div className={styles.chapterTransition}>
                   <span aria-hidden="true" />
-                  <p>{entry.transitionNote}</p>
+                  <div className={styles.chapterTransitionCopy}>
+                    <span>Between stops</span>
+                    <p>{entry.transitionNote}</p>
+                  </div>
                 </div>
               ) : null}
               <div className={styles.chapterStop}>
@@ -246,9 +288,9 @@ export function ChapterReader({
                   showDescription
                 />
               </div>
-            </div>
+            </li>
           ))}
-        </div>
+        </ol>
       </section>
 
       {mode === 'shared' ? (

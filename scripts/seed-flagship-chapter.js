@@ -6,13 +6,24 @@ const { db } = require('@vercel/postgres');
 const sharp = require('sharp');
 const { randomUUID } = require('node:crypto');
 
-const TARGET_EMAIL = 'prill2ts+woodenbridge-e2e-codex@gmail.com';
-const REQUIRED_CONFIRMATION = '--confirm-replace-e2e-atlas';
+const DEFAULT_TARGET_EMAIL = 'prill2ts+woodenbridge-e2e-codex@gmail.com';
+const REPLACE_CONFIRMATION = '--confirm-replace-e2e-atlas';
+const APPEND_CONFIRMATION = '--confirm-add-flagship';
 const APP_URL = 'https://woodenbridge.vercel.app';
 const MAX_ORIGINAL_BYTES = 10 * 1024 * 1024;
 const MAX_THUMBNAIL_BYTES = 2 * 1024 * 1024;
+const targetEmailArgument = process.argv.find((argument) =>
+  argument.startsWith('--target-email='),
+);
+const TARGET_EMAIL =
+  targetEmailArgument?.slice('--target-email='.length).trim().toLowerCase() ||
+  DEFAULT_TARGET_EMAIL;
 const isApply = process.argv.includes('--apply');
-const isConfirmed = process.argv.includes(REQUIRED_CONFIRMATION);
+const isAppend = process.argv.includes('--append');
+const requiredConfirmation = isAppend
+  ? APPEND_CONFIRMATION
+  : REPLACE_CONFIRMATION;
+const isConfirmed = process.argv.includes(requiredConfirmation);
 
 const stops = [
   {
@@ -395,6 +406,7 @@ async function preparePhoto(photo) {
   return {
     original: original.data,
     thumbnail,
+    thumbnailByteSize: thumbnail.length,
     width: original.info.width,
     height: original.info.height,
   };
@@ -413,33 +425,34 @@ async function uploadPhotos(token, seededStops, uploadedPaths) {
       const originalPath = `atlas/memories/${stop.id}/${photo.id}.jpg`;
       const thumbnailPath = `atlas/memories/${stop.id}/${photo.id}.thumbnail.webp`;
 
-      await put(originalPath, prepared.original, {
-        access: 'private',
-        token,
-        contentType: 'image/jpeg',
-        addRandomSuffix: false,
-        allowOverwrite: true,
-        maximumSizeInBytes: MAX_ORIGINAL_BYTES,
-        cacheControlMaxAge: 30 * 24 * 60 * 60,
-      });
-      uploadedPaths.push(originalPath);
-      await put(thumbnailPath, prepared.thumbnail, {
-        access: 'private',
-        token,
-        contentType: 'image/webp',
-        addRandomSuffix: false,
-        allowOverwrite: true,
-        maximumSizeInBytes: MAX_THUMBNAIL_BYTES,
-        cacheControlMaxAge: 30 * 24 * 60 * 60,
-      });
-      uploadedPaths.push(thumbnailPath);
-
+      uploadedPaths.push(originalPath, thumbnailPath);
+      await Promise.all([
+        put(originalPath, prepared.original, {
+          access: 'private',
+          token,
+          contentType: 'image/jpeg',
+          addRandomSuffix: false,
+          allowOverwrite: true,
+          maximumSizeInBytes: MAX_ORIGINAL_BYTES,
+          cacheControlMaxAge: 30 * 24 * 60 * 60,
+        }),
+        put(thumbnailPath, prepared.thumbnail, {
+          access: 'private',
+          token,
+          contentType: 'image/webp',
+          addRandomSuffix: false,
+          allowOverwrite: true,
+          maximumSizeInBytes: MAX_THUMBNAIL_BYTES,
+          cacheControlMaxAge: 30 * 24 * 60 * 60,
+        }),
+      ]);
       Object.assign(photo, {
         originalPath,
         thumbnailPath,
         width: prepared.width,
         height: prepared.height,
         byteSize: prepared.original.length,
+        thumbnailByteSize: prepared.thumbnailByteSize,
       });
       completed += 1;
       console.log(
@@ -488,9 +501,11 @@ async function insertFlagship(client, userId, seededStops, chapter) {
         `
           INSERT INTO atlas_media (
             id, entry_id, user_id, storage_path, thumbnail_path, mime_type,
-            width, height, byte_size, alt_text, sort_order
+            width, height, byte_size, thumbnail_byte_size, alt_text, sort_order
           )
-          VALUES ($1, $2, $3, $4, $5, 'image/jpeg', $6, $7, $8, $9, $10)
+          VALUES (
+            $1, $2, $3, $4, $5, 'image/jpeg', $6, $7, $8, $9, $10, $11
+          )
         `,
         [
           photo.id,
@@ -501,6 +516,7 @@ async function insertFlagship(client, userId, seededStops, chapter) {
           photo.width,
           photo.height,
           photo.byteSize,
+          photo.thumbnailByteSize,
           photo.alt,
           sortOrder,
         ],
@@ -558,7 +574,13 @@ async function main() {
     );
     const user = userResult.rows[0];
     if (!user || !user.email_verified_at) {
-      throw new Error('The verified Codex E2E account was not found.');
+      throw new Error(`A verified account was not found for ${TARGET_EMAIL}.`);
+    }
+
+    if (!isAppend && TARGET_EMAIL !== DEFAULT_TARGET_EMAIL) {
+      throw new Error(
+        'Replacement mode is restricted to the disposable Codex E2E account. Use --append for any other account.',
+      );
     }
 
     const [entryCount, chapterCount, mediaResult] = await Promise.all([
@@ -593,15 +615,31 @@ async function main() {
       `Flagship atlas: ${stops.length} memories and ${stops.reduce((count, stop) => count + stop.photos.length, 0)} photographs.`,
     );
 
+    if (isAppend) {
+      const existingFlagship = await client.query(
+        `
+          SELECT id
+          FROM atlas_chapters
+          WHERE user_id = $1
+            AND title = 'A World in Ten Wonders'
+          LIMIT 1
+        `,
+        [user.id],
+      );
+      if (existingFlagship.rowCount) {
+        throw new Error('This account already has the flagship chapter.');
+      }
+    }
+
     if (!isApply) {
       console.log(
-        `Dry run only. Use --apply ${REQUIRED_CONFIRMATION} to replace this account's atlas.`,
+        `Dry run only. Use --apply ${isAppend ? '--append ' : ''}${requiredConfirmation} to ${isAppend ? 'add the flagship to' : 'replace'} this account's atlas.`,
       );
       return;
     }
     if (!isConfirmed) {
       throw new Error(
-        `Refusing to replace data without ${REQUIRED_CONFIRMATION}.`,
+        `Refusing to ${isAppend ? 'add' : 'replace'} data without ${requiredConfirmation}.`,
       );
     }
 
@@ -628,12 +666,14 @@ async function main() {
 
     try {
       await client.query('BEGIN');
-      await client.query('DELETE FROM atlas_chapters WHERE user_id = $1', [
-        user.id,
-      ]);
-      await client.query('DELETE FROM atlas_entries WHERE user_id = $1', [
-        user.id,
-      ]);
+      if (!isAppend) {
+        await client.query('DELETE FROM atlas_chapters WHERE user_id = $1', [
+          user.id,
+        ]);
+        await client.query('DELETE FROM atlas_entries WHERE user_id = $1', [
+          user.id,
+        ]);
+      }
       await insertFlagship(client, user.id, seededStops, chapter);
       await client.query('COMMIT');
     } catch (error) {
@@ -641,7 +681,7 @@ async function main() {
       throw error;
     }
 
-    if (oldBlobPaths.length) {
+    if (!isAppend && oldBlobPaths.length) {
       await del(oldBlobPaths, { token }).catch((error) => {
         console.warn(`Old blob cleanup warning: ${error.message}`);
       });
@@ -654,17 +694,20 @@ async function main() {
           chapterId: chapter.id,
           shareId: chapter.shareId,
           shareUrl: `${APP_URL}/shared/chapters/${chapter.shareId}`,
+          mode: isAppend ? 'append' : 'replace',
           memories: seededStops.length,
           photographs: seededStops.reduce(
             (count, stop) => count + stop.photos.length,
             0,
           ),
-          removed: {
-            memories: Number(entryCount.rows[0].count),
-            chapters: Number(chapterCount.rows[0].count),
-            mediaRecords: mediaResult.rowCount,
-            blobObjects: oldBlobPaths.length,
-          },
+          removed: isAppend
+            ? null
+            : {
+                memories: Number(entryCount.rows[0].count),
+                chapters: Number(chapterCount.rows[0].count),
+                mediaRecords: mediaResult.rowCount,
+                blobObjects: oldBlobPaths.length,
+              },
         },
         null,
         2,

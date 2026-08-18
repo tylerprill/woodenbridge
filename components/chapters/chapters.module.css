@@ -1606,7 +1606,7 @@
 .chapterShareAction,
 .chapterPrivateAction {
   display: inline-flex;
-  min-height: 2.7rem;
+  min-height: 2.75rem;
   align-items: center;
   justify-content: center;
   border: 1px solid rgba(16, 35, 29, 0.18);
@@ -1624,6 +1624,10 @@
     border-color 180ms ease,
     background 180ms ease,
     color 180ms ease;
+}
+
+.chapterShareAction {
+  min-width: 7.4rem;
 }
 
 .chapterShareAction:hover,
@@ -1679,16 +1683,35 @@
 }
 
 .chapterSaveNotice {
+  position: fixed;
+  z-index: 40;
+  right: max(1rem, env(safe-area-inset-right));
+  bottom: max(1rem, env(safe-area-inset-bottom));
   display: grid;
+  width: min(24rem, calc(100vw - 2rem));
   grid-template-columns: auto minmax(0, 1fr) auto;
   align-items: center;
-  margin-bottom: 1rem;
   border: 1px solid rgba(76, 106, 91, 0.2);
   border-radius: 1rem;
   background: rgba(235, 239, 224, 0.92);
+  box-shadow: 0 1.1rem 3rem rgba(16, 35, 29, 0.18);
   color: var(--forest-600);
   padding: 0.8rem 0.9rem;
   gap: 0.75rem;
+  backdrop-filter: blur(1rem);
+  animation: chapter-notice-arrive 280ms cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+@keyframes chapter-notice-arrive {
+  from {
+    opacity: 0;
+    transform: translateY(0.75rem);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
 }
 
 .chapterSaveNotice > span {
@@ -1722,8 +1745,8 @@
 
 .chapterSaveNotice > button {
   display: grid;
-  width: 2.25rem;
-  height: 2.25rem;
+  width: 2.75rem;
+  height: 2.75rem;
   place-items: center;
   border-radius: 50%;
   color: var(--forest-600);
@@ -1742,8 +1765,18 @@
   margin-bottom: 0;
 }
 
+.chapterDetailNav > a:first-child {
+  display: inline-flex;
+  min-width: 2.75rem;
+  min-height: 2.75rem;
+  align-items: center;
+  justify-content: center;
+  margin-left: -0.65rem;
+  padding: 0.5rem 0.65rem;
+}
+
 .chapterDetailNav a:last-child {
-  min-height: 2.7rem;
+  min-height: 2.75rem;
   border: 1px solid rgba(16, 35, 29, 0.18);
   border-radius: 999px;
   padding: 0.65rem 0.9rem;
@@ -1754,6 +1787,23 @@
   border-color: var(--forest-950);
   background: var(--forest-950);
   color: var(--paper-light);
+}
+
+.chapterDetail[data-reader-mode='owner'] .chapterDetailActions > a:last-child {
+  border-color: var(--forest-950);
+  background: var(--forest-950);
+  color: var(--paper-light);
+  box-shadow: 0 0.55rem 1.35rem rgba(16, 35, 29, 0.12);
+}
+
+.chapterDetail[data-reader-mode='owner']
+  .chapterDetailActions
+  > a:last-child:hover,
+.chapterDetail[data-reader-mode='owner']
+  .chapterDetailActions
+  > a:last-child:focus-visible {
+  border-color: var(--timber);
+  background: var(--timber);
 }
 
 .chapterHero {
@@ -1776,11 +1826,29 @@
 }
 
 .chapterHeroStory {
+  position: relative;
   display: flex;
   min-width: 0;
   flex-direction: column;
   justify-content: center;
   padding: clamp(2rem, 5vw, 5rem);
+}
+
+.chapterDetail[data-reader-mode='owner'] .chapterHeroStory {
+  background:
+    radial-gradient(
+      circle at 100% 0,
+      rgba(183, 93, 52, 0.055),
+      transparent 17rem
+    ),
+    var(--paper-light);
+}
+
+.chapterDetail[data-reader-mode='owner']
+  .chapterHeroStory
+  :global(.section-kicker),
+.chapterPrologue :global(.section-kicker) {
+  color: #8e4327;
 }
 
 .chapterHeroStory h1 {
@@ -1790,7 +1858,7 @@
   font-weight: 400;
   letter-spacing: -0.062em;
   line-height: 0.91;
-  hyphens: auto;
+  hyphens: none;
   overflow-wrap: anywhere;
   text-wrap: balance;
 }
@@ -1798,16 +1866,6 @@
 .chapterHeroStory[data-long-title='true'] h1 {
   font-size: clamp(2.5rem, 4.8vw, 4.7rem);
   line-height: 0.98;
-}
-
-.chapterIntroduction {
-  max-width: 35rem;
-  margin-top: 1.4rem;
-  color: var(--forest-600);
-  font-family: Georgia, 'Times New Roman', serif;
-  font-size: clamp(1rem, 1.6vw, 1.25rem);
-  line-height: 1.65;
-  overflow-wrap: anywhere;
 }
 
 .chapterHeroMeta {
@@ -1835,11 +1893,27 @@
 }
 
 .chapterPlaces {
+  display: flex;
+  max-width: 100%;
+  align-items: center;
   margin-top: 0.9rem;
   color: rgba(76, 106, 91, 0.8);
-  font-size: 0.67rem;
-  line-height: 1.6;
+  gap: 0.5rem;
+  font-size: 0.65rem;
+  font-weight: 700;
+  line-height: 1.45;
+  text-transform: uppercase;
+}
+
+.chapterPlaces span {
+  min-width: 0;
   overflow-wrap: anywhere;
+}
+
+.chapterPlaces svg {
+  width: 0.9rem;
+  flex: 0 0 0.9rem;
+  opacity: 0.62;
 }
 
 .chapterDetail[data-reader-mode='shared'] .chapterHero {
@@ -1946,6 +2020,20 @@
     transform 180ms ease;
 }
 
+.chapterDetail[data-reader-mode='owner'] .chapterHeroBegin {
+  border-color: rgba(16, 35, 29, 0.18);
+  background: rgba(16, 35, 29, 0.055);
+  color: var(--forest-950);
+  text-shadow: none;
+}
+
+.chapterDetail[data-reader-mode='owner'] .chapterHeroBegin:hover,
+.chapterDetail[data-reader-mode='owner'] .chapterHeroBegin:focus-visible {
+  border-color: var(--forest-950);
+  background: var(--forest-950);
+  color: var(--paper-light);
+}
+
 .chapterHeroBegin:hover,
 .chapterHeroBegin:focus-visible {
   border-color: var(--paper-light);
@@ -1958,7 +2046,7 @@
   width: 0.95rem;
 }
 
-.sharedChapterPrologue {
+.chapterPrologue {
   display: grid;
   grid-template-columns: minmax(9rem, 0.28fr) minmax(0, 1fr);
   align-items: start;
@@ -1967,18 +2055,18 @@
   scroll-margin-top: 2rem;
 }
 
-.sharedChapterPrologue > div {
+.chapterPrologue > div {
   display: grid;
   gap: 1.1rem;
 }
 
-.sharedChapterPrologue > div > span {
+.chapterPrologue > div > span {
   width: min(100%, 8rem);
   height: 1px;
   background: rgba(16, 35, 29, 0.18);
 }
 
-.sharedChapterPrologue > p {
+.chapterPrologue > p {
   max-width: 60rem;
   color: var(--forest-800);
   font-family: Georgia, 'Times New Roman', serif;
@@ -1987,6 +2075,25 @@
   line-height: 1.55;
   overflow-wrap: anywhere;
   text-wrap: pretty;
+}
+
+.chapterFocusTarget:focus {
+  outline: none;
+}
+
+.chapterFocusTarget:focus-visible {
+  text-decoration-line: underline;
+  text-decoration-color: rgba(142, 67, 39, 0.7);
+  text-decoration-thickness: 0.08em;
+  text-underline-offset: 0.2em;
+}
+
+.chapterDetail[data-reader-mode='owner'] .chapterPrologue {
+  padding-top: clamp(3.5rem, 7vw, 6rem);
+}
+
+.chapterDetail[data-reader-mode='owner'] .chapterPrologue + .routeSection {
+  padding-top: clamp(3.5rem, 7vw, 6rem);
 }
 
 .routeSection,
@@ -2189,136 +2296,335 @@
 .chapterTimeline {
   position: relative;
   display: grid;
-  gap: 1rem;
+  margin: 0;
+  padding: 0;
+  gap: 0.7rem;
+  list-style: none;
 }
 
 .chapterStopGroup {
   min-width: 0;
+  padding-block: 0.25rem;
+  /* content-visibility adds paint containment; keep enough ink overflow for
+     the elevated card and waypoint shadows instead of clipping them. */
   content-visibility: auto;
-  contain-intrinsic-size: auto 19rem;
+  contain-intrinsic-size: auto 35rem;
+  overflow-clip-margin: 5rem;
+}
+
+@supports not (overflow-clip-margin: 5rem) {
+  .chapterStopGroup {
+    contain: layout style;
+    content-visibility: visible;
+  }
 }
 
 .chapterTransition {
   display: grid;
-  grid-template-columns: 3rem minmax(0, 1fr);
+  min-height: clamp(7.5rem, 13vw, 10rem);
+  grid-template-columns: 3.25rem minmax(0, 1fr);
   align-items: center;
-  padding: 0.9rem 0 1.7rem;
-  gap: 1rem;
+  padding: 1.25rem 0;
+  gap: 1.15rem;
 }
 
 .chapterTransition > span {
   z-index: 1;
   display: block;
-  width: 0.55rem;
-  height: 0.55rem;
+  width: 0.65rem;
+  height: 0.65rem;
   justify-self: center;
   border: 1px solid var(--forest-600);
   border-radius: 50%;
   background: var(--paper);
-  box-shadow: 0 0 0 0.35rem var(--paper);
+  box-shadow:
+    0 0 0 0.4rem var(--paper),
+    0 0 0 0.5rem rgba(76, 106, 91, 0.11);
 }
 
-.chapterTransition p {
+.chapterTransitionCopy {
+  display: grid;
+  max-width: 54rem;
+  grid-template-columns: auto minmax(2rem, 1fr);
+  align-items: center;
+  gap: 0.6rem 1rem;
+}
+
+.chapterTransitionCopy::after {
+  height: 1px;
+  background: linear-gradient(
+    90deg,
+    rgba(183, 93, 52, 0.32),
+    rgba(76, 106, 91, 0.04)
+  );
+  content: '';
+}
+
+.chapterTransitionCopy > span {
+  color: var(--forest-600);
+  font-size: 0.54rem;
+  font-weight: 800;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+
+.chapterTransitionCopy p {
+  grid-column: 1 / -1;
   max-width: 48rem;
   color: var(--forest-600);
   font-family: Georgia, 'Times New Roman', serif;
-  font-size: clamp(1rem, 2vw, 1.35rem);
+  font-size: clamp(1.05rem, 2vw, 1.45rem);
   font-style: italic;
-  line-height: 1.65;
+  letter-spacing: -0.012em;
+  line-height: 1.55;
   text-wrap: pretty;
   white-space: pre-wrap;
 }
 
 .chapterTimeline::before {
   position: absolute;
-  top: 1.5rem;
-  bottom: 1.5rem;
-  left: 1.45rem;
-  width: 1px;
-  background: rgba(76, 106, 91, 0.22);
+  top: 1.75rem;
+  bottom: 1.75rem;
+  left: 1.58rem;
+  width: 2px;
+  background: linear-gradient(
+    180deg,
+    rgba(183, 93, 52, 0.45),
+    rgba(76, 106, 91, 0.24) 20%,
+    rgba(76, 106, 91, 0.24) 80%,
+    rgba(183, 93, 52, 0.45)
+  );
   content: '';
 }
 
 .chapterStop {
   position: relative;
   display: grid;
-  grid-template-columns: 3rem minmax(0, 1fr);
+  grid-template-columns: 3.25rem minmax(0, 1fr);
   align-items: center;
-  gap: 1rem;
+  gap: 1.15rem;
+}
+
+.chapterStop::before {
+  position: absolute;
+  top: 50%;
+  left: 2.9rem;
+  width: 1.5rem;
+  height: 1px;
+  background: rgba(76, 106, 91, 0.22);
+  content: '';
+  pointer-events: none;
 }
 
 .chapterStopMarker {
   z-index: 1;
   display: grid;
-  width: 2.9rem;
-  height: 2.9rem;
+  width: 3.15rem;
+  height: 3.15rem;
   place-items: center;
   border: 1px solid rgba(16, 35, 29, 0.22);
   border-radius: 50%;
-  background: var(--paper);
-  box-shadow: 0 0 0 0.45rem var(--paper);
+  background: var(--paper-light);
+  box-shadow:
+    0 0 0 0.45rem var(--paper),
+    0 0.65rem 1.5rem rgba(16, 35, 29, 0.08);
+  transition:
+    border-color 240ms ease,
+    background 240ms ease,
+    box-shadow 240ms ease,
+    color 240ms ease,
+    transform 240ms cubic-bezier(0.22, 1, 0.36, 1);
 }
 
 .chapterStopMarker span {
-  color: var(--timber);
+  color: var(--forest-800);
   font-family: Georgia, 'Times New Roman', serif;
-  font-size: 0.78rem;
+  font-size: 0.84rem;
+  font-style: italic;
+}
+
+.chapterStopGroup:hover .chapterStopMarker,
+.chapterStopGroup:focus-within .chapterStopMarker {
+  border-color: var(--forest-950);
+  background: var(--forest-950);
+  box-shadow:
+    0 0 0 0.45rem var(--paper),
+    0 0.85rem 1.8rem rgba(16, 35, 29, 0.18);
+  transform: scale(1.04);
+}
+
+.chapterStopGroup:hover .chapterStopMarker span,
+.chapterStopGroup:focus-within .chapterStopMarker span {
+  color: var(--paper-light);
 }
 
 .chapterStop :global(.keepsake-card-row) {
-  grid-template-columns: minmax(15rem, 0.72fr) minmax(0, 1fr);
-  min-height: 16.5rem;
+  min-height: clamp(20rem, 34vw, 27rem);
+  grid-template-columns: minmax(17rem, 0.88fr) minmax(0, 1fr);
   align-items: stretch;
   overflow: hidden;
   padding: 0;
   border: 1px solid var(--chapter-line);
-  border-radius: 1.2rem;
-  background: rgba(251, 250, 245, 0.78);
+  border-radius: clamp(1.4rem, 2.5vw, 1.9rem);
+  background:
+    radial-gradient(
+      circle at 100% 0%,
+      rgba(183, 93, 52, 0.055),
+      transparent 15rem
+    ),
+    rgba(251, 250, 245, 0.9);
+  box-shadow: 0 1.2rem 3rem rgba(16, 35, 29, 0.06);
   gap: 0;
+  isolation: isolate;
+  transition:
+    border-color 240ms ease,
+    box-shadow 320ms ease,
+    transform 320ms cubic-bezier(0.22, 1, 0.36, 1);
 }
 
 .chapterStop :global(.keepsake-card-row > .bridge-card-art),
 .chapterStop :global(.keepsake-card-row > .atlas-memory-artwork) {
   width: 100%;
   height: 100%;
-  min-height: 16.5rem;
+  min-height: clamp(20rem, 34vw, 27rem);
   aspect-ratio: auto;
   border-radius: 0;
 }
 
+.chapterStop :global(.keepsake-card-row > .atlas-memory-artwork::after) {
+  position: absolute;
+  z-index: 2;
+  inset: 0;
+  background: linear-gradient(180deg, transparent 62%, rgba(16, 35, 29, 0.2));
+  content: '';
+  pointer-events: none;
+}
+
+.chapterStopGroup:hover :global(.keepsake-card-row),
+.chapterStopGroup:focus-within :global(.keepsake-card-row) {
+  border-color: rgba(76, 106, 91, 0.34);
+  box-shadow: 0 1.8rem 4.5rem rgba(16, 35, 29, 0.13);
+  transform: translateY(-0.28rem);
+}
+
+.chapterStopGroup:hover :global(.atlas-memory-artwork img),
+.chapterStopGroup:focus-within :global(.atlas-memory-artwork img) {
+  transform: scale(1.025);
+}
+
 .chapterStop :global(.keepsake-card-row-link) {
   align-content: center;
-  padding: clamp(1.5rem, 3.5vw, 2.5rem);
+  padding: clamp(2rem, 4.5vw, 3.75rem);
 }
 
 .chapterStop :global(.keepsake-card-index) {
-  display: none;
+  display: inline-flex;
+  width: max-content;
+  align-items: center;
+  margin-bottom: 1rem;
+  border: 1px solid rgba(183, 93, 52, 0.2);
+  border-radius: 999px;
+  background: rgba(183, 93, 52, 0.07);
+  color: var(--forest-800);
+  padding: 0.38rem 0.58rem;
+  gap: 0.25rem;
+  font-family: inherit;
+  font-size: 0.55rem;
+  font-style: normal;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  line-height: 1;
+  text-transform: uppercase;
+}
+
+.chapterStop :global(.keepsake-card-index::before) {
+  content: 'Stop';
 }
 
 .chapterStop :global(.keepsake-card-row-copy h3) {
   margin: 0;
-  font-size: clamp(1.65rem, 3vw, 2.35rem);
-  line-height: 1.02;
+  max-width: 15ch;
+  font-size: clamp(1.9rem, 3.6vw, 3.15rem);
+  letter-spacing: -0.048em;
+  line-height: 0.98;
+  text-wrap: balance;
 }
 
 .chapterStop :global(.keepsake-card-location) {
-  margin-top: 0.75rem;
-  font-size: 0.7rem;
+  margin-top: 0.85rem;
+  color: var(--forest-800);
+  font-size: 0.72rem;
+  font-weight: 750;
+}
+
+.chapterStop :global(.keepsake-card-location svg) {
+  color: var(--timber);
 }
 
 .chapterStop :global(.keepsake-card-row-description) {
-  max-width: 42rem;
-  margin-top: 1rem;
+  max-width: 36rem;
+  margin-top: 1.2rem;
   color: var(--forest-600);
-  font-size: clamp(0.74rem, 1.15vw, 0.86rem);
-  line-height: 1.7;
+  font-size: clamp(0.78rem, 1.15vw, 0.9rem);
+  line-height: 1.75;
   text-wrap: pretty;
   white-space: pre-wrap;
 }
 
 .chapterStop :global(.keepsake-card-row .keepsake-card-meta-main) {
-  margin-top: 1.05rem;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-top: 1.35rem;
+  padding-top: 1rem;
+  border-top: 1px solid rgba(16, 35, 29, 0.1);
+  gap: 1rem;
   font-size: 0.62rem;
+}
+
+.chapterStop :global(.keepsake-card-row .keepsake-card-meta-main small) {
+  padding: 0.32rem 0.5rem;
+  border-radius: 999px;
+  background: rgba(76, 106, 91, 0.09);
+  color: var(--forest-600);
+  font-size: 0.5rem;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.chapterStop :global(.atlas-carousel-control) {
+  width: 2.75rem;
+  height: 2.75rem;
+}
+
+.chapterStop :global(.atlas-carousel-control-previous) {
+  left: 0.8rem;
+}
+
+.chapterStop :global(.atlas-carousel-control-next) {
+  right: 0.8rem;
+}
+
+.chapterStop :global(.atlas-carousel-control svg) {
+  width: 1rem;
+}
+
+.chapterStop :global(.atlas-carousel-dots) {
+  display: flex;
+  padding: 0.1rem 0.2rem;
+  gap: 0.1rem;
+}
+
+.chapterStop :global(.atlas-carousel-dots button) {
+  width: 1.5rem;
+  height: 1.5rem;
+}
+
+.chapterStop :global(.atlas-carousel-count) {
+  right: 0.8rem;
+  bottom: 0.78rem;
+  padding: 0.3rem 0.45rem;
+  font-size: 0.5rem;
 }
 
 .chapterStopGroup:nth-child(even)
@@ -2652,21 +2958,21 @@
     margin-top: 1.1rem;
   }
 
-  .sharedChapterPrologue {
+  .chapterPrologue {
     grid-template-columns: minmax(0, 1fr);
     padding: 3.75rem 0 0;
     gap: 1.35rem;
   }
 
-  .sharedChapterPrologue > div {
+  .chapterPrologue > div {
     gap: 0.8rem;
   }
 
-  .sharedChapterPrologue > div > span {
+  .chapterPrologue > div > span {
     width: 4rem;
   }
 
-  .sharedChapterPrologue > p {
+  .chapterPrologue > p {
     font-size: clamp(1.15rem, 5.8vw, 1.5rem);
     line-height: 1.55;
   }
@@ -2730,7 +3036,12 @@
     grid-template-columns: minmax(0, 1fr);
     min-height: 0;
     padding: 0;
+    border-radius: 1.35rem;
     gap: 0;
+  }
+
+  .chapterStopGroup {
+    contain-intrinsic-size: auto 38rem;
   }
 
   .chapterStop :global(.keepsake-card-row > .bridge-card-art),
@@ -2747,7 +3058,7 @@
     height: auto;
     min-height: 0;
     aspect-ratio: 16 / 10;
-    border-radius: 1.15rem 1.15rem 0 0;
+    border-radius: 1.3rem 1.3rem 0 0;
   }
 
   .chapterStop :global(.keepsake-card-row-link),
@@ -2757,26 +3068,31 @@
     grid-column: 1;
     grid-row: 2;
     min-height: 7.25rem;
-    padding: 1rem 1.05rem 1.1rem;
+    padding: 1.25rem 1.2rem 1.35rem;
+  }
+
+  .chapterStop :global(.keepsake-card-index) {
+    margin-bottom: 0.8rem;
   }
 
   .chapterStop :global(.keepsake-card-row-copy h3) {
-    font-size: clamp(1.25rem, 6vw, 1.65rem);
+    font-size: clamp(1.5rem, 7vw, 1.9rem);
   }
 
   .chapterStop :global(.keepsake-card-location) {
-    margin-top: 0.45rem;
-    font-size: 0.65rem;
+    margin-top: 0.55rem;
+    font-size: 0.68rem;
   }
 
   .chapterStop :global(.keepsake-card-row-description) {
-    margin-top: 0.75rem;
-    font-size: 0.72rem;
-    line-height: 1.65;
+    margin-top: 0.9rem;
+    color: var(--forest-800);
+    font-size: 0.8rem;
+    line-height: 1.7;
   }
 
   .chapterStop :global(.keepsake-card-row .keepsake-card-meta-main) {
-    margin-top: 0.7rem;
+    margin-top: 0.9rem;
   }
 
   .chapterDetailNav a {
@@ -2788,7 +3104,7 @@
   }
 
   .chapterDetailNav a:last-child {
-    min-width: 2.7rem;
+    min-width: 2.75rem;
     justify-content: center;
     padding: 0.65rem;
   }
@@ -2800,9 +3116,21 @@
 
   .chapterShareAction,
   .chapterPrivateAction {
-    min-width: 2.7rem;
+    min-width: 2.75rem;
     padding: 0.65rem;
     font-size: 0;
+  }
+
+  .chapterPlaces {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
+    justify-items: start;
+    gap: 0.3rem;
+  }
+
+  .chapterPlaces svg {
+    margin-left: 0.15rem;
+    transform: rotate(90deg);
   }
 
   .chapterHeroStory h1 {
@@ -2843,19 +3171,35 @@
   }
 
   .chapterTimeline::before {
-    left: 1rem;
+    left: 1.02rem;
   }
 
   .chapterTransition {
+    min-height: 7rem;
     grid-template-columns: 2.15rem minmax(0, 1fr);
-    padding: 0.75rem 0 1.25rem;
-    gap: 0.7rem;
+    padding: 1rem 0;
+    gap: 0.75rem;
+  }
+
+  .chapterTransitionCopy {
+    gap: 0.5rem 0.75rem;
+  }
+
+  .chapterTransitionCopy p {
+    font-size: clamp(1rem, 5.4vw, 1.25rem);
+    line-height: 1.55;
   }
 
   .chapterStop {
     grid-template-columns: 2.15rem minmax(0, 1fr);
     align-items: start;
-    gap: 0.7rem;
+    gap: 0.75rem;
+  }
+
+  .chapterStop::before {
+    top: 1.72rem;
+    left: 1.75rem;
+    width: 1.15rem;
   }
 
   .chapterStopMarker {
@@ -2868,12 +3212,33 @@
   .chapterStopMarker span {
     font-size: 0.63rem;
   }
+
+  .chapterStop :global(.atlas-carousel-control) {
+    width: 2.75rem;
+    height: 2.75rem;
+    opacity: 1;
+  }
+
+  .chapterStop :global(.atlas-carousel-control-previous) {
+    left: 0.65rem;
+  }
+
+  .chapterStop :global(.atlas-carousel-control-next) {
+    right: 0.65rem;
+  }
+
+  .chapterStop :global(.atlas-carousel-count) {
+    display: none;
+  }
 }
 
 @media (prefers-reduced-motion: reduce) {
   .chapterCard,
   .chapterCardImage,
   .chapterCardOpen,
+  .chapterStopMarker,
+  .chapterStop :global(.keepsake-card-row),
+  .chapterStop :global(.atlas-memory-artwork img),
   .newChapterButton,
   .chapterSave {
     transition: none;
@@ -2881,5 +3246,9 @@
 
   .chapterSaveSpinner {
     animation-duration: 1.5s;
+  }
+
+  .chapterSaveNotice {
+    animation: none;
   }
 }

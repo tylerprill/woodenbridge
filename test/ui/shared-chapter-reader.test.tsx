@@ -4,7 +4,7 @@
 
 /* eslint-disable @next/next/no-img-element */
 
-import { render, screen } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 
 import type { SharedAtlasChapter } from '@/app/lib/chapters/definitions';
 import { ChapterReader } from '@/components/chapters/chapter-reader';
@@ -34,9 +34,9 @@ const chapter: SharedAtlasChapter = {
   introduction:
     'Ten places across the world, held together as one remembered journey.',
   version: 1,
-  memoryCount: 1,
+  memoryCount: 2,
   startDate: '2026-01-03',
-  endDate: '2026-01-03',
+  endDate: '2026-02-12',
   coverMedia: null,
   coverMediaId: null,
   visibility: 'shared',
@@ -69,6 +69,29 @@ const chapter: SharedAtlasChapter = {
       media: [],
       transitionNote: '',
     },
+    {
+      id: 'memory-2',
+      title: 'Kyoto by lantern light',
+      description: 'A quiet evening beneath the lanterns of Gion.',
+      placeLabel: 'Kyoto, Japan',
+      placeName: 'Kyoto',
+      placeLocality: 'Kyoto',
+      placeRegion: 'Kyoto',
+      placeCountry: 'Japan',
+      placeCountryCode: 'JP',
+      placeGeocoder: 'test',
+      placeGeocodedAt: '2026-02-12T00:00:00.000Z',
+      visitedOn: '2026-02-12',
+      recordState: 'saved',
+      journeyState: 'visited',
+      latitude: 35,
+      longitude: 135.8,
+      version: 1,
+      createdAt: '2026-02-12T00:00:00.000Z',
+      updatedAt: '2026-02-12T00:00:00.000Z',
+      media: [],
+      transitionNote: 'Eastward, desert stone gave way to lantern light.',
+    },
   ],
 };
 
@@ -86,6 +109,12 @@ describe('shared Chapter reader', () => {
       screen.getByRole('link', { name: /Begin the journey/i }),
     ).toHaveAttribute('href', '#chapter-story');
     expect(
+      screen.getByLabelText('From Petra, Jordan to Kyoto, Japan'),
+    ).toHaveTextContent('Petra, Jordan');
+    expect(
+      screen.getByLabelText('From Petra, Jordan to Kyoto, Japan'),
+    ).toHaveTextContent('Kyoto, Japan');
+    expect(
       screen.getByRole('region', { name: 'Chapter introduction' }),
     ).toHaveTextContent('Ten places across the world');
     expect(
@@ -97,6 +126,15 @@ describe('shared Chapter reader', () => {
     expect(document.querySelector('#chapter-route')).not.toBeNull();
     expect(document.querySelector('#chapter-memories')).not.toBeNull();
     expect(screen.getByTestId('chapter-map')).toBeInTheDocument();
+    const journey = screen.getByRole('list', {
+      name: 'Chapter memories in journey order',
+    });
+    expect(journey).toBeInTheDocument();
+    expect(screen.getAllByRole('listitem')).toHaveLength(2);
+    expect(journey).toHaveTextContent('Between stops');
+    expect(journey).toHaveTextContent(
+      'Eastward, desert stone gave way to lantern light.',
+    );
     expect(
       screen.getByRole('link', { name: 'Start your own atlas' }),
     ).toHaveAttribute('href', '/sign-up');
@@ -105,6 +143,58 @@ describe('shared Chapter reader', () => {
     ).toHaveAttribute('href', '#chapter-top');
     expect(
       screen.queryByRole('link', { name: /Open Petra at dawn keepsake/i }),
+    ).not.toBeInTheDocument();
+  });
+
+  it('keeps the owner opening concise and hands focus to its field note', async () => {
+    render(<ChapterReader chapter={chapter} mode="owner" />);
+
+    expect(screen.getByRole('link', { name: 'My Chapters' })).toHaveAttribute(
+      'href',
+      '/dashboard/chapters',
+    );
+    expect(screen.getByRole('link', { name: 'Edit chapter' })).toHaveAttribute(
+      'href',
+      '/dashboard/chapters/chapter-1/edit',
+    );
+    expect(
+      screen.getByRole('link', { name: 'Read your chapter' }),
+    ).toHaveAttribute('href', '#chapter-story');
+    expect(
+      screen.getByRole('region', { name: 'Chapter introduction' }),
+    ).toHaveTextContent('Ten places across the world');
+    const ownerHero = screen
+      .getByRole('heading', { name: 'Wonders without borders', level: 1 })
+      .closest('header');
+    expect(ownerHero).not.toHaveTextContent('Ten places across the world');
+
+    fireEvent.click(screen.getByRole('link', { name: 'Read your chapter' }));
+    await waitFor(() =>
+      expect(screen.getByText('The field note')).toHaveFocus(),
+    );
+    expect(
+      screen.getByRole('list', {
+        name: 'Chapter memories in journey order',
+      }),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole('link', { name: /Open Petra at dawn keepsake/i }),
+    ).toHaveAttribute('href', '/dashboard/card/memory-1');
+  });
+
+  it('sends the opening action to the route when there is no field note', () => {
+    render(
+      <ChapterReader
+        chapter={{ ...chapter, introduction: '' }}
+        mode="shared"
+      />,
+    );
+
+    expect(
+      screen.getByRole('link', { name: 'Begin the journey' }),
+    ).toHaveAttribute('href', '#chapter-route');
+    expect(
+      screen.queryByRole('region', { name: 'Chapter introduction' }),
     ).not.toBeInTheDocument();
   });
 });
