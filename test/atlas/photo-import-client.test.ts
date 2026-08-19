@@ -180,12 +180,36 @@ function analyzedHeic(file: File): AnalyzedImportPhoto {
   };
 }
 
-function installCanvas({ width = 4000, height = 3000 } = {}) {
+function installCanvas({
+  width = 4000,
+  height = 3000,
+  nativeDecodeFails = false,
+} = {}) {
   const close = jest.fn();
   Object.defineProperty(window, 'createImageBitmap', {
     configurable: true,
-    value: jest.fn().mockResolvedValue({ width, height, close }),
+    value: nativeDecodeFails
+      ? jest.fn().mockRejectedValue(new Error('Native decode unavailable.'))
+      : jest.fn().mockResolvedValue({ width, height, close }),
   });
+  if (nativeDecodeFails) {
+    jest.spyOn(window, 'Image').mockImplementation(() => {
+      const image = document.createElement('img');
+      Object.defineProperties(image, {
+        decode: {
+          configurable: true,
+          value: jest.fn().mockRejectedValue(new Error('Decode rejected.')),
+        },
+        src: {
+          configurable: true,
+          set: () => {
+            image.dispatchEvent(new Event('error'));
+          },
+        },
+      });
+      return image;
+    });
+  }
   const fillRect = jest.fn();
   const drawImage = jest.fn();
   jest.spyOn(HTMLCanvasElement.prototype, 'getContext').mockReturnValue({
@@ -510,6 +534,60 @@ describe('Atlas bulk-import photo preprocessing', () => {
     expect(close).toHaveBeenCalledTimes(1);
   });
 
+  it('uses native HEIC decoding for mobile Safari before loading the worker', async () => {
+    const { file } = makeFile('heic');
+    const { close, drawImage } = installCanvas({
+      width: 3024,
+      height: 4032,
+    });
+
+    const preview = await prepareAtlasImportPreview(file, analyzedHeic(file));
+
+    expect(preview).toMatchObject({ width: 768, height: 1024 });
+    expect(window.createImageBitmap).toHaveBeenCalledWith(file, {
+      imageOrientation: 'from-image',
+    });
+    expect(MockHeicWorker.instances).toHaveLength(0);
+    expect(drawImage).toHaveBeenCalledTimes(1);
+    expect(close).toHaveBeenCalledTimes(1);
+  });
+
+  it('uses the mobile Chrome image load event when decode rejects', async () => {
+    const { file } = makeFile('heic');
+    const { drawImage } = installCanvas({ nativeDecodeFails: true });
+    const image = document.createElement('img');
+    Object.defineProperties(image, {
+      naturalWidth: { configurable: true, value: 3024 },
+      naturalHeight: { configurable: true, value: 4032 },
+      decode: {
+        configurable: true,
+        value: jest.fn().mockRejectedValue(new Error('Decode rejected.')),
+      },
+      src: {
+        configurable: true,
+        set: () => {
+          image.dispatchEvent(new Event('load'));
+        },
+      },
+    });
+    jest.spyOn(window, 'Image').mockImplementation(() => image);
+    Object.defineProperty(URL, 'createObjectURL', {
+      configurable: true,
+      value: jest.fn().mockReturnValue('blob:mobile-heic'),
+    });
+    Object.defineProperty(URL, 'revokeObjectURL', {
+      configurable: true,
+      value: jest.fn(),
+    });
+
+    const preview = await prepareAtlasImportPreview(file, analyzedHeic(file));
+
+    expect(preview).toMatchObject({ width: 768, height: 1024 });
+    expect(image.decode).toHaveBeenCalledTimes(1);
+    expect(MockHeicWorker.instances).toHaveLength(0);
+    expect(drawImage).toHaveBeenCalledTimes(1);
+  });
+
   it('rejects decoded images above the 25 megapixel safety limit', async () => {
     const { file } = makeFile('jpeg');
     parseMock.mockResolvedValue({});
@@ -524,7 +602,11 @@ describe('Atlas bulk-import photo preprocessing', () => {
   it('lazily serializes HEIC workers, transfers unique requests, and resets after a crash', async () => {
     const first = makeFile('heic', { name: 'first.heic' }).file;
     const second = makeFile('heic', { name: 'second.heic' }).file;
-    installCanvas({ width: 3024, height: 4032 });
+    installCanvas({
+      width: 3024,
+      height: 4032,
+      nativeDecodeFails: true,
+    });
     const firstProgress: string[] = [];
     const secondProgress: string[] = [];
 

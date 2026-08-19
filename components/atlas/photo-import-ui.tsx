@@ -1,7 +1,6 @@
 'use client';
 
 import { PhotoIcon } from '@heroicons/react/24/outline';
-import Image from 'next/image';
 import type { RefObject } from 'react';
 import { getImportStepIndex } from './photo-import-helpers';
 import {
@@ -59,13 +58,17 @@ export function ImportPhotoPreview({
     );
   }
   return (
-    <Image
+    // Object URLs are already bounded, metadata-free derivatives and cannot be
+    // processed by Next's image optimizer. A native image is also more reliable
+    // for transient Blob URLs in mobile Safari.
+    // eslint-disable-next-line @next/next/no-img-element
+    <img
+      className={styles.photoPreview}
       src={item.previewUrl}
       alt=""
-      fill
-      sizes="(max-width: 680px) 50vw, 280px"
-      priority={priority}
-      unoptimized
+      decoding="async"
+      loading={priority ? 'eager' : 'lazy'}
+      fetchPriority={priority ? 'high' : 'auto'}
     />
   );
 }

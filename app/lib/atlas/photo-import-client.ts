@@ -28,6 +28,7 @@ const IMPORT_MASTER_QUALITY = 0.9;
 const IMPORT_THUMBNAIL_QUALITY = ATLAS_THUMBNAIL_QUALITY;
 const HEIC_WORKER_TIMEOUT_MS = 90_000;
 const HEIC_WORKER_IDLE_TIMEOUT_MS = 60_000;
+const IMAGE_LOAD_TIMEOUT_MS = 15_000;
 const HEIC_WORKER_NAME = 'field-atlas-heic-decoder';
 
 export type AtlasImportPhotoFormat =
@@ -1011,7 +1012,13 @@ async function createBitmap(blob: Blob) {
       imageOrientation: 'from-image',
     });
   } catch {
-    return window.createImageBitmap(blob);
+    try {
+      return await window.createImageBitmap(blob);
+    } catch {
+      // Safari can render formats through HTMLImageElement that its
+      // createImageBitmap implementation does not accept.
+      return null;
+    }
   }
 }
 
@@ -1038,9 +1045,42 @@ async function loadPhoto(blob: Blob): Promise<LoadedPhoto> {
   const objectUrl = URL.createObjectURL(blob);
   const image = new window.Image();
   image.decoding = 'async';
+  let removeLoadListeners = () => undefined;
+  const loaded = new Promise<void>((resolve, reject) => {
+    const timeout = window.setTimeout(() => {
+      removeLoadListeners();
+      reject(new Error('The browser took too long to load this photograph.'));
+    }, IMAGE_LOAD_TIMEOUT_MS);
+    const handleLoad = () => {
+      removeLoadListeners();
+      resolve();
+    };
+    const handleError = () => {
+      removeLoadListeners();
+      reject(new Error('The browser could not load this photograph.'));
+    };
+    removeLoadListeners = () => {
+      window.clearTimeout(timeout);
+      image.removeEventListener('load', handleLoad);
+      image.removeEventListener('error', handleError);
+    };
+    image.addEventListener('load', handleLoad, { once: true });
+    image.addEventListener('error', handleError, { once: true });
+  });
   image.src = objectUrl;
   try {
-    await image.decode();
+    // Chrome on iOS can render a camera-roll HEIC through WebKit even when
+    // HTMLImageElement.decode() rejects. Treat the real load event as equally
+    // authoritative and use decode() only as an eager optimization.
+    const decoded =
+      typeof image.decode === 'function'
+        ? image.decode().catch(() => loaded)
+        : loaded;
+    await Promise.race([loaded, decoded]);
+    removeLoadListeners();
+    if (image.naturalWidth < 1 || image.naturalHeight < 1) {
+      throw new Error('The photograph did not expose valid dimensions.');
+    }
     return {
       source: image,
       width: image.naturalWidth,
@@ -1048,8 +1088,26 @@ async function loadPhoto(blob: Blob): Promise<LoadedPhoto> {
       release: () => URL.revokeObjectURL(objectUrl),
     };
   } catch (error) {
+    removeLoadListeners();
     URL.revokeObjectURL(objectUrl);
     throw error;
+  }
+}
+
+async function loadHeicPhoto(file: File): Promise<LoadedPhoto> {
+  // Safari 17+ decodes HEIC natively. Prefer that path on iPhone and iPad so a
+  // camera-roll preview does not need to initialize the large WASM decoder.
+  // Chromium and older browsers fall through to the isolated worker.
+  try {
+    return await loadPhoto(file);
+  } catch {
+    const bitmap = await normalizeHeic(file);
+    return {
+      source: bitmap,
+      width: bitmap.width,
+      height: bitmap.height,
+      release: () => bitmap.close(),
+    };
   }
 }
 
@@ -1153,22 +1211,12 @@ export async function prepareAtlasImportPhoto(
     );
   }
 
-  let source: Blob | ImageBitmap = file;
   if (analysis.isHeic) {
     reportProgress(options.onProgress, {
       stage: 'converting-heic',
       percent: 15,
       message: 'Opening the HEIC photograph…',
     });
-    try {
-      source = await normalizeHeic(file);
-    } catch (error) {
-      console.error('Atlas HEIC conversion failed:', error);
-      throw new AtlasImportPhotoError(
-        'decode-failed',
-        'This HEIC photograph could not be opened.',
-      );
-    }
   }
 
   reportProgress(options.onProgress, {
@@ -1178,16 +1226,7 @@ export async function prepareAtlasImportPhoto(
   });
   let photo: LoadedPhoto;
   try {
-    if (source instanceof Blob) {
-      photo = await loadPhoto(source);
-    } else {
-      photo = {
-        source,
-        width: source.width,
-        height: source.height,
-        release: () => source.close(),
-      };
-    }
+    photo = analysis.isHeic ? await loadHeicPhoto(file) : await loadPhoto(file);
   } catch (error) {
     if (error instanceof AtlasImportPhotoError) throw error;
     console.error('Atlas photograph decode failed:', error);
@@ -1293,30 +1332,9 @@ export async function prepareAtlasImportPreview(
     );
   }
 
-  let source: Blob | ImageBitmap = file;
-  if (analysis.isHeic) {
-    try {
-      source = await normalizeHeic(file);
-    } catch (error) {
-      console.error('Atlas HEIC preview conversion failed:', error);
-      throw new AtlasImportPhotoError(
-        'decode-failed',
-        'This HEIC photograph could not be opened.',
-      );
-    }
-  }
-
   let photo: LoadedPhoto;
   try {
-    photo =
-      source instanceof Blob
-        ? await loadPhoto(source)
-        : {
-            source,
-            width: source.width,
-            height: source.height,
-            release: () => source.close(),
-          };
+    photo = analysis.isHeic ? await loadHeicPhoto(file) : await loadPhoto(file);
   } catch (error) {
     if (error instanceof AtlasImportPhotoError) throw error;
     console.error('Atlas photograph preview decode failed:', error);
