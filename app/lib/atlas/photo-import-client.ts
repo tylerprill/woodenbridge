@@ -1147,6 +1147,114 @@ function canvasToBlob(
   });
 }
 
+function readBlobBytes(blob: Blob) {
+  if (typeof blob.arrayBuffer === 'function') {
+    return blob.arrayBuffer().then((buffer) => new Uint8Array(buffer));
+  }
+
+  return new Promise<Uint8Array>((resolve, reject) => {
+    const reader = new FileReader();
+    reader.addEventListener(
+      'load',
+      () => {
+        if (!(reader.result instanceof ArrayBuffer)) {
+          reject(new Error('The prepared photograph could not be read.'));
+          return;
+        }
+        resolve(new Uint8Array(reader.result));
+      },
+      { once: true },
+    );
+    reader.addEventListener(
+      'error',
+      () =>
+        reject(reader.error ?? new Error('The photograph could not be read.')),
+      { once: true },
+    );
+    reader.readAsArrayBuffer(blob);
+  });
+}
+
+function jpegMarkerHasNoLength(marker: number) {
+  return (
+    marker === 0x01 ||
+    marker === 0xd8 ||
+    marker === 0xd9 ||
+    (marker >= 0xd0 && marker <= 0xd7)
+  );
+}
+
+function isPrivateJpegMarker(marker: number) {
+  // APP1 stores EXIF/GPS and XMP, APP13 stores IPTC/Photoshop metadata, and
+  // COM may contain user-authored text. Mobile WebKit can preserve these
+  // segments when canvas.toBlob() encodes a JPEG, so remove them explicitly
+  // instead of trusting the browser encoder to honor our privacy boundary.
+  return marker === 0xe1 || marker === 0xed || marker === 0xfe;
+}
+
+async function stripPrivateJpegSegments(blob: Blob) {
+  const bytes = await readBlobBytes(blob);
+  if (bytes.length < 4 || bytes[0] !== 0xff || bytes[1] !== 0xd8) {
+    throw new AtlasImportPhotoError(
+      'encode-failed',
+      'This browser produced an invalid photograph.',
+    );
+  }
+
+  const retained: BlobPart[] = [bytes.slice(0, 2)];
+  let cursor = 2;
+  let removedPrivateMetadata = false;
+
+  while (cursor < bytes.length) {
+    const markerStart = cursor;
+    if (bytes[cursor] !== 0xff) {
+      throw new AtlasImportPhotoError(
+        'encode-failed',
+        'This browser produced an invalid photograph.',
+      );
+    }
+    while (cursor < bytes.length && bytes[cursor] === 0xff) cursor += 1;
+    if (cursor >= bytes.length) break;
+
+    const marker = bytes[cursor];
+    cursor += 1;
+    if (marker === 0xda) {
+      retained.push(bytes.slice(markerStart));
+      cursor = bytes.length;
+      break;
+    }
+    if (jpegMarkerHasNoLength(marker)) {
+      retained.push(bytes.slice(markerStart, cursor));
+      if (marker === 0xd9) cursor = bytes.length;
+      continue;
+    }
+    if (cursor + 2 > bytes.length) {
+      throw new AtlasImportPhotoError(
+        'encode-failed',
+        'This browser produced an invalid photograph.',
+      );
+    }
+
+    const segmentLength = (bytes[cursor] << 8) | bytes[cursor + 1];
+    if (segmentLength < 2 || cursor + segmentLength > bytes.length) {
+      throw new AtlasImportPhotoError(
+        'encode-failed',
+        'This browser produced an invalid photograph.',
+      );
+    }
+    const segmentEnd = cursor + segmentLength;
+    if (isPrivateJpegMarker(marker)) {
+      removedPrivateMetadata = true;
+    } else {
+      retained.push(bytes.slice(markerStart, segmentEnd));
+    }
+    cursor = segmentEnd;
+  }
+
+  if (!removedPrivateMetadata) return blob;
+  return new Blob(retained, { type: 'image/jpeg' });
+}
+
 async function renderDerivative(
   photo: LoadedPhoto,
   dimensions: { width: number; height: number },
@@ -1172,7 +1280,10 @@ async function renderDerivative(
     const qualities = [quality, Math.max(0.68, quality - 0.1), 0.62];
     for (const candidate of qualities) {
       const blob = await canvasToBlob(canvas, type, candidate);
-      if (blob.size <= maximumBytes) return blob;
+      if (blob.size > maximumBytes) continue;
+      const sanitized =
+        type === 'image/jpeg' ? await stripPrivateJpegSegments(blob) : blob;
+      if (sanitized.size <= maximumBytes) return sanitized;
     }
     throw new AtlasImportPhotoError(
       'encode-failed',

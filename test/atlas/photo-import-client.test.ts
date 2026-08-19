@@ -220,9 +220,56 @@ function installCanvas({
   jest
     .spyOn(HTMLCanvasElement.prototype, 'toBlob')
     .mockImplementation((callback, type) => {
-      callback(new Blob(['prepared'], { type: type ?? 'image/png' }));
+      const outputType = type ?? 'image/png';
+      callback(
+        new Blob(
+          [
+            outputType === 'image/jpeg'
+              ? new Uint8Array([0xff, 0xd8, 0xff, 0xd9])
+              : 'prepared',
+          ],
+          { type: outputType },
+        ),
+      );
     });
   return { close, drawImage, fillRect };
+}
+
+function jpegWithPrivateMetadata() {
+  const segment = (marker: number, payload: number[]) =>
+    new Uint8Array([0xff, marker, 0, payload.length + 2, ...payload]);
+  return new Blob(
+    [
+      new Uint8Array([0xff, 0xd8]),
+      segment(0xe0, [0x4a, 0x46]),
+      segment(0xe1, [0x45, 0x78, 0x69, 0x66]),
+      segment(0xed, [0x49, 0x50, 0x54, 0x43]),
+      segment(0xfe, [0x6e, 0x6f, 0x74, 0x65]),
+      new Uint8Array([0xff, 0xda, 0, 2, 0x11, 0x22, 0xff, 0xd9]),
+    ],
+    { type: 'image/jpeg' },
+  );
+}
+
+async function blobBytes(blob: Blob) {
+  if (typeof blob.arrayBuffer === 'function') {
+    return new Uint8Array(await blob.arrayBuffer());
+  }
+  return new Promise<Uint8Array>((resolve, reject) => {
+    const reader = new FileReader();
+    reader.addEventListener(
+      'load',
+      () =>
+        reader.result instanceof ArrayBuffer
+          ? resolve(new Uint8Array(reader.result))
+          : reject(new Error('Blob did not resolve to bytes.')),
+      { once: true },
+    );
+    reader.addEventListener('error', () => reject(reader.error), {
+      once: true,
+    });
+    reader.readAsArrayBuffer(blob);
+  });
 }
 
 describe('Atlas bulk-import photo preprocessing', () => {
@@ -513,6 +560,32 @@ describe('Atlas bulk-import photo preprocessing', () => {
     expect(fillRect).toHaveBeenCalledTimes(2);
     expect(drawImage).toHaveBeenCalledTimes(2);
     expect(close).toHaveBeenCalledTimes(1);
+  });
+
+  it('removes EXIF, IPTC, and comment segments retained by mobile WebKit JPEG encoding', async () => {
+    const { file } = makeFile('jpeg', { type: 'image/jpeg' });
+    parseMock.mockResolvedValue({});
+    installCanvas();
+    jest
+      .spyOn(HTMLCanvasElement.prototype, 'toBlob')
+      .mockImplementation((callback) => callback(jpegWithPrivateMetadata()));
+
+    const prepared = await prepareAtlasImportPhoto(file);
+    const outputs = await Promise.all([
+      blobBytes(prepared.master),
+      blobBytes(prepared.thumbnail),
+    ]);
+
+    for (const bytes of outputs) {
+      const markers = Array.from(bytes)
+        .map((value, index) => (value === 0xff ? bytes[index + 1] : null))
+        .filter((value): value is number => value !== null);
+      expect(markers).toContain(0xe0);
+      expect(markers).not.toContain(0xe1);
+      expect(markers).not.toContain(0xed);
+      expect(markers).not.toContain(0xfe);
+      expect(markers).toContain(0xda);
+    }
   });
 
   it('creates one bounded metadata-free review preview without retaining a full-size master', async () => {
