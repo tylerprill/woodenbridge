@@ -54,9 +54,11 @@ type ImportMediaPreflight = {
 };
 
 function hasPrivateImageMetadata(metadata: Metadata) {
-  return Boolean(
-    metadata.exif || metadata.xmp || metadata.iptc || metadata.icc,
-  );
+  // ICC is a color-rendering profile, not photo provenance. Browser canvas
+  // encoders attach a small standard sRGB profile to otherwise metadata-free
+  // JPEG and WebP derivatives. EXIF, XMP, and IPTC are the containers that can
+  // retain GPS, device, author, or editorial metadata and must remain absent.
+  return Boolean(metadata.exif || metadata.xmp || metadata.iptc);
 }
 
 async function readPrivateBlob(pathname: string, token: string) {

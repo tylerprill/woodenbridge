@@ -121,13 +121,23 @@ describe('Atlas import media registration', () => {
     jest.mocked(sharp).mockImplementation(((bytes: Buffer) => ({
       metadata: jest.fn(async () =>
         bytes.toString() === 'main'
-          ? { format: 'jpeg', width: 1000, height: 750 }
-          : { format: 'webp', width: 1000, height: 750 },
+          ? {
+              format: 'jpeg',
+              width: 1000,
+              height: 750,
+              icc: Buffer.alloc(456),
+            }
+          : {
+              format: 'webp',
+              width: 1000,
+              height: 750,
+              icc: Buffer.alloc(456),
+            },
       ),
     })) as never);
   });
 
-  it('atomically marks the item uploaded and the complete batch ready', async () => {
+  it('accepts browser sRGB profiles and atomically marks the import ready', async () => {
     __testMocks.taggedQuery.mockResolvedValue({
       rows: [
         {
@@ -349,7 +359,7 @@ describe('Atlas import media registration', () => {
     expect(__testMocks.connect).not.toHaveBeenCalled();
   });
 
-  it('rejects imported derivatives that retain an embedded color profile', async () => {
+  it('rejects imported derivatives that retain private EXIF metadata', async () => {
     __testMocks.taggedQuery.mockResolvedValue({
       rows: [
         {
@@ -377,7 +387,7 @@ describe('Atlas import media registration', () => {
               format: 'jpeg',
               width: 1000,
               height: 750,
-              icc: Buffer.from('camera-profile'),
+              exif: Buffer.from('private-photo-metadata'),
             }
           : { format: 'webp', width: 1000, height: 750 },
       ),
