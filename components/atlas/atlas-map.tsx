@@ -21,6 +21,7 @@ import {
   addAtlasLayers,
   updateAtlasSource,
 } from './atlas-layers';
+import { getAtlasFitPadding } from './atlas-map-camera';
 import styles from './atlas.module.css';
 
 type FocusRequest = {
@@ -99,12 +100,22 @@ function fitEntries(map: MapLibreMap, entries: AtlasEntry[]) {
 
   const bounds = new LngLatBounds();
   entries.forEach((entry) => bounds.extend([entry.longitude, entry.latitude]));
-  map.fitBounds(bounds, {
-    padding: { top: 170, right: 120, bottom: 140, left: 120 },
-    maxZoom: 8,
-    duration: 1200,
-    essential: true,
-  });
+  const container = map.getContainer();
+  try {
+    map.fitBounds(bounds, {
+      padding: getAtlasFitPadding(
+        container.clientWidth,
+        container.clientHeight,
+      ),
+      maxZoom: 8,
+      duration: 1200,
+      essential: true,
+    });
+  } catch (error) {
+    // Camera fitting is presentation-only. A transient zero-size canvas or
+    // browser-specific MapLibre error must never take down the import route.
+    console.error('Atlas map camera fit failed:', error);
+  }
 }
 
 export default function AtlasMap({
@@ -158,30 +169,37 @@ export default function AtlasMap({
   useEffect(() => {
     if (!containerRef.current || mapRef.current) return;
 
-    const map = new maplibregl.Map({
-      container: containerRef.current,
-      style: process.env.NEXT_PUBLIC_ATLAS_STYLE_URL || DEFAULT_STYLE,
-      center: [initialView.longitude, initialView.latitude],
-      zoom: initialView.zoom,
-      bearing: 0,
-      pitch: 0,
-      minZoom: 1,
-      maxZoom: 18,
-      maxPitch: 0,
-      attributionControl: false,
-      cooperativeGestures: true,
-      boxZoom: true,
-      doubleClickZoom: true,
-      dragPan: true,
-      dragRotate: false,
-      keyboard: true,
-      pitchWithRotate: false,
-      scrollZoom: true,
-      touchPitch: false,
-      touchZoomRotate: true,
-      canvasContextAttributes: { antialias: true },
-      fadeDuration: 180,
-    });
+    let map: MapLibreMap;
+    try {
+      map = new maplibregl.Map({
+        container: containerRef.current,
+        style: process.env.NEXT_PUBLIC_ATLAS_STYLE_URL || DEFAULT_STYLE,
+        center: [initialView.longitude, initialView.latitude],
+        zoom: initialView.zoom,
+        bearing: 0,
+        pitch: 0,
+        minZoom: 1,
+        maxZoom: 18,
+        maxPitch: 0,
+        attributionControl: false,
+        cooperativeGestures: true,
+        boxZoom: true,
+        doubleClickZoom: true,
+        dragPan: true,
+        dragRotate: false,
+        keyboard: true,
+        pitchWithRotate: false,
+        scrollZoom: true,
+        touchPitch: false,
+        touchZoomRotate: true,
+        canvasContextAttributes: { antialias: true },
+        fadeDuration: 180,
+      });
+    } catch (error) {
+      console.error('Atlas map initialization failed:', error);
+      const errorTimer = window.setTimeout(() => setMapError(true), 0);
+      return () => window.clearTimeout(errorTimer);
+    }
 
     mapRef.current = map;
     map.keyboard.disableRotation();
@@ -196,20 +214,25 @@ export default function AtlasMap({
     );
 
     const handleLoad = () => {
-      map.setProjection({ type: 'globe' });
-      map.setSky({
-        'sky-color': '#d8ded6',
-        'horizon-color': '#f5f2e9',
-        'fog-color': '#dfe5dc',
-        'fog-ground-blend': 0.7,
-        'horizon-fog-blend': 0.7,
-        'sky-horizon-blend': 0.82,
-        'atmosphere-blend': 0.82,
-      });
-      addAtlasLayers(map, entriesRef.current);
-      renderedMapDataKeyRef.current = mapDataKey(entriesRef.current);
-      setMapLoaded(true);
-      setMapError(false);
+      try {
+        map.setProjection({ type: 'globe' });
+        map.setSky({
+          'sky-color': '#d8ded6',
+          'horizon-color': '#f5f2e9',
+          'fog-color': '#dfe5dc',
+          'fog-ground-blend': 0.7,
+          'horizon-fog-blend': 0.7,
+          'sky-horizon-blend': 0.82,
+          'atmosphere-blend': 0.82,
+        });
+        addAtlasLayers(map, entriesRef.current);
+        renderedMapDataKeyRef.current = mapDataKey(entriesRef.current);
+        setMapLoaded(true);
+        setMapError(false);
+      } catch (error) {
+        console.error('Atlas map setup failed:', error);
+        setMapError(true);
+      }
     };
 
     const handleError = (event: ErrorEvent) => {

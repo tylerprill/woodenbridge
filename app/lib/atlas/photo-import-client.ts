@@ -1085,7 +1085,10 @@ async function loadPhoto(blob: Blob): Promise<LoadedPhoto> {
       source: image,
       width: image.naturalWidth,
       height: image.naturalHeight,
-      release: () => URL.revokeObjectURL(objectUrl),
+      release: () => {
+        image.removeAttribute('src');
+        URL.revokeObjectURL(objectUrl);
+      },
     };
   } catch (error) {
     removeLoadListeners();
