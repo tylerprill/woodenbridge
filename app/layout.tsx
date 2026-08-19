@@ -4,6 +4,7 @@ import { connection } from 'next/server';
 import '@/app/global.css';
 import 'maplibre-gl/dist/maplibre-gl.css';
 import {
+  getSiteManifestHref,
   SITE_DESCRIPTION,
   SITE_NAME,
   SITE_TITLE,
@@ -19,7 +20,7 @@ export const metadata: Metadata = {
   creator: SITE_NAME,
   publisher: SITE_NAME,
   category: 'travel',
-  manifest: '/manifest.webmanifest',
+  manifest: getSiteManifestHref(),
   verification: process.env.GOOGLE_SITE_VERIFICATION
     ? { google: process.env.GOOGLE_SITE_VERIFICATION }
     : undefined,

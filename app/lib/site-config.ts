@@ -5,6 +5,19 @@ export const SITE_TITLE = 'Field Atlas | Personal Travel Map & Photo Journal';
 export const SITE_DESCRIPTION =
   'Create a personal travel map with pins, photos, and field notes. Field Atlas keeps every place you have visited in one private, beautiful travel journal.';
 
+export function getSiteManifestHref(
+  deploymentEnvironment = process.env.VERCEL_ENV,
+) {
+  // Vercel Deployment Protection redirects preview asset requests through its
+  // SSO endpoint. A protected preview therefore cannot load a same-origin web
+  // manifest, and widening manifest-src to the SSO origin would weaken CSP for
+  // a response that is HTML rather than a manifest. Production remains fully
+  // installable; previews simply omit the manifest link.
+  return deploymentEnvironment === 'preview'
+    ? undefined
+    : '/manifest.webmanifest';
+}
+
 function normalizeSiteUrl(value: string) {
   const url =
     value.startsWith('http://') || value.startsWith('https://')

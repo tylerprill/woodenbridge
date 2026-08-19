@@ -1,0 +1,16 @@
+{
+  "name": "Field Atlas",
+  "short_name": "Field Atlas",
+  "description": "Create a personal travel map with pins, photos, and field notes. Field Atlas keeps every place you have visited in one private, beautiful travel journal.",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#f5f2e9",
+  "theme_color": "#10231d",
+  "icons": [
+    {
+      "src": "/icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml"
+    }
+  ]
+}
