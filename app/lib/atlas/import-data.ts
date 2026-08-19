@@ -4,7 +4,10 @@ import { db, sql } from '@/app/lib/db';
 
 import { requireVerifiedSession } from '@/app/lib/auth/session';
 import { createAuthenticatedAtlasMediaUrls } from './media-grant';
-import { createAtlasMediaPath, createAtlasThumbnailPath } from './media-policy';
+import {
+  createAtlasImportThumbnailPath,
+  createAtlasMediaPath,
+} from './media-policy';
 import type {
   AtlasImportBatch,
   AtlasImportItemStatus,
@@ -194,7 +197,7 @@ export async function loadAtlasImportBatchForUser(
           );
         const thumbnailPathname =
           row.media_thumbnail_path ??
-          createAtlasThumbnailPath(row.entry_id, row.expected_media_id);
+          createAtlasImportThumbnailPath(row.entry_id, row.expected_media_id);
         const mediaUrls =
           row.media_storage_path &&
           row.media_thumbnail_path &&

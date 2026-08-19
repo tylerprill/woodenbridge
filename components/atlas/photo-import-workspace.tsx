@@ -29,7 +29,7 @@ import type {
 } from '@/app/lib/atlas/import-definitions';
 import {
   createAtlasMediaPath,
-  createAtlasThumbnailPath,
+  createAtlasImportThumbnailPath,
   isAllowedAtlasMediaType,
 } from '@/app/lib/atlas/media-policy';
 import {
@@ -1040,7 +1040,7 @@ export function PhotoImportWorkspace({
         mapping.mediaId,
         prepared.master.type,
       );
-      const thumbnailPathname = createAtlasThumbnailPath(
+      const thumbnailPathname = createAtlasImportThumbnailPath(
         mapping.entryId,
         mapping.mediaId,
       );

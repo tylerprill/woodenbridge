@@ -2,8 +2,10 @@ import {
   ATLAS_MEDIA_MAX_BYTES,
   areAtlasMediaPathsPaired,
   atlasMediaRegistrationSchema,
+  createAtlasImportThumbnailPath,
   createAtlasMediaPath,
   createAtlasThumbnailPath,
+  getAtlasThumbnailContentType,
   getAtlasThumbnailDimensions,
   isAtlasMediaPath,
   isAtlasThumbnailPath,
@@ -55,6 +57,23 @@ describe('atlas media policy', () => {
         entryId,
       ),
     ).toBe(false);
+  });
+
+  it('creates and pairs the iOS-safe JPEG import thumbnail pathname', () => {
+    const pathname = createAtlasMediaPath(entryId, photoId, 'image/jpeg');
+    const thumbnailPathname = createAtlasImportThumbnailPath(entryId, photoId);
+
+    expect(thumbnailPathname).toBe(
+      `atlas/memories/${entryId}/${photoId}.thumbnail.jpg`,
+    );
+    expect(isAtlasThumbnailPath(thumbnailPathname, entryId)).toBe(true);
+    expect(areAtlasMediaPathsPaired(pathname, thumbnailPathname, entryId)).toBe(
+      true,
+    );
+    expect(getAtlasThumbnailContentType(thumbnailPathname)).toBe('image/jpeg');
+    expect(
+      getAtlasThumbnailContentType(createAtlasThumbnailPath(entryId, photoId)),
+    ).toBe('image/webp');
   });
 
   it('constrains thumbnails without enlarging small originals', () => {

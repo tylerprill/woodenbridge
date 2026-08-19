@@ -4,10 +4,10 @@ import {
   ATLAS_MEDIA_ALLOWED_TYPES,
   ATLAS_MEDIA_MAX_BYTES,
   ATLAS_THUMBNAIL_MAX_BYTES,
-  ATLAS_THUMBNAIL_MIME_TYPE,
   areAtlasMediaPathsPaired,
   atlasMediaClientPayloadSchema,
   getAtlasMediaPathId,
+  getAtlasThumbnailContentType,
   isAtlasMediaPath,
   isAtlasMediaUploadPath,
   isAtlasThumbnailPath,
@@ -64,7 +64,13 @@ export async function POST(request: Request) {
 
         const isThumbnail = isAtlasThumbnailPath(pathname, parsed.data.entryId);
         const isOriginal = isAtlasMediaPath(pathname, parsed.data.entryId);
-        if (!isThumbnail && !isOriginal) {
+        const thumbnailContentType = isThumbnail
+          ? getAtlasThumbnailContentType(pathname)
+          : null;
+        if (
+          (!isThumbnail && !isOriginal) ||
+          (isThumbnail && !thumbnailContentType)
+        ) {
           throw new Error('Invalid upload request.');
         }
         const variant = isThumbnail ? 'thumbnail' : 'original';
@@ -78,9 +84,10 @@ export async function POST(request: Request) {
         });
 
         return {
-          allowedContentTypes: isThumbnail
-            ? [ATLAS_THUMBNAIL_MIME_TYPE]
-            : [...ATLAS_MEDIA_ALLOWED_TYPES],
+          allowedContentTypes:
+            isThumbnail && thumbnailContentType
+              ? [thumbnailContentType]
+              : [...ATLAS_MEDIA_ALLOWED_TYPES],
           maximumSizeInBytes: isThumbnail
             ? ATLAS_THUMBNAIL_MAX_BYTES
             : ATLAS_MEDIA_MAX_BYTES,

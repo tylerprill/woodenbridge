@@ -140,6 +140,52 @@ describe('atlas Blob upload authorization route', () => {
     });
   });
 
+  it('authorizes the iOS-safe JPEG thumbnail for a bulk import', async () => {
+    const userId = '17d69b97-9d24-4e07-a461-271263c71c52';
+    const jpegThumbnailPathname = `atlas/memories/${entryId}/${mediaId}.thumbnail.jpg`;
+    const jpegPayload = JSON.stringify({
+      entryId,
+      mediaId,
+      pathname,
+      thumbnailPathname: jpegThumbnailPathname,
+    });
+    jest.mocked(getVerifiedSession).mockResolvedValue({
+      user: { id: userId },
+    } as never);
+    let generatedOptions: Record<string, unknown> | undefined;
+    jest.mocked(handleUpload).mockImplementation(async (options) => {
+      generatedOptions = await options.onBeforeGenerateToken(
+        jpegThumbnailPathname,
+        jpegPayload,
+        false,
+      );
+      return { type: 'blob.generate-client-token', clientToken: 'safe-token' };
+    });
+
+    const response = await POST(
+      uploadRequest({
+        type: 'blob.generate-client-token',
+        payload: {
+          pathname: jpegThumbnailPathname,
+          clientPayload: jpegPayload,
+          multipart: false,
+        },
+      }),
+    );
+
+    expect(response.status).toBe(200);
+    expect(generatedOptions).toMatchObject({
+      allowedContentTypes: ['image/jpeg'],
+      maximumSizeInBytes: 2 * 1024 * 1024,
+    });
+    expect(reserveAtlasMediaUploadVariant).toHaveBeenCalledWith(
+      expect.objectContaining({
+        thumbnailPathname: jpegThumbnailPathname,
+        variant: 'thumbnail',
+      }),
+    );
+  });
+
   it('accepts signed completion callbacks without an Auth.js browser session', async () => {
     const userId = '17d69b97-9d24-4e07-a461-271263c71c52';
     jest.mocked(handleUpload).mockImplementation(async (options) => {

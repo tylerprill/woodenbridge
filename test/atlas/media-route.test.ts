@@ -124,6 +124,29 @@ describe('authenticated Atlas media delivery', () => {
     );
   });
 
+  it('serves imported JPEG thumbnails with the correct nosniff content type', async () => {
+    const jpegSource = {
+      ...source,
+      thumbnailPath: source.thumbnailPath.replace(/\.webp$/, '.jpg'),
+    };
+    const grant = createAtlasMediaGrant(jpegSource, userId);
+
+    const response = await GET(
+      new Request(
+        `https://fieldatlas.test/api/atlas/media/${mediaId}?variant=thumbnail&grant=${grant}`,
+      ),
+      { params: Promise.resolve({ mediaId }) },
+    );
+
+    expect(response.status).toBe(200);
+    expect(response.headers.get('content-type')).toBe('image/jpeg');
+    expect(response.headers.get('x-content-type-options')).toBe('nosniff');
+    expect(get).toHaveBeenCalledWith(
+      jpegSource.thumbnailPath,
+      expect.objectContaining({ access: 'private' }),
+    );
+  });
+
   it('never exposes an original upload through an unlisted share', async () => {
     const shareId = '7d7762db-25db-4887-8a87-04ce90df1db3';
     const response = await GET(

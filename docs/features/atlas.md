@@ -107,7 +107,8 @@ The production chapter experience now includes:
 - optional maps and approximate shared coordinates by default, with coordinates
   omitted entirely from public chapter data when a map is disabled;
 - ownership-checked private originals, with public chapters restricted to
-  metadata-stripped WebP derivatives so EXIF data cannot bypass map privacy;
+  metadata-stripped JPEG or WebP derivatives so EXIF data cannot bypass map
+  privacy; bulk imports use JPEG for reliable canvas export on iOS browsers;
   and
 - lazy thumbnails, bounded editor rendering, and off-screen content containment
   for responsive long chapters.

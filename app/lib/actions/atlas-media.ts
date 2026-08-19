@@ -16,11 +16,11 @@ import {
   ATLAS_MEDIA_MAX_BYTES,
   ATLAS_MEDIA_MAX_FILES,
   ATLAS_THUMBNAIL_MAX_BYTES,
-  ATLAS_THUMBNAIL_MIME_TYPE,
   areAtlasMediaPathsPaired,
   atlasMediaDiscardSchema,
   atlasMediaRegistrationSchema,
   getAtlasMediaPathId,
+  getAtlasThumbnailContentType,
   getAtlasThumbnailDimensions,
   isAllowedAtlasMediaType,
 } from '@/app/lib/atlas/media-policy';
@@ -127,6 +127,10 @@ async function validateImportedMedia({
     masterWidth,
     masterHeight,
   );
+  const expectedThumbnailContentType =
+    getAtlasThumbnailContentType(thumbnailPathname);
+  const expectedThumbnailFormat =
+    expectedThumbnailContentType === 'image/jpeg' ? 'jpeg' : 'webp';
 
   return (
     master.format === 'jpeg' &&
@@ -135,7 +139,8 @@ async function validateImportedMedia({
     Math.max(masterWidth, masterHeight) <= ATLAS_IMPORT_MAX_MEDIA_EDGE &&
     masterWidth * masterHeight <= ATLAS_IMPORT_MAX_PIXELS &&
     !hasPrivateImageMetadata(master) &&
-    thumbnail.format === 'webp' &&
+    expectedThumbnailContentType !== null &&
+    thumbnail.format === expectedThumbnailFormat &&
     Math.abs(thumbnailWidth - expectedThumbnail.width) <= 1 &&
     Math.abs(thumbnailHeight - expectedThumbnail.height) <= 1 &&
     Math.max(thumbnailWidth, thumbnailHeight) <= 1024 &&
@@ -205,6 +210,12 @@ export async function getAtlasImportMediaPairStatusAction(
   }
 
   const mediaInput = parsed.data;
+  const expectedThumbnailContentType = getAtlasThumbnailContentType(
+    mediaInput.thumbnailPathname,
+  );
+  if (!expectedThumbnailContentType) {
+    return { ok: false, error: 'invalid', message: 'Invalid photo.' };
+  }
   try {
     const expected = await sql<{
       prepared_byte_size: number | null;
@@ -274,7 +285,7 @@ export async function getAtlasImportMediaPairStatusAction(
       }),
       importedBlobCommitted({
         pathname: mediaInput.thumbnailPathname,
-        expectedContentType: ATLAS_THUMBNAIL_MIME_TYPE,
+        expectedContentType: expectedThumbnailContentType,
         expectedSize: row.thumbnail_byte_size,
         token,
       }),
@@ -428,13 +439,17 @@ export async function registerAtlasMediaAction(
       head(mediaInput.pathname, { token }),
       head(mediaInput.thumbnailPathname, { token }),
     ]);
+    const expectedThumbnailContentType = getAtlasThumbnailContentType(
+      mediaInput.thumbnailPathname,
+    );
     if (
       blob.pathname !== mediaInput.pathname ||
       !isAllowedAtlasMediaType(blob.contentType) ||
       blob.size <= 0 ||
       blob.size > ATLAS_MEDIA_MAX_BYTES ||
       thumbnail.pathname !== mediaInput.thumbnailPathname ||
-      thumbnail.contentType !== ATLAS_THUMBNAIL_MIME_TYPE ||
+      !expectedThumbnailContentType ||
+      thumbnail.contentType !== expectedThumbnailContentType ||
       thumbnail.size <= 0 ||
       thumbnail.size > ATLAS_THUMBNAIL_MAX_BYTES
     ) {

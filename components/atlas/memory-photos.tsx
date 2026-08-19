@@ -39,17 +39,28 @@ type MemoryPhotosProps = {
   onChange: (media: AtlasMedia[]) => void;
 };
 
-function canvasToBlob(canvas: HTMLCanvasElement) {
-  return new Promise<Blob>((resolve, reject) => {
+function encodeCanvas(
+  canvas: HTMLCanvasElement,
+  contentType: 'image/jpeg' | 'image/webp',
+) {
+  return new Promise<Blob | null>((resolve) => {
     canvas.toBlob(
-      (blob) =>
-        blob
-          ? resolve(blob)
-          : reject(new Error('This browser could not prepare the thumbnail.')),
-      ATLAS_THUMBNAIL_MIME_TYPE,
+      (blob) => resolve(blob?.type === contentType ? blob : null),
+      contentType,
       ATLAS_THUMBNAIL_QUALITY,
     );
   });
+}
+
+async function canvasToBlob(canvas: HTMLCanvasElement) {
+  const webp = await encodeCanvas(canvas, ATLAS_THUMBNAIL_MIME_TYPE);
+  if (webp) return webp;
+
+  // Chrome on iOS uses WebKit, where unsupported canvas encoders fall back to
+  // PNG. JPEG is supported there and keeps thumbnails compact.
+  const jpeg = await encodeCanvas(canvas, 'image/jpeg');
+  if (jpeg) return jpeg;
+  throw new Error('This browser could not prepare the thumbnail.');
 }
 
 async function loadPhoto(file: File) {
@@ -175,7 +186,11 @@ export function MemoryPhotos({
           mediaId,
           file.type as (typeof ATLAS_MEDIA_ALLOWED_TYPES)[number],
         );
-        const thumbnailPathname = createAtlasThumbnailPath(entryId, mediaId);
+        const thumbnailPathname = createAtlasThumbnailPath(
+          entryId,
+          mediaId,
+          thumbnail.type === 'image/jpeg' ? 'image/jpeg' : 'image/webp',
+        );
         pendingUpload = { mediaId, pathname, thumbnailPathname };
         const clientPayload = JSON.stringify({
           entryId,

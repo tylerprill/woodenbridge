@@ -494,7 +494,7 @@ describe('Atlas bulk-import photo preprocessing', () => {
       imageOrientation: 'from-image',
     });
     expect(prepared.master.type).toBe('image/jpeg');
-    expect(prepared.thumbnail.type).toBe('image/webp');
+    expect(prepared.thumbnail.type).toBe('image/jpeg');
     expect(prepared.master.size).toBeLessThanOrEqual(
       ATLAS_IMPORT_PHOTO_LIMITS.masterMaxBytes,
     );
@@ -523,14 +523,18 @@ describe('Atlas bulk-import photo preprocessing', () => {
 
     const preview = await prepareAtlasImportPreview(file, analysis);
 
-    expect(preview.blob.type).toBe('image/webp');
+    expect(preview.blob.type).toBe('image/jpeg');
     expect(preview).toMatchObject({ width: 1024, height: 768 });
     expect(window.createImageBitmap).toHaveBeenCalledWith(file, {
       imageOrientation: 'from-image',
     });
     expect(fillRect).toHaveBeenCalledTimes(1);
     expect(drawImage).toHaveBeenCalledTimes(1);
-    expect(HTMLCanvasElement.prototype.toBlob).toHaveBeenCalledTimes(1);
+    expect(HTMLCanvasElement.prototype.toBlob).toHaveBeenCalledWith(
+      expect.any(Function),
+      'image/jpeg',
+      expect.any(Number),
+    );
     expect(close).toHaveBeenCalledTimes(1);
   });
 

@@ -74,7 +74,7 @@ const entryId = 'f7c0bf19-59fc-49df-9bd7-ae405a69e49c';
 const mediaId = '2df8f2d8-9fae-4c86-9578-3ed6179e262b';
 const sourceHash = 'a'.repeat(64);
 const pathname = `atlas/memories/${entryId}/${mediaId}.jpg`;
-const thumbnailPathname = `atlas/memories/${entryId}/${mediaId}.thumbnail.webp`;
+const thumbnailPathname = `atlas/memories/${entryId}/${mediaId}.thumbnail.jpg`;
 
 function normalizeQuery(query: unknown) {
   return String(query).replace(/\s+/g, ' ').trim();
@@ -110,7 +110,7 @@ describe('Atlas import media registration', () => {
             }
           : {
               pathname: thumbnailPathname,
-              contentType: 'image/webp',
+              contentType: 'image/jpeg',
               size: 5,
             }) as never,
     );
@@ -128,7 +128,7 @@ describe('Atlas import media registration', () => {
               icc: Buffer.alloc(456),
             }
           : {
-              format: 'webp',
+              format: 'jpeg',
               width: 1000,
               height: 750,
               icc: Buffer.alloc(456),
@@ -341,7 +341,7 @@ describe('Atlas import media registration', () => {
       metadata: jest.fn(async () =>
         bytes.toString() === 'main'
           ? { format: 'jpeg', width: 1000, height: 750 }
-          : { format: 'webp', width: 1, height: 1 },
+          : { format: 'jpeg', width: 1, height: 1 },
       ),
     })) as never);
 
@@ -389,7 +389,7 @@ describe('Atlas import media registration', () => {
               height: 750,
               exif: Buffer.from('private-photo-metadata'),
             }
-          : { format: 'webp', width: 1000, height: 750 },
+          : { format: 'jpeg', width: 1000, height: 750 },
       ),
     })) as never);
 

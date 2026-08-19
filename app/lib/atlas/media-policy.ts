@@ -6,6 +6,7 @@ export const ATLAS_MEDIA_MAX_DIMENSION = 20_000;
 export const ATLAS_THUMBNAIL_MAX_BYTES = 2 * 1024 * 1024;
 export const ATLAS_THUMBNAIL_MAX_DIMENSION = 1024;
 export const ATLAS_THUMBNAIL_MIME_TYPE = 'image/webp';
+export const ATLAS_IMPORT_THUMBNAIL_MIME_TYPE = 'image/jpeg';
 export const ATLAS_THUMBNAIL_QUALITY = 0.82;
 export const ATLAS_MEDIA_PAIR_RESERVED_BYTES =
   ATLAS_MEDIA_MAX_BYTES + ATLAS_THUMBNAIL_MAX_BYTES;
@@ -68,7 +69,7 @@ export function isAtlasThumbnailPath(pathname: string, entryId: string) {
 
   return (
     pathname.startsWith(prefix) &&
-    /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\.thumbnail\.webp$/.test(
+    /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\.thumbnail\.(?:jpg|webp)$/.test(
       fileName,
     )
   );
@@ -109,8 +110,27 @@ export function createAtlasMediaPath(
   return `${atlasMediaPathPrefix(entryId)}${id}.${extensionByType[contentType]}`;
 }
 
-export function createAtlasThumbnailPath(entryId: string, id: string) {
-  return `${atlasMediaPathPrefix(entryId)}${id}.thumbnail.webp`;
+export function createAtlasThumbnailPath(
+  entryId: string,
+  id: string,
+  contentType: 'image/jpeg' | 'image/webp' = ATLAS_THUMBNAIL_MIME_TYPE,
+) {
+  const extension = contentType === 'image/jpeg' ? 'jpg' : 'webp';
+  return `${atlasMediaPathPrefix(entryId)}${id}.thumbnail.${extension}`;
+}
+
+export function createAtlasImportThumbnailPath(entryId: string, id: string) {
+  return createAtlasThumbnailPath(
+    entryId,
+    id,
+    ATLAS_IMPORT_THUMBNAIL_MIME_TYPE,
+  );
+}
+
+export function getAtlasThumbnailContentType(pathname: string) {
+  if (pathname.endsWith('.thumbnail.webp')) return 'image/webp' as const;
+  if (pathname.endsWith('.thumbnail.jpg')) return 'image/jpeg' as const;
+  return null;
 }
 
 export function getAtlasThumbnailDimensions(width: number, height: number) {

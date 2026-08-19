@@ -4,6 +4,7 @@ import { sql } from '@/app/lib/db';
 import { getVerifiedSession } from '@/app/lib/auth/session';
 import { verifyAtlasMediaGrant } from '@/app/lib/atlas/media-grant';
 import { getAtlasBlobToken } from '@/app/lib/atlas/media-storage';
+import { getAtlasThumbnailContentType } from '@/app/lib/atlas/media-policy';
 import { atlasChapterIdSchema } from '@/app/lib/chapters/validation';
 
 export const runtime = 'nodejs';
@@ -31,7 +32,7 @@ export async function GET(
   );
   const isSharedAccess = parsedShareId.success;
 
-  // Unlisted chapter viewers receive only the canvas-transcoded WebP
+  // Unlisted chapter viewers receive only the canvas-transcoded derivative.
   // derivative. Original uploads can retain EXIF/location metadata and remain
   // available exclusively through an authenticated owner path.
   if (isSharedAccess && variant !== 'thumbnail') {
@@ -97,7 +98,10 @@ export async function GET(
 
   const thumbnailPath = variant === 'thumbnail' ? row.thumbnail_path : null;
   const storagePath = thumbnailPath ?? row.storage_path;
-  const contentType = thumbnailPath ? 'image/webp' : row.mime_type;
+  const contentType = thumbnailPath
+    ? getAtlasThumbnailContentType(thumbnailPath)
+    : row.mime_type;
+  if (!contentType) return new Response(null, { status: 404 });
 
   try {
     const blob = await get(storagePath, {

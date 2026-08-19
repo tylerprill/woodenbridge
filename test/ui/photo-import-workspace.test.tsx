@@ -225,7 +225,7 @@ function preparedPhoto(file: File) {
   return {
     analysis,
     master: new Blob([`master-${file.name}`], { type: 'image/jpeg' }),
-    thumbnail: new Blob([`thumbnail-${file.name}`], { type: 'image/webp' }),
+    thumbnail: new Blob([`thumbnail-${file.name}`], { type: 'image/jpeg' }),
     dimensions: {
       sourceWidth: 3024,
       sourceHeight: 4032,
@@ -1730,7 +1730,7 @@ describe('bulk photo import workspace', () => {
     );
     expect(getAtlasImportMediaPairStatusAction).toHaveBeenCalledTimes(1);
     expect(upload).toHaveBeenCalledTimes(3);
-    expect(jest.mocked(upload).mock.calls[2][0]).toMatch(/\.thumbnail\.webp$/);
+    expect(jest.mocked(upload).mock.calls[2][0]).toMatch(/\.thumbnail\.jpg$/);
     expect(registerAtlasMediaAction).toHaveBeenCalledTimes(1);
   });
 });

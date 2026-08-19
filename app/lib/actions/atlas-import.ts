@@ -30,10 +30,7 @@ import {
   prepareAtlasImportItemSchema,
   resolveAtlasImportPlaceSchema,
 } from '@/app/lib/atlas/import-validation';
-import {
-  createAtlasMediaPath,
-  createAtlasThumbnailPath,
-} from '@/app/lib/atlas/media-policy';
+import { createAtlasMediaPath } from '@/app/lib/atlas/media-policy';
 import { lookupAtlasPlace } from '@/app/lib/atlas/geocoding';
 import { createAtlasImportPayloadFingerprint } from '@/app/lib/atlas/import-fingerprint';
 import type { AtlasPlaceContext } from '@/app/lib/atlas/place';
