@@ -25,6 +25,33 @@ describe('responsive and route-level UI contracts', () => {
     );
   });
 
+  it('keeps the photo-import surface within a 320px viewport', () => {
+    const css = readFileSync(
+      join(root, 'components/atlas/photo-import.module.css'),
+      'utf8',
+    );
+    const compactPage = css.match(
+      /@media \(max-width: 480px\) \{[\s\S]*?\.page \{([\s\S]*?)\n  \}/,
+    )?.[1];
+
+    expect(compactPage).toContain('width: 100%');
+    expect(compactPage).toContain('margin-inline: 0');
+    expect(compactPage).not.toMatch(/calc\(100%\s*\+/);
+    expect(compactPage).not.toMatch(/margin-inline:\s*-/);
+  });
+
+  it('keeps the keyboard map-center action at least 44px tall', () => {
+    const css = readFileSync(
+      join(root, 'components/atlas/photo-import.module.css'),
+      'utf8',
+    );
+    const centerAction = css.match(
+      /\.locationControls button \{([\s\S]*?)\n\}/,
+    )?.[1];
+
+    expect(centerAction).toContain('min-height: 2.75rem');
+  });
+
   it('reserves mobile route-map padding for marker radius and offsets', () => {
     const source = readFileSync(
       join(root, 'components/chapters/chapter-map.tsx'),

@@ -1,6 +1,9 @@
 jest.mock('server-only', () => ({}));
 
-import { reverseGeocodeAtlasPlace } from '@/app/lib/atlas/geocoding';
+import {
+  lookupAtlasPlace,
+  reverseGeocodeAtlasPlace,
+} from '@/app/lib/atlas/geocoding';
 
 describe('reverseGeocodeAtlasPlace', () => {
   const fetchMock = jest.spyOn(global, 'fetch');
@@ -36,6 +39,10 @@ describe('reverseGeocodeAtlasPlace', () => {
       countryCode: 'US',
       geocoder: 'nominatim',
     });
+    expect(fetchMock).toHaveBeenCalledWith(
+      expect.any(URL),
+      expect.objectContaining({ cache: 'no-store' }),
+    );
   });
 
   it('returns null when the provider is unavailable', async () => {
@@ -44,6 +51,36 @@ describe('reverseGeocodeAtlasPlace', () => {
     await expect(
       reverseGeocodeAtlasPlace({ latitude: 42, longitude: -83 }),
     ).resolves.toBeNull();
+  });
+
+  it('preserves provider pacing and transient failures for importer retries', async () => {
+    fetchMock
+      .mockResolvedValueOnce(
+        new Response(null, {
+          status: 429,
+          headers: { 'Retry-After': '2' },
+        }),
+      )
+      .mockResolvedValueOnce(new Response(null, { status: 503 }))
+      .mockResolvedValueOnce(new Response(null, { status: 404 }));
+
+    await expect(
+      lookupAtlasPlace({ latitude: 42, longitude: -83 }),
+    ).resolves.toEqual({
+      ok: false,
+      reason: 'rate-limited',
+      retryAfterMs: 2_000,
+    });
+    await expect(
+      lookupAtlasPlace({ latitude: 42, longitude: -83 }),
+    ).resolves.toEqual({
+      ok: false,
+      reason: 'provider-error',
+      retryAfterMs: 1_500,
+    });
+    await expect(
+      lookupAtlasPlace({ latitude: 42, longitude: -83 }),
+    ).resolves.toEqual({ ok: false, reason: 'provider-error' });
   });
 
   it('does not treat a county as a state or province', async () => {
@@ -70,6 +107,37 @@ describe('reverseGeocodeAtlasPlace', () => {
       region: null,
       country: 'Japan',
       countryCode: 'JP',
+    });
+  });
+
+  it('keeps a remote named feature without inventing a city', async () => {
+    fetchMock.mockResolvedValue(
+      new Response(
+        JSON.stringify({
+          name: 'Black Cloud Trail',
+          address: {
+            road: 'Black Cloud Trail',
+            county: 'Lake County',
+            state: 'Colorado',
+            country: 'United States',
+            country_code: 'us',
+          },
+        }),
+        { status: 200, headers: { 'Content-Type': 'application/json' } },
+      ),
+    );
+
+    await expect(
+      reverseGeocodeAtlasPlace({
+        latitude: 39.1176695,
+        longitude: -106.4454117,
+      }),
+    ).resolves.toMatchObject({
+      placeName: 'Black Cloud Trail',
+      locality: null,
+      region: 'Colorado',
+      country: 'United States',
+      countryCode: 'US',
     });
   });
 });

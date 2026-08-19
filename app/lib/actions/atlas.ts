@@ -1,7 +1,7 @@
 'use server';
 
 import { del } from '@vercel/blob';
-import { db, sql } from '@/app/lib/db';
+import { db, sql, type VercelPoolClient } from '@/app/lib/db';
 import { revalidatePath } from 'next/cache';
 
 import { requireVerifiedSession } from '@/app/lib/auth/session';
@@ -47,6 +47,45 @@ const ENTRY_COLUMNS = `
 
 function failed(message = 'We could not save that change. Please try again.') {
   return { ok: false, error: 'failed', message } as const;
+}
+
+async function lockAtlasEntryImportBatch(
+  client: VercelPoolClient,
+  entryId: string,
+  userId: string,
+) {
+  const association = await client.query<{ batch_id: string }>(
+    `
+      SELECT batch_id
+      FROM atlas_import_items
+      WHERE entry_id = $1 AND user_id = $2
+      LIMIT 1
+    `,
+    [entryId, userId],
+  );
+  const batchId = association.rows[0]?.batch_id;
+  if (!batchId) return null;
+
+  const batch = await client.query<{ status: string }>(
+    `
+      SELECT status
+      FROM atlas_import_batches
+      WHERE id = $1 AND user_id = $2
+      LIMIT 1
+      FOR UPDATE
+    `,
+    [batchId, userId],
+  );
+  return batch.rows[0]?.status ?? null;
+}
+
+function unfinishedImportConflict() {
+  return {
+    ok: false,
+    error: 'conflict',
+    message:
+      'This memory belongs to an unfinished photo import. Finish or discard the import first.',
+  } as const;
 }
 
 export async function createAtlasDraftAction(
@@ -122,6 +161,47 @@ export async function updateAtlasEntryAction(
   const client = await db.connect();
 
   try {
+    await client.query('BEGIN');
+    const importStatus = await lockAtlasEntryImportBatch(
+      client,
+      entry.id,
+      session.user.id,
+    );
+    if (importStatus && importStatus !== 'completed') {
+      await client.query('ROLLBACK');
+      return unfinishedImportConflict();
+    }
+
+    const locked = await client.query<{ version: number }>(
+      `
+        SELECT version
+        FROM atlas_entries
+        WHERE id = $1
+          AND user_id = $2
+          AND deleted_at IS NULL
+        LIMIT 1
+        FOR UPDATE
+      `,
+      [entry.id, session.user.id],
+    );
+    const currentVersion = locked.rows[0]?.version;
+    if (currentVersion === undefined) {
+      await client.query('ROLLBACK');
+      return {
+        ok: false,
+        error: 'not-found',
+        message: 'That memory no longer exists.',
+      };
+    }
+    if (currentVersion !== entry.version) {
+      await client.query('ROLLBACK');
+      return {
+        ok: false,
+        error: 'conflict',
+        message: 'This memory changed elsewhere. Refresh it and try again.',
+      };
+    }
+
     const result = await client.query<AtlasEntryRow>(
       `
         UPDATE atlas_entries
@@ -153,33 +233,16 @@ export async function updateAtlasEntryAction(
     );
 
     if (!result.rows[0]) {
-      const current = await sql<{ version: number }>`
-        SELECT version
-        FROM atlas_entries
-        WHERE id = ${entry.id}
-          AND user_id = ${session.user.id}
-          AND deleted_at IS NULL
-        LIMIT 1
-      `;
-
-      return current.rows[0]
-        ? {
-            ok: false,
-            error: 'conflict',
-            message: 'This memory changed elsewhere. Refresh it and try again.',
-          }
-        : {
-            ok: false,
-            error: 'not-found',
-            message: 'That memory no longer exists.',
-          };
+      throw new Error('Locked Atlas entry update returned no row.');
     }
+    await client.query('COMMIT');
 
     revalidatePath('/dashboard');
     revalidatePath('/dashboard/places');
     revalidatePath(`/dashboard/card/${entry.id}`);
     return { ok: true, data: toAtlasEntry(result.rows[0]) };
   } catch (error) {
+    await client.query('ROLLBACK').catch(() => undefined);
     console.error('Atlas entry update failed:', error);
     return failed();
   } finally {
@@ -315,6 +378,16 @@ export async function archiveAtlasEntryAction(
   const client = await db.connect();
   try {
     await client.query('BEGIN');
+    const importStatus = await lockAtlasEntryImportBatch(
+      client,
+      parsed.data,
+      session.user.id,
+    );
+    if (importStatus && importStatus !== 'completed') {
+      await client.query('ROLLBACK');
+      return unfinishedImportConflict();
+    }
+
     const entry = await client.query<{ id: string }>(
       `
         SELECT id

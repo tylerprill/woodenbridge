@@ -12,6 +12,7 @@ import {
 } from '@/app/lib/auth/security-notification-outbox';
 import { deleteExpiredAuthenticatedSessions } from '@/app/lib/auth/session-record';
 import { cleanupExpiredAtlasMediaUploadIntents } from '@/app/lib/atlas/upload-intents';
+import { cleanupCancelledAtlasImportBatches } from '@/app/lib/atlas/import-cleanup';
 import { GET } from '@/app/api/internal/auth-cleanup/route';
 
 jest.mock('@/app/lib/auth/auth-rate-limit', () => ({
@@ -46,6 +47,9 @@ jest.mock('@/app/lib/auth/session-record', () => ({
 jest.mock('@/app/lib/atlas/upload-intents', () => ({
   cleanupExpiredAtlasMediaUploadIntents: jest.fn(),
 }));
+jest.mock('@/app/lib/atlas/import-cleanup', () => ({
+  cleanupCancelledAtlasImportBatches: jest.fn(),
+}));
 
 const cleanupRateLimits = jest.mocked(deleteExpiredAuthRateLimitData);
 const cleanupVerification = jest.mocked(deleteExpiredEmailVerificationData);
@@ -66,6 +70,7 @@ const cleanupAuthenticatedSessions = jest.mocked(
   deleteExpiredAuthenticatedSessions,
 );
 const cleanupUploadIntents = jest.mocked(cleanupExpiredAtlasMediaUploadIntents);
+const cleanupImports = jest.mocked(cleanupCancelledAtlasImportBatches);
 const logSecurityEvent = jest.mocked(recordSecurityEvent);
 const originalCronSecret = process.env.CRON_SECRET;
 
@@ -98,6 +103,7 @@ describe('scheduled authentication cleanup', () => {
     });
     cleanupAuthenticatedSessions.mockResolvedValue(undefined);
     cleanupUploadIntents.mockResolvedValue({ cleaned: 0 });
+    cleanupImports.mockResolvedValue({ cleaned: 0 });
   });
 
   afterAll(() => {
@@ -144,6 +150,7 @@ describe('scheduled authentication cleanup', () => {
     });
     expect(cleanupAuthenticatedSessions).toHaveBeenCalledTimes(1);
     expect(cleanupUploadIntents).toHaveBeenCalledTimes(1);
+    expect(cleanupImports).toHaveBeenCalledTimes(1);
     expect(logSecurityEvent).toHaveBeenCalledWith(
       'maintenance.auth_cleanup',
       'success',

@@ -5,11 +5,13 @@ import {
   Bars3BottomLeftIcon,
   MagnifyingGlassIcon,
   MapPinIcon,
+  PhotoIcon,
   PlusIcon,
   XMarkIcon,
 } from '@heroicons/react/24/outline';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
+import Link from 'next/link';
 
 import {
   createAtlasDraftAction,
@@ -588,6 +590,10 @@ export function AtlasWorkspace({
           <span>{placementMode ? 'Cancel pin' : 'Add memory'}</span>
         </button>
         <span className={styles.toolDivider} aria-hidden="true" />
+        <Link href="/dashboard/import" aria-label="Import photos as memories">
+          <PhotoIcon aria-hidden="true" />
+          <span>Import</span>
+        </Link>
         <button
           type="button"
           onClick={() => {

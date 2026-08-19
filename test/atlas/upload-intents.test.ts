@@ -76,6 +76,106 @@ describe('atlas media upload intent abuse controls', () => {
     jest.mocked(del).mockReset();
   });
 
+  it('refuses to issue a Blob token after an import leaves uploading state', async () => {
+    __testMocks.clientQuery.mockImplementation(async (query: string) => {
+      const text = normalizeQuery(query);
+      if (text.includes('SELECT batch_id FROM atlas_import_items')) {
+        return { rows: [{ batch_id: '3fe3cf16-c676-42cf-b3e6-87158c836fd9' }] };
+      }
+      if (text.includes('SELECT status FROM atlas_import_batches')) {
+        return { rows: [{ status: 'cancel_pending' }], rowCount: 1 };
+      }
+      return { rows: [], rowCount: 0 };
+    });
+
+    await expect(reserveAtlasMediaUploadVariant(intent)).rejects.toMatchObject<
+      Partial<AtlasUploadIntentError>
+    >({ code: 'not-found' });
+
+    const batchLockIndex = __testMocks.clientQuery.mock.calls.findIndex(
+      ([query]) =>
+        normalizeQuery(query).includes(
+          'SELECT status FROM atlas_import_batches',
+        ),
+    );
+    const entryLockIndex = __testMocks.clientQuery.mock.calls.findIndex(
+      ([query]) =>
+        normalizeQuery(query).includes('SELECT id FROM atlas_entries'),
+    );
+    expect(batchLockIndex).toBeGreaterThanOrEqual(0);
+    expect(entryLockIndex).toBe(-1);
+    expect(
+      __testMocks.clientQuery.mock.calls.some(([query]) =>
+        normalizeQuery(query).includes(
+          'INSERT INTO atlas_media_upload_intents',
+        ),
+      ),
+    ).toBe(false);
+  });
+
+  it('locks an active import batch before its item and entry', async () => {
+    __testMocks.clientQuery.mockImplementation(async (query: string) => {
+      const text = normalizeQuery(query);
+      if (text.includes('SELECT batch_id FROM atlas_import_items')) {
+        return { rows: [{ batch_id: '3fe3cf16-c676-42cf-b3e6-87158c836fd9' }] };
+      }
+      if (text.includes('SELECT status FROM atlas_import_batches')) {
+        return { rows: [{ status: 'uploading' }], rowCount: 1 };
+      }
+      if (
+        text.includes('SELECT id FROM atlas_import_items') &&
+        text.includes('expected_media_id = $4')
+      ) {
+        return { rows: [{ id: '1476ce67-531d-423a-a977-f6e895374419' }] };
+      }
+      if (text.includes('SELECT id FROM atlas_entries')) {
+        return { rows: [{ id: entryId }], rowCount: 1 };
+      }
+      if (
+        text.includes('FROM atlas_media_upload_intents') &&
+        text.includes('WHERE media_id = $1')
+      ) {
+        return {
+          rows: [
+            {
+              media_id: mediaId,
+              user_id: userId,
+              entry_id: entryId,
+              original_path: `${pathname}.other`,
+              thumbnail_path: thumbnailPathname,
+              expires_at: new Date(Date.now() + 60_000),
+              consumed_at: null,
+              cleanup_started_at: null,
+            },
+          ],
+        };
+      }
+      return { rows: [], rowCount: 0 };
+    });
+
+    await expect(reserveAtlasMediaUploadVariant(intent)).rejects.toMatchObject<
+      Partial<AtlasUploadIntentError>
+    >({ code: 'invalid' });
+
+    const queries = __testMocks.clientQuery.mock.calls.map(([query]) =>
+      normalizeQuery(query),
+    );
+    const batchLock = queries.findIndex((query) =>
+      query.includes('SELECT status FROM atlas_import_batches'),
+    );
+    const itemLock = queries.findIndex(
+      (query) =>
+        query.includes('SELECT id FROM atlas_import_items') &&
+        query.includes('expected_media_id = $4'),
+    );
+    const entryLock = queries.findIndex((query) =>
+      query.includes('SELECT id FROM atlas_entries'),
+    );
+    expect(batchLock).toBeGreaterThanOrEqual(0);
+    expect(itemLock).toBeGreaterThan(batchLock);
+    expect(entryLock).toBeGreaterThan(itemLock);
+  });
+
   it('counts abandoned and expired reservations against the per-entry limit', async () => {
     __testMocks.clientQuery.mockImplementation(
       async (query: string, values?: unknown[]) => {

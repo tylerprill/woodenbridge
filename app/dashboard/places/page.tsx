@@ -1,4 +1,4 @@
-import { BookmarkIcon } from '@heroicons/react/24/outline';
+import { BookmarkIcon, PhotoIcon } from '@heroicons/react/24/outline';
 import Link from 'next/link';
 
 import {
@@ -38,12 +38,17 @@ export default async function CollectionPage({
           <h1>Your collection.</h1>
           <p>Places you have explored and those still calling you onward.</p>
         </div>
-        <div className="collection-count">
-          <BookmarkIcon aria-hidden="true" />
-          <span>
-            <strong>{data.counts.total}</strong>
-            saved places
-          </span>
+        <div className="collection-heading-actions">
+          <Link href="/dashboard/import">
+            <PhotoIcon aria-hidden="true" /> Import photos
+          </Link>
+          <div className="collection-count">
+            <BookmarkIcon aria-hidden="true" />
+            <span>
+              <strong>{data.counts.total}</strong>
+              saved places
+            </span>
+          </div>
         </div>
       </header>
 
@@ -109,7 +114,10 @@ export default async function CollectionPage({
             Your collection is ready for its first place.
           </h2>
           <p>Drop a pin, write what matters, and it will appear here.</p>
-          <Link href="/dashboard">Open your atlas</Link>
+          <div className="collection-empty-actions">
+            <Link href="/dashboard/import">Import photos</Link>
+            <Link href="/dashboard">Open your atlas</Link>
+          </div>
         </section>
       )}
 

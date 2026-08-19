@@ -14,6 +14,7 @@ import {
 } from '@/app/lib/auth/security-notification-outbox';
 import { deleteExpiredAuthenticatedSessions } from '@/app/lib/auth/session-record';
 import { cleanupExpiredAtlasMediaUploadIntents } from '@/app/lib/atlas/upload-intents';
+import { cleanupCancelledAtlasImportBatches } from '@/app/lib/atlas/import-cleanup';
 
 export const dynamic = 'force-dynamic';
 export const runtime = 'nodejs';
@@ -60,6 +61,7 @@ export async function GET(request: Request) {
         deleteExpiredSecurityEvents(),
         deleteRetainedSecurityNotifications(),
         cleanupExpiredAtlasMediaUploadIntents(),
+        cleanupCancelledAtlasImportBatches(),
       ]),
       drainSecurityNotificationOutbox({ batchSize: 20, maxBatches: 4 }),
     ]);

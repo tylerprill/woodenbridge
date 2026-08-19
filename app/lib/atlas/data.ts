@@ -134,6 +134,16 @@ export async function getAtlasData(): Promise<AtlasData> {
       WHERE user_id = ${userId}
         AND record_state IN ('draft', 'saved')
         AND deleted_at IS NULL
+        AND NOT EXISTS (
+          SELECT 1
+          FROM atlas_import_items AS import_item
+          INNER JOIN atlas_import_batches AS import_batch
+            ON import_batch.id = import_item.batch_id
+            AND import_batch.user_id = import_item.user_id
+          WHERE import_item.entry_id = atlas_entries.id
+            AND import_item.user_id = atlas_entries.user_id
+            AND import_batch.status <> 'completed'
+        )
       ORDER BY updated_at DESC
       LIMIT 5000
     `,

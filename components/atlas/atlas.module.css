@@ -508,7 +508,7 @@
   transition: opacity 180ms ease;
 }
 
-.toolDock button {
+.toolDock :is(button, a) {
   display: grid;
   min-height: 3.7rem;
   place-items: center;
@@ -517,20 +517,21 @@
   font-size: 0.58rem;
   font-weight: 750;
   gap: 0.22rem;
+  text-decoration: none;
   transition:
     background 160ms ease,
     color 160ms ease,
     transform 160ms ease;
 }
 
-.toolDock button:hover,
-.toolDock button:focus-visible {
+.toolDock :is(button, a):hover,
+.toolDock :is(button, a):focus-visible {
   background: rgba(16, 35, 29, 0.07);
   color: var(--forest-950);
   transform: translateY(-1px);
 }
 
-.toolDock button svg {
+.toolDock :is(button, a) svg {
   width: 1.1rem;
 }
 
@@ -1789,7 +1790,7 @@
     transform: none;
   }
 
-  .toolDock button,
+  .toolDock :is(button, a),
   .toolDock .addButton {
     display: flex;
     min-height: 3rem;
@@ -1799,7 +1800,7 @@
     gap: 0.38rem;
   }
 
-  .toolDock button:not(.addButton) span {
+  .toolDock :is(button, a):not(.addButton) span {
     display: none;
   }
 
@@ -1933,7 +1934,7 @@
     display: none;
   }
 
-  .toolDock button:not(.addButton):last-child {
+  .toolDock :is(button, a):not(.addButton):last-child {
     display: none;
   }
 

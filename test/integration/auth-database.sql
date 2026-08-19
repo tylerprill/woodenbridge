@@ -6,6 +6,11 @@ DECLARE
 BEGIN
   FOREACH required_table IN ARRAY ARRAY[
     'account_creation_requests',
+    'atlas_import_batches',
+    'atlas_import_geocode_cache',
+    'atlas_import_geocode_global_usage',
+    'atlas_import_geocode_usage',
+    'atlas_import_items',
     'atlas_media_upload_intents',
     'auth_security_events',
     'auth_sessions',

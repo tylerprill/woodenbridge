@@ -1,7 +1,9 @@
 import { randomUUID } from 'node:crypto';
 
 import { auth } from '@/auth';
+import { createAtlasImportBatchAction } from '@/app/lib/actions/atlas-import';
 import { setManagedUserAccountStatus } from '@/app/lib/actions/owner-users';
+import type { CreateAtlasImportBatchInput } from '@/app/lib/atlas/import-definitions';
 import { LOGIN_LIMITS } from '@/app/lib/auth/auth-rate-limit';
 import { authorizeCredentials } from '@/app/lib/auth/credentials';
 import {
@@ -254,6 +256,147 @@ afterAll(async () => {
 });
 
 describe('production authentication flows against PostgreSQL', () => {
+  it('binds an Atlas import idempotency key to its original canonical payload', async () => {
+    const user = await insertUser({
+      label: 'atlas-import-idempotency',
+      passwordHash: await hashPassword('Atlas import password 2026!'),
+    });
+    authMock.mockResolvedValue({
+      accountStatus: 'active',
+      emailVerified: true,
+      role: 'user',
+      sessionValid: true,
+      sessionVersion: user.session_version,
+      user: { id: user.id },
+    } as never);
+
+    const input = {
+      clientRequestId: randomUUID(),
+      chapterTitle: 'A lake remembered',
+      chapterIntroduction: 'One summer afternoon.',
+      coverClientItemId: randomUUID(),
+      items: [
+        {
+          clientItemId: randomUUID(),
+          title: 'The original title',
+          description: 'Wind moving across the water.',
+          placeLabel: 'Sandusky, Michigan',
+          placeName: 'Sandusky',
+          placeLocality: 'Sandusky',
+          placeRegion: 'Michigan',
+          placeCountry: 'United States',
+          placeCountryCode: 'US',
+          placeGeocoder: null,
+          placeGeocodedAt: null,
+          visitedOn: '2026-08-18',
+          latitude: 43.4203,
+          longitude: -82.8297,
+          locationSource: 'photo_gps',
+          dateSource: 'photo_metadata',
+          dateConfirmed: true,
+          sourceName: 'IMG_1364.HEIC',
+          sourceMimeType: 'image/heic',
+          sourceByteSize: 3_200_000,
+          sourceHash: 'b'.repeat(64),
+          sourceWidth: null,
+          sourceHeight: null,
+          mediaWidth: null,
+          mediaHeight: null,
+          preparedByteSize: null,
+          thumbnailByteSize: null,
+        },
+        {
+          clientItemId: randomUUID(),
+          title: 'The chosen cover',
+          description: 'Light settling over the shoreline.',
+          placeLabel: 'Port Austin, Michigan',
+          placeName: 'Port Austin',
+          placeLocality: 'Port Austin',
+          placeRegion: 'Michigan',
+          placeCountry: 'United States',
+          placeCountryCode: 'US',
+          placeGeocoder: null,
+          placeGeocodedAt: null,
+          visitedOn: '2026-08-19',
+          latitude: 44.0475,
+          longitude: -82.9941,
+          locationSource: 'photo_gps',
+          dateSource: 'photo_metadata',
+          dateConfirmed: true,
+          sourceName: 'IMG_1365.HEIC',
+          sourceMimeType: 'image/heic',
+          sourceByteSize: 3_100_000,
+          sourceHash: 'c'.repeat(64),
+          sourceWidth: null,
+          sourceHeight: null,
+          mediaWidth: null,
+          mediaHeight: null,
+          preparedByteSize: null,
+          thumbnailByteSize: null,
+        },
+      ],
+    } satisfies CreateAtlasImportBatchInput;
+    input.coverClientItemId = input.items[1].clientItemId;
+
+    const [created, concurrentLostResponseRetry] = await Promise.all([
+      createAtlasImportBatchAction(input),
+      createAtlasImportBatchAction({
+        ...input,
+        chapterTitle: ` ${input.chapterTitle} `,
+      }),
+    ]);
+    expect(created.ok).toBe(true);
+    expect(concurrentLostResponseRetry.ok).toBe(true);
+    if (!created.ok || !concurrentLostResponseRetry.ok) {
+      throw new Error('The concurrent Atlas import could not be created.');
+    }
+    expect(concurrentLostResponseRetry.data.id).toBe(created.data.id);
+    expect(created.data.coverClientItemId).toBe(input.coverClientItemId);
+    expect(concurrentLostResponseRetry.data.coverClientItemId).toBe(
+      input.coverClientItemId,
+    );
+
+    const editedRetry = await createAtlasImportBatchAction({
+      ...input,
+      items: input.items.map((item, index) =>
+        index === 0 ? { ...item, title: 'An edited stale title' } : item,
+      ),
+    });
+    expect(editedRetry).toMatchObject({ ok: false, error: 'conflict' });
+
+    const persisted = await sql<{
+      batch_count: number;
+      entry_count: number;
+      cover_client_item_id: string;
+      title: string;
+    }>`
+      SELECT
+        COUNT(DISTINCT batch.id)::int AS batch_count,
+        COUNT(DISTINCT entry.id)::int AS entry_count,
+        MAX(batch.cover_client_item_id::text) AS cover_client_item_id,
+        MAX(
+          CASE
+            WHEN item.client_item_id = ${input.items[0].clientItemId}
+            THEN entry.title
+            ELSE NULL
+          END
+        ) AS title
+      FROM atlas_import_batches AS batch
+      INNER JOIN atlas_import_items AS item
+        ON item.batch_id = batch.id AND item.user_id = batch.user_id
+      INNER JOIN atlas_entries AS entry
+        ON entry.id = item.entry_id AND entry.user_id = item.user_id
+      WHERE batch.user_id = ${user.id}
+        AND batch.client_request_id = ${input.clientRequestId}
+    `;
+    expect(persisted.rows[0]).toEqual({
+      batch_count: 1,
+      entry_count: 2,
+      cover_client_item_id: input.coverClientItemId,
+      title: 'The original title',
+    });
+  });
+
   it('prevents an unverified registration from pre-hijacking an address', async () => {
     const email = testEmail('pending');
     const attackerPassword = 'Attacker-selected password 2026!';
