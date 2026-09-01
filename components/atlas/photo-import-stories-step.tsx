@@ -22,6 +22,7 @@ export function PhotoImportStoriesStep({
   storyIndex,
   completedStories,
   includeChapter,
+  canSkipRemaining,
   busy,
   locked,
   updateItem,
@@ -29,12 +30,14 @@ export function PhotoImportStoriesStep({
   onEditLocation,
   onBack,
   onContinue,
+  onSkipRemaining,
 }: {
   items: ImportItem[];
   currentItem: ImportItem;
   storyIndex: number;
   completedStories: number;
   includeChapter: boolean;
+  canSkipRemaining: boolean;
   busy: boolean;
   locked: boolean;
   updateItem: UpdateImportItem;
@@ -42,6 +45,7 @@ export function PhotoImportStoriesStep({
   onEditLocation: (id: string) => void;
   onBack: () => void;
   onContinue: () => void;
+  onSkipRemaining: () => void;
 }) {
   return (
     <main className={styles.storyLayout}>
@@ -71,8 +75,15 @@ export function PhotoImportStoriesStep({
             {completedStories} of {items.length} ready
           </span>
         </div>
+        <p className={styles.storyGuidance}>
+          {canSkipRemaining
+            ? 'A suggested title is ready. Personalize any memory, add a field note, or skip the remaining optional details.'
+            : 'A suggested title is ready. Confirm each low-confidence date before continuing; every other detail is optional.'}
+        </p>
         <div className={styles.editorField}>
-          <label htmlFor="import-memory-title">Title</label>
+          <label htmlFor="import-memory-title">
+            Title <em>Suggested</em>
+          </label>
           <input
             id="import-memory-title"
             value={currentItem.title}
@@ -230,23 +241,64 @@ export function PhotoImportStoriesStep({
         </ol>
       </aside>
       <footer className={styles.actionBar}>
-        <button type="button" onClick={onBack} disabled={locked}>
-          <ArrowLeftIcon aria-hidden="true" />{' '}
-          {storyIndex ? 'Previous memory' : 'Review journey'}
-        </button>
         <button
           type="button"
-          className={styles.primaryButton}
-          onClick={onContinue}
-          disabled={busy}
+          aria-label={storyIndex ? 'Previous memory' : 'Review journey'}
+          onClick={onBack}
+          disabled={locked}
         >
-          {storyIndex < items.length - 1
-            ? 'Next memory'
-            : includeChapter
-              ? 'Shape the chapter'
-              : 'Create memory'}
-          <ArrowRightIcon aria-hidden="true" />
+          <ArrowLeftIcon aria-hidden="true" />{' '}
+          <span className={styles.longActionLabel}>
+            {storyIndex ? 'Previous memory' : 'Review journey'}
+          </span>
+          <span className={styles.shortActionLabel}>
+            {storyIndex ? 'Previous' : 'Review'}
+          </span>
         </button>
+        <div className={styles.storyActions}>
+          {storyIndex < items.length - 1 && canSkipRemaining ? (
+            <button
+              type="button"
+              aria-label="Skip optional details"
+              onClick={onSkipRemaining}
+              disabled={busy}
+            >
+              <span className={styles.longActionLabel}>
+                Skip optional details
+              </span>
+              <span className={styles.shortActionLabel}>Skip details</span>
+            </button>
+          ) : null}
+          <button
+            type="button"
+            className={styles.primaryButton}
+            aria-label={
+              storyIndex < items.length - 1
+                ? 'Next memory'
+                : includeChapter
+                  ? 'Shape the chapter'
+                  : 'Create memory'
+            }
+            onClick={onContinue}
+            disabled={busy}
+          >
+            <span className={styles.longActionLabel}>
+              {storyIndex < items.length - 1
+                ? 'Next memory'
+                : includeChapter
+                  ? 'Shape the chapter'
+                  : 'Create memory'}
+            </span>
+            <span className={styles.shortActionLabel}>
+              {storyIndex < items.length - 1
+                ? 'Next'
+                : includeChapter
+                  ? 'Chapter'
+                  : 'Create'}
+            </span>
+            <ArrowRightIcon aria-hidden="true" />
+          </button>
+        </div>
       </footer>
     </main>
   );

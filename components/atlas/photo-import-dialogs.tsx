@@ -191,7 +191,7 @@ export function ImportLeaveDialog({
       <span className={styles.dialogIcon}>
         <PhotoIcon aria-hidden="true" />
       </span>
-      <p className="section-kicker">Leave this photo journey?</p>
+      <p className="section-kicker">Leave this photo upload?</p>
       <h2 id="leave-dialog-title">Your unfinished review will close.</h2>
       <p>
         {hasDraft
@@ -212,7 +212,7 @@ export function ImportLeaveDialog({
             ? 'Clearing draft…'
             : armed
               ? 'Confirm discard'
-              : 'Discard import'}
+              : 'Discard upload'}
         </button>
       </div>
     </ImportDialogShell>

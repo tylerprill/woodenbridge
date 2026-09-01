@@ -21,7 +21,7 @@ export function ImportProgress({
   const current = getImportStepIndex(step, includeChapter);
 
   return (
-    <nav className={styles.stepper} aria-label="Photo import progress">
+    <nav className={styles.stepper} aria-label="Photo upload progress">
       <ol>
         {visibleSteps.map(([value, label], index) => (
           <li
@@ -125,7 +125,7 @@ export function ImportHeading({
     <>
       <p className="section-kicker">Photo journey</p>
       <h1 ref={headingRef} tabIndex={-1}>
-        {step === 'choose' && 'Let your camera roll find its way home.'}
+        {step === 'choose' && 'Turn your camera roll into an atlas.'}
         {step === 'review' && 'See where the journey took shape.'}
         {step === 'stories' && 'Give every place its voice.'}
         {step === 'chapter' && 'Bring the journey together.'}
@@ -134,11 +134,11 @@ export function ImportHeading({
       </h1>
       <p>
         {step === 'choose' &&
-          'Field Atlas reads the captured dates and GPS already kept inside your photographs, then asks you to confirm every memory.'}
+          'Upload once. Field Atlas suggests dates, places, and titles, then brings only the exceptions to your attention.'}
         {step === 'review' &&
           'Every pin remains editable. Nothing becomes a memory until you approve the journey.'}
         {step === 'stories' &&
-          'Add the title and small detail that make each photograph worth returning to.'}
+          'Suggested titles are ready. Personalize what matters, or move on without filling every field.'}
         {step === 'chapter' &&
           'Keep the memories in their captured order, choose a cover, and name what connects them.'}
         {step === 'complete' &&

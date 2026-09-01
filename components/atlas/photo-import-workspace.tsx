@@ -47,6 +47,7 @@ import {
 import {
   applyImportAnalysis,
   createAnalyzingImportItem,
+  formatImportDate,
   formatImportSize,
   getImportFileProblem,
   getImportPlaceLabel,
@@ -163,6 +164,26 @@ function recoveryMapping(batch: AtlasImportBatch): ActiveBatch {
       mediaId: item.mediaId,
     })),
   };
+}
+
+function suggestedMemoryTitle(item: ImportItem) {
+  const place = item.placeLabel.trim();
+  const date = item.visitedOn ? formatImportDate(item.visitedOn) : '';
+  const filename = item.fileName
+    .replace(/\.[^.]+$/, '')
+    .replace(/[_-]+/g, ' ')
+    .trim();
+  const cameraFilename = /^(?:img|dsc|pxl|image|photo)\s*\d+$/i.test(filename);
+  const suggestion =
+    place && date
+      ? `${place} · ${date}`
+      : place ||
+        (date
+          ? `Memory from ${date}`
+          : cameraFilename
+            ? 'Untitled memory'
+            : filename);
+  return (suggestion || 'Untitled memory').slice(0, 80);
 }
 
 export function PhotoImportWorkspace({
@@ -582,18 +603,18 @@ export function PhotoImportWorkspace({
   const chooseFiles = async (selectedFiles: File[]) => {
     if (busy || openRecovery) return;
     const room = MAX_IMPORT_PHOTOS - items.length;
-    const considered = selectedFiles.slice(0, Math.max(room, 0));
     const nextRejections: string[] = [];
-    if (selectedFiles.length > room) {
-      nextRejections.push(
-        `This journey has room for ${room} more ${room === 1 ? 'photo' : 'photos'}.`,
-      );
-    }
-    const valid = considered.filter((file) => {
+    const accepted = selectedFiles.filter((file) => {
       const problem = getImportFileProblem(file);
       if (problem) nextRejections.push(`${file.name}: ${problem}`);
       return !problem;
     });
+    const valid = accepted.slice(0, Math.max(room, 0));
+    if (accepted.length > room) {
+      nextRejections.push(
+        `This journey has room for ${room} more ${room === 1 ? 'photo' : 'photos'}. ${accepted.length - Math.max(room, 0)} valid ${accepted.length - Math.max(room, 0) === 1 ? 'photo was' : 'photos were'} left out.`,
+      );
+    }
     setRejections(nextRejections);
     if (!valid.length) return;
 
@@ -739,19 +760,20 @@ export function PhotoImportWorkspace({
     }
   };
 
-  const removeItem = (id: string) => {
+  const removeItems = (ids: string[]) => {
     if (activeBatch) return;
-    removedItemIdsRef.current.add(id);
-    const item = items.find((candidate) => candidate.clientItemId === id);
-    if (item?.previewUrl) {
+    const removedIds = new Set(ids);
+    ids.forEach((id) => removedItemIdsRef.current.add(id));
+    items.forEach((item) => {
+      if (!removedIds.has(item.clientItemId) || !item.previewUrl) return;
       URL.revokeObjectURL(item.previewUrl);
       previewUrlsRef.current.delete(item.previewUrl);
-    }
+    });
     const remaining = items.filter(
-      (candidate) => candidate.clientItemId !== id,
+      (candidate) => !removedIds.has(candidate.clientItemId),
     );
     setItems(remaining);
-    if (coverClientItemId === id) {
+    if (coverClientItemId && removedIds.has(coverClientItemId)) {
       setCoverClientItemId(
         remaining.find(
           (candidate) =>
@@ -759,6 +781,10 @@ export function PhotoImportWorkspace({
         )?.clientItemId ?? null,
       );
     }
+  };
+
+  const removeItem = (id: string) => {
+    removeItems([id]);
   };
 
   const confirmLocation = async (
@@ -865,8 +891,32 @@ export function PhotoImportWorkspace({
       setMessage('Place every photograph on the atlas before continuing.');
       return;
     }
+    setItems((current) =>
+      current.map((item) =>
+        item.state !== 'duplicate' &&
+        item.state !== 'error' &&
+        !item.title.trim()
+          ? { ...item, title: suggestedMemoryTitle(item) }
+          : item,
+      ),
+    );
     setStoryIndex(0);
     goToStep('stories');
+  };
+
+  const confirmAllFileDates = () => {
+    const count = items.filter(needsFileDateConfirmation).length;
+    if (!count || activeBatch) return;
+    setItems((current) =>
+      current.map((item) =>
+        needsFileDateConfirmation(item)
+          ? { ...item, fileDateConfirmed: true }
+          : item,
+      ),
+    );
+    setMessage(
+      `${count} file ${count === 1 ? 'date is' : 'dates are'} confirmed.`,
+    );
   };
 
   const advanceStory = () => {
@@ -899,6 +949,12 @@ export function PhotoImportWorkspace({
       focusStep();
       return;
     }
+    if (includeChapter) goToStep('chapter');
+    else void createJourney(false);
+  };
+
+  const skipOptionalDetails = () => {
+    if (busy) return;
     if (includeChapter) goToStep('chapter');
     else void createJourney(false);
   };
@@ -1414,7 +1470,7 @@ export function PhotoImportWorkspace({
               className={styles.backLink}
               onClick={() => setLeaveHref('/dashboard')}
             >
-              <ArrowLeftIcon aria-hidden="true" /> Leave import
+              <ArrowLeftIcon aria-hidden="true" /> Leave upload
             </button>
           ) : (
             <Link className={styles.backLink} href="/dashboard">
@@ -1449,12 +1505,12 @@ export function PhotoImportWorkspace({
           <span className={styles.dialogIcon} aria-hidden="true">
             <ArrowPathIcon />
           </span>
-          <p className="section-kicker">Journey recovery</p>
-          <h2>An interrupted private import is waiting.</h2>
+          <p className="section-kicker">Upload recovery</p>
+          <h2>An interrupted private upload is waiting.</h2>
           <p>
             {openRecovery.status === 'ready'
               ? `${openRecovery.items.length} ${openRecovery.items.length === 1 ? 'memory is' : 'memories are'} uploaded and ready to finish.`
-              : 'The original files are not retained by the browser. Clear this incomplete draft, then select the photographs again.'}
+              : 'This browser no longer has the original files. Clear the incomplete draft, then select those photographs again.'}
           </p>
           {openRecovery.status === 'ready' && recoveredCover ? (
             <div className={styles.recoveryCoverIntent}>
@@ -1519,6 +1575,8 @@ export function PhotoImportWorkspace({
           blockingCount={blockingCount}
           onEditLocation={setLocationEditorId}
           onRemove={removeItem}
+          onRemoveMany={removeItems}
+          onConfirmFileDates={confirmAllFileDates}
           onBack={() => goToStep('choose')}
           onContinue={startStories}
         />
@@ -1531,6 +1589,7 @@ export function PhotoImportWorkspace({
           storyIndex={storyIndex}
           completedStories={completedStories}
           includeChapter={includeChapter}
+          canSkipRemaining={!items.some(needsFileDateConfirmation)}
           busy={busy}
           locked={busy || Boolean(activeBatch)}
           updateItem={(id, update) => {
@@ -1544,6 +1603,7 @@ export function PhotoImportWorkspace({
               : goToStep('review')
           }
           onContinue={advanceStory}
+          onSkipRemaining={skipOptionalDetails}
         />
       ) : null}
 

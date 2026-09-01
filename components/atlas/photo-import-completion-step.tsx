@@ -62,7 +62,7 @@ export function PhotoImportCompletionStep({
           ) : null}
           <Link href="/dashboard">View on the Atlas</Link>
           <button type="button" onClick={onRestart}>
-            Import another journey
+            Upload another journey
           </button>
         </div>
       </section>

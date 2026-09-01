@@ -26,9 +26,9 @@ export const ACCEPTED_IMPORT_MIME_TYPES = new Set([
 ]);
 
 export const IMPORT_STEPS = [
-  ['choose', 'Choose photos'],
+  ['choose', 'Upload photos'],
   ['review', 'Review journey'],
-  ['stories', 'Tell the stories'],
+  ['stories', 'Optional details'],
   ['chapter', 'Shape chapter'],
 ] as const;
 

@@ -4,7 +4,7 @@ import { getLatestOpenAtlasImportBatchData } from '@/app/lib/atlas/import-data';
 import { PhotoImportWorkspace } from '@/components/atlas/photo-import-workspace';
 
 export const metadata: Metadata = {
-  title: 'Import photos — Field Atlas',
+  title: 'Upload photos — Field Atlas',
   description:
     'Turn the places and dates kept in your photographs into private Atlas memories.',
 };

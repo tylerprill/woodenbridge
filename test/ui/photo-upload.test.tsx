@@ -8,6 +8,10 @@ import userEvent from '@testing-library/user-event';
 import { upload } from '@vercel/blob/client';
 
 import { registerAtlasMediaAction } from '@/app/lib/actions/atlas-media';
+import {
+  analyzeAtlasImportPhoto,
+  prepareAtlasImportPhoto,
+} from '@/app/lib/atlas/photo-import-client';
 import { MemoryPhotos } from '@/components/atlas/memory-photos';
 
 jest.mock('@vercel/blob/client', () => ({ upload: jest.fn() }));
@@ -16,28 +20,53 @@ jest.mock('@/app/lib/actions/atlas-media', () => ({
   discardAtlasMediaUploadAction: jest.fn(),
   registerAtlasMediaAction: jest.fn(),
 }));
+jest.mock('@/app/lib/atlas/photo-import-client', () => ({
+  ...jest.requireActual('@/app/lib/atlas/photo-import-client'),
+  analyzeAtlasImportPhoto: jest.fn(),
+  prepareAtlasImportPhoto: jest.fn(),
+}));
 
 describe('photo upload UI', () => {
   it('prepares, uploads, registers, and returns a valid photo', async () => {
     const user = userEvent.setup();
     const onChange = jest.fn();
-    const close = jest.fn();
-    Object.defineProperty(window, 'createImageBitmap', {
-      configurable: true,
-      value: jest.fn().mockResolvedValue({ width: 1200, height: 800, close }),
-    });
     Object.defineProperty(window.crypto, 'randomUUID', {
       configurable: true,
       value: jest.fn(() => '00000000-0000-4000-8000-000000000001'),
     });
-    jest.spyOn(HTMLCanvasElement.prototype, 'getContext').mockReturnValue({
-      drawImage: jest.fn(),
-    } as unknown as CanvasRenderingContext2D);
-    jest
-      .spyOn(HTMLCanvasElement.prototype, 'toBlob')
-      .mockImplementation((callback) => {
-        callback(new Blob(['thumbnail'], { type: 'image/webp' }));
-      });
+    const source = new File(['photo'], 'kyoto.png', { type: 'image/png' });
+    const analysis = {
+      file: source,
+      name: source.name,
+      byteSize: source.size,
+      sourceHash: 'source-hash',
+      declaredMimeType: source.type,
+      format: 'png' as const,
+      isHeic: false,
+      canPrepare: true,
+      orientation: 1,
+      location: null,
+      capture: null,
+      issues: [],
+    };
+    const master = new Blob(['private-metadata-removed'], {
+      type: 'image/jpeg',
+    });
+    const thumbnail = new Blob(['thumbnail'], { type: 'image/webp' });
+    jest.mocked(analyzeAtlasImportPhoto).mockResolvedValue(analysis);
+    jest.mocked(prepareAtlasImportPhoto).mockResolvedValue({
+      analysis,
+      master,
+      thumbnail,
+      dimensions: {
+        sourceWidth: 2400,
+        sourceHeight: 1600,
+        masterWidth: 1200,
+        masterHeight: 800,
+        thumbnailWidth: 600,
+        thumbnailHeight: 400,
+      },
+    });
     let resolveOriginal!: (value: { pathname: string }) => void;
     let resolveThumbnail!: (value: { pathname: string }) => void;
     const originalUpload = new Promise<{ pathname: string }>((resolve) => {
@@ -79,11 +108,8 @@ describe('photo upload UI', () => {
       />,
     );
 
-    const input = screen.getByLabelText('Add photos');
-    const uploadInteraction = user.upload(
-      input,
-      new File(['photo'], 'kyoto.png', { type: 'image/png' }),
-    );
+    const input = screen.getByLabelText('Upload photos');
+    const uploadInteraction = user.upload(input, source);
 
     // The thumbnail request starts before the unresolved original finishes.
     await waitFor(() => expect(upload).toHaveBeenCalledTimes(2));
@@ -98,6 +124,8 @@ describe('photo upload UI', () => {
     expect(originalPayload).toEqual(
       JSON.parse(thumbnailOptions.clientPayload ?? '{}'),
     );
+    expect(jest.mocked(upload).mock.calls[0][1]).toBe(master);
+    expect(jest.mocked(upload).mock.calls[1][1]).toBe(thumbnail);
     resolveOriginal({ pathname: 'atlas/memory-1/photo.png' });
     resolveThumbnail({ pathname: 'atlas/memory-1/photo.thumb.webp' });
     await uploadInteraction;
@@ -112,7 +140,6 @@ describe('photo upload UI', () => {
       }),
     );
     expect(onChange).toHaveBeenCalledWith([media]);
-    expect(close).toHaveBeenCalled();
   });
 
   it('rejects unsupported files before any upload begins', async () => {
@@ -130,12 +157,12 @@ describe('photo upload UI', () => {
     );
 
     await user.upload(
-      screen.getByLabelText('Add photos'),
+      screen.getByLabelText('Upload photos'),
       new File(['notes'], 'notes.txt', { type: 'text/plain' }),
     );
 
     expect(screen.getByRole('alert')).toHaveTextContent(
-      'Choose a JPG, PNG, or WebP image.',
+      'Choose a JPG, PNG, WebP, HEIC, or HEIF photograph.',
     );
     expect(upload).not.toHaveBeenCalled();
   });

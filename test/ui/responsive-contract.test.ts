@@ -35,9 +35,52 @@ describe('responsive and route-level UI contracts', () => {
     )?.[1];
 
     expect(compactPage).toContain('width: 100%');
-    expect(compactPage).toContain('margin-inline: 0');
+    expect(compactPage).toContain('margin-inline: auto');
     expect(compactPage).not.toMatch(/calc\(100%\s*\+/);
     expect(compactPage).not.toMatch(/margin-inline:\s*-/);
+  });
+
+  it('uses one compact spacing rhythm across the mobile upload flow', () => {
+    const css = readFileSync(
+      join(root, 'components/atlas/photo-import.module.css'),
+      'utf8',
+    );
+    const mobile = css.match(
+      /@media \(max-width: 760px\) \{[\s\S]*?@media/,
+    )?.[0];
+    const compact = css.match(/@media \(max-width: 480px\) \{[\s\S]*\}/)?.[0];
+
+    expect(mobile).toContain('--import-mobile-gap: 1rem');
+    expect(mobile).toMatch(
+      /\.chooseLayout,[\s\S]*?\.chapterLayout \{[\s\S]*?gap: var\(--import-mobile-gap\);/,
+    );
+    expect(compact).toMatch(
+      /\.dropCard,[\s\S]*?\.chapterOrder \{[\s\S]*?padding: 1rem;/,
+    );
+    expect(compact).toMatch(
+      /\.actionBar \{[\s\S]*?padding: 0\.625rem;[\s\S]*?gap: 0\.5rem;/,
+    );
+    expect(compact).toMatch(
+      /\.storyForm \.sectionHeading \{[\s\S]*?display: flex;[\s\S]*?gap: 0\.75rem;/,
+    );
+    expect(compact).toMatch(
+      /\.longActionLabel \{[\s\S]*?display: none;[\s\S]*?\.shortActionLabel \{[\s\S]*?display: inline;/,
+    );
+  });
+
+  it('keeps optional-detail actions in one compact phone row', () => {
+    const css = readFileSync(
+      join(root, 'components/atlas/photo-import.module.css'),
+      'utf8',
+    );
+    const compact = css.match(/@media \(max-width: 480px\) \{[\s\S]*\}/)?.[0];
+
+    expect(compact).toMatch(
+      /\.storyActions \{[\s\S]*?flex-direction: row;[\s\S]*?align-items: center;/,
+    );
+    expect(compact).toMatch(
+      /\.storyActions > button \{[\s\S]*?min-width: 0;[\s\S]*?flex: 1 1 0;/,
+    );
   });
 
   it('keeps the keyboard map-center action at least 44px tall', () => {

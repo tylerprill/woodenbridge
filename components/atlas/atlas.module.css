@@ -772,27 +772,40 @@
   line-height: 1.65;
 }
 
-.emptyState button {
-  display: inline-flex;
-  min-height: 2.9rem;
-  align-items: center;
+.emptyStateActions {
+  display: flex;
+  flex-wrap: wrap;
   margin-top: 1.25rem;
-  padding-inline: 1rem;
-  border-radius: 999px;
-  background: var(--forest-950);
-  color: var(--paper-light);
-  font-size: 0.7rem;
-  font-weight: 800;
   gap: 0.55rem;
 }
 
-.emptyState button:hover,
-.emptyState button:focus-visible {
+.emptyStateActions :is(a, button) {
+  display: inline-flex;
+  min-height: 3rem;
+  align-items: center;
+  padding-inline: 1rem;
+  border: 1px solid var(--forest-950);
+  border-radius: 999px;
+  color: var(--forest-950);
+  font-size: 0.7rem;
+  font-weight: 800;
+  gap: 0.55rem;
+  text-decoration: none;
+}
+
+.emptyStateActions a {
+  background: var(--forest-950);
+  color: var(--paper-light);
+}
+
+.emptyStateActions :is(a, button):hover,
+.emptyStateActions :is(a, button):focus-visible {
   background: var(--forest-800);
+  color: var(--paper-light);
   transform: translateY(-1px);
 }
 
-.emptyState button svg {
+.emptyStateActions :is(a, button) svg {
   width: 0.9rem;
 }
 
@@ -1112,7 +1125,7 @@
 
 .photoHeading p {
   color: rgba(76, 106, 91, 0.72);
-  font-size: 0.62rem;
+  font-size: 0.72rem;
   line-height: 1.45;
 }
 
@@ -1120,7 +1133,7 @@
   position: relative;
   display: inline-flex;
   overflow: hidden;
-  min-height: 2.35rem;
+  min-height: 2.75rem;
   flex: 0 0 auto;
   align-items: center;
   justify-content: center;
@@ -1130,13 +1143,20 @@
   background: rgba(255, 255, 255, 0.5);
   color: var(--forest-950);
   cursor: pointer;
-  font-size: 0.62rem;
+  font-size: 0.7rem;
   font-weight: 800;
   gap: 0.4rem;
   transition:
     border-color 160ms ease,
     background 160ms ease,
     transform 160ms ease;
+}
+
+.photoUploadGuidance {
+  margin-top: 0.55rem;
+  color: rgba(76, 106, 91, 0.72);
+  font-size: 0.68rem;
+  line-height: 1.45;
 }
 
 .photoUploadButton:hover,
@@ -1235,14 +1255,15 @@
   bottom: 0.4rem;
   z-index: 1;
   display: inline-flex;
-  min-height: 1.9rem;
+  min-width: 2.75rem;
+  min-height: 2.75rem;
   align-items: center;
   padding-inline: 0.55rem;
   border: 1px solid rgba(255, 255, 255, 0.25);
   border-radius: 999px;
   background: rgba(16, 35, 29, 0.82);
   color: var(--paper-light);
-  font-size: 0.56rem;
+  font-size: 0.66rem;
   font-weight: 800;
   gap: 0.3rem;
   backdrop-filter: blur(10px);
@@ -1263,9 +1284,13 @@
 
 .photoMessage {
   margin-top: 0.65rem;
-  color: #7a3d29;
-  font-size: 0.62rem;
+  color: var(--forest-800);
+  font-size: 0.7rem;
   line-height: 1.5;
+}
+
+.photoMessage[data-error='true'] {
+  color: #7a3d29;
 }
 
 .drawerMessage {

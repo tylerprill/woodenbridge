@@ -590,9 +590,9 @@ export function AtlasWorkspace({
           <span>{placementMode ? 'Cancel pin' : 'Add memory'}</span>
         </button>
         <span className={styles.toolDivider} aria-hidden="true" />
-        <Link href="/dashboard/import" aria-label="Import photos as memories">
+        <Link href="/dashboard/import" aria-label="Upload photos">
           <PhotoIcon aria-hidden="true" />
-          <span>Import</span>
+          <span>Upload</span>
         </Link>
         <button
           type="button"
@@ -684,12 +684,17 @@ export function AtlasWorkspace({
           <p className={styles.eyebrow}>The first page</p>
           <h2 id="empty-atlas-title">Your world is waiting.</h2>
           <p>
-            Begin with somewhere that changed you, somewhere you miss, or
-            somewhere still calling your name.
+            Begin with the photographs already in your camera roll, or place a
+            memory manually on the map.
           </p>
-          <button type="button" onClick={() => setPlacementMode(true)}>
-            <PlusIcon aria-hidden="true" /> Place your first memory
-          </button>
+          <div className={styles.emptyStateActions}>
+            <Link href="/dashboard/import">
+              <PhotoIcon aria-hidden="true" /> Upload photos
+            </Link>
+            <button type="button" onClick={() => setPlacementMode(true)}>
+              <PlusIcon aria-hidden="true" /> Place manually
+            </button>
+          </div>
         </section>
       ) : null}
 

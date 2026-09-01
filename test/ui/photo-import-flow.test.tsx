@@ -68,7 +68,7 @@ describe('photo journey import UI', () => {
     expect(screen.getByText(/configured geocoder/i)).toBeInTheDocument();
     expect(screen.getByText(/Photos stay on this device/i)).toBeInTheDocument();
     expect(
-      screen.getByRole('button', { name: /Find the journey/i }),
+      screen.getByRole('button', { name: /Review 0 photos/i }),
     ).toBeDisabled();
   });
 
@@ -99,11 +99,82 @@ describe('photo journey import UI', () => {
     expect(onChoose).toHaveBeenCalledWith(files);
   });
 
+  it('accepts drag-and-drop, exposes mobile capture, and keeps every selection visible', () => {
+    const onChoose = jest.fn();
+    const items = Array.from({ length: 13 }, (_, index) =>
+      importItem(`photo-${index}`, {
+        state: 'ready',
+        latitude: 42.1,
+        longitude: -83.1,
+        placeLabel: 'Detroit, Michigan',
+      }),
+    );
+    render(
+      <PhotoImportChooseStep
+        items={items}
+        activeCount={items.length}
+        totalSize="13 MB"
+        busy={false}
+        selectionLocked={false}
+        inputRef={createRef<HTMLInputElement>()}
+        rejections={[]}
+        onChoose={onChoose}
+        onRemove={jest.fn()}
+        onContinue={jest.fn()}
+      />,
+    );
+
+    expect(screen.getByLabelText('Take a photo')).toHaveAttribute(
+      'capture',
+      'environment',
+    );
+    expect(
+      screen.getByRole('button', { name: 'Remove photo-12.jpg' }),
+    ).toBeVisible();
+
+    const dropTarget = screen.getByRole('region', {
+      name: 'Upload a journey.',
+    });
+    const files = [new File(['drop'], 'dropped.jpg', { type: 'image/jpeg' })];
+    fireEvent.dragEnter(dropTarget, { dataTransfer: { files } });
+    expect(screen.getByText('Drop them right here.')).toBeVisible();
+    fireEvent.drop(dropTarget, { dataTransfer: { files } });
+    expect(onChoose).toHaveBeenCalledWith(files);
+  });
+
+  it('counts every selection that genuinely needs attention', () => {
+    const items = [
+      importItem('ready', {
+        state: 'ready',
+        latitude: 42.1,
+        longitude: -83.1,
+      }),
+      importItem('missing-place'),
+      importItem('unreadable', { state: 'error' }),
+    ];
+    render(
+      <PhotoImportChooseStep
+        items={items}
+        activeCount={2}
+        totalSize="3 MB"
+        busy={false}
+        selectionLocked={false}
+        inputRef={createRef<HTMLInputElement>()}
+        rejections={[]}
+        onChoose={jest.fn()}
+        onRemove={jest.fn()}
+        onContinue={jest.fn()}
+      />,
+    );
+
+    expect(screen.getByText('2 need attention')).toBeVisible();
+  });
+
   it('uses three progress steps when a single photo skips chapter creation', () => {
     render(<ImportProgress step="stories" includeChapter={false} />);
     expect(screen.getAllByRole('listitem')).toHaveLength(3);
     expect(screen.queryByText('Shape chapter')).not.toBeInTheDocument();
-    expect(screen.getByText('Tell the stories').closest('li')).toHaveAttribute(
+    expect(screen.getByText('Optional details').closest('li')).toHaveAttribute(
       'aria-current',
       'step',
     );

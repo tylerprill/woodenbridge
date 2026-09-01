@@ -16,17 +16,16 @@ import {
 } from '@/app/lib/actions/atlas-media';
 import type { AtlasMedia } from '@/app/lib/atlas/definitions';
 import {
-  ATLAS_MEDIA_ALLOWED_TYPES,
-  ATLAS_MEDIA_MAX_BYTES,
   ATLAS_MEDIA_MAX_FILES,
-  ATLAS_THUMBNAIL_MAX_BYTES,
-  ATLAS_THUMBNAIL_MIME_TYPE,
-  ATLAS_THUMBNAIL_QUALITY,
   createAtlasMediaPath,
   createAtlasThumbnailPath,
-  getAtlasThumbnailDimensions,
   isAllowedAtlasMediaType,
 } from '@/app/lib/atlas/media-policy';
+import {
+  analyzeAtlasImportPhoto,
+  prepareAtlasImportPhoto,
+} from '@/app/lib/atlas/photo-import-client';
+import { getImportFileProblem } from './photo-import-helpers';
 import styles from './atlas.module.css';
 
 type MemoryPhotosProps = {
@@ -39,96 +38,8 @@ type MemoryPhotosProps = {
   onChange: (media: AtlasMedia[]) => void;
 };
 
-function encodeCanvas(
-  canvas: HTMLCanvasElement,
-  contentType: 'image/jpeg' | 'image/webp',
-) {
-  return new Promise<Blob | null>((resolve) => {
-    canvas.toBlob(
-      (blob) => resolve(blob?.type === contentType ? blob : null),
-      contentType,
-      ATLAS_THUMBNAIL_QUALITY,
-    );
-  });
-}
-
-async function canvasToBlob(canvas: HTMLCanvasElement) {
-  const webp = await encodeCanvas(canvas, ATLAS_THUMBNAIL_MIME_TYPE);
-  if (webp) return webp;
-
-  // Chrome on iOS uses WebKit, where unsupported canvas encoders fall back to
-  // PNG. JPEG is supported there and keeps thumbnails compact.
-  const jpeg = await encodeCanvas(canvas, 'image/jpeg');
-  if (jpeg) return jpeg;
-  throw new Error('This browser could not prepare the thumbnail.');
-}
-
-async function loadPhoto(file: File) {
-  if (typeof window.createImageBitmap === 'function') {
-    const bitmap = await window.createImageBitmap(file, {
-      imageOrientation: 'from-image',
-    });
-    return {
-      source: bitmap as CanvasImageSource,
-      width: bitmap.width,
-      height: bitmap.height,
-      release: () => bitmap.close(),
-    };
-  }
-
-  const objectUrl = URL.createObjectURL(file);
-  const image = new window.Image();
-  image.decoding = 'async';
-  image.src = objectUrl;
-  try {
-    await image.decode();
-    return {
-      source: image as CanvasImageSource,
-      width: image.naturalWidth,
-      height: image.naturalHeight,
-      release: () => URL.revokeObjectURL(objectUrl),
-    };
-  } catch (error) {
-    URL.revokeObjectURL(objectUrl);
-    throw error;
-  }
-}
-
-async function preparePhoto(file: File) {
-  const photo = await loadPhoto(file);
-
-  try {
-    const dimensions = { width: photo.width, height: photo.height };
-    const thumbnailDimensions = getAtlasThumbnailDimensions(
-      dimensions.width,
-      dimensions.height,
-    );
-    const canvas = document.createElement('canvas');
-    canvas.width = thumbnailDimensions.width;
-    canvas.height = thumbnailDimensions.height;
-    const context = canvas.getContext('2d');
-    if (!context) throw new Error('This browser could not prepare the photo.');
-
-    context.drawImage(photo.source, 0, 0, canvas.width, canvas.height);
-    const thumbnail = await canvasToBlob(canvas);
-    if (thumbnail.size > ATLAS_THUMBNAIL_MAX_BYTES) {
-      throw new Error('The photo preview is unexpectedly large.');
-    }
-
-    return { dimensions, thumbnail };
-  } finally {
-    photo.release();
-  }
-}
-
 function fileError(file: File) {
-  if (!isAllowedAtlasMediaType(file.type)) {
-    return 'Choose a JPG, PNG, or WebP image.';
-  }
-  if (!file.size || file.size > ATLAS_MEDIA_MAX_BYTES) {
-    return 'Choose an image smaller than 10 MB.';
-  }
-  return null;
+  return getImportFileProblem(file);
 }
 
 export function MemoryPhotos({
@@ -144,6 +55,7 @@ export function MemoryPhotos({
   const [uploading, setUploading] = useState(false);
   const [progress, setProgress] = useState(0);
   const [message, setMessage] = useState('');
+  const [messageIsError, setMessageIsError] = useState(false);
   const [removeArmed, setRemoveArmed] = useState<string | null>(null);
 
   const uploadPhotos = async (files: File[]) => {
@@ -152,6 +64,7 @@ export function MemoryPhotos({
       setMessage(
         `This memory has room for ${availableSlots} more ${availableSlots === 1 ? 'photo' : 'photos'}.`,
       );
+      setMessageIsError(true);
       if (inputRef.current) inputRef.current.value = '';
       return;
     }
@@ -159,6 +72,7 @@ export function MemoryPhotos({
     const invalidFile = files.find((file) => fileError(file));
     if (invalidFile) {
       setMessage(`${invalidFile.name}: ${fileError(invalidFile)}`);
+      setMessageIsError(true);
       if (inputRef.current) inputRef.current.value = '';
       return;
     }
@@ -166,6 +80,7 @@ export function MemoryPhotos({
     setUploading(true);
     setProgress(0);
     setMessage('');
+    setMessageIsError(false);
 
     let pendingUpload: {
       mediaId: string;
@@ -175,17 +90,33 @@ export function MemoryPhotos({
 
     try {
       let nextMedia = [...media];
-      const uploadOperations = files.length * 2;
-
       for (let index = 0; index < files.length; index += 1) {
         const file = files[index];
-        const { dimensions, thumbnail } = await preparePhoto(file);
-        const mediaId = crypto.randomUUID();
-        const pathname = createAtlasMediaPath(
-          entryId,
-          mediaId,
-          file.type as (typeof ATLAS_MEDIA_ALLOWED_TYPES)[number],
+        setMessage(`Preparing photo ${index + 1} of ${files.length}…`);
+        const analysis = await analyzeAtlasImportPhoto(file);
+        const blockingIssue = analysis.issues.find(
+          (issue) => issue.severity === 'error',
         );
+        if (blockingIssue || !analysis.canPrepare) {
+          throw new Error(
+            blockingIssue?.message ?? 'This photograph could not be prepared.',
+          );
+        }
+        const prepared = await prepareAtlasImportPhoto(file, {
+          analysis,
+          onProgress: ({ percent }) =>
+            setProgress(
+              Math.round(
+                ((index + (percent / 100) * 0.25) / files.length) * 100,
+              ),
+            ),
+        });
+        const { master, thumbnail, dimensions } = prepared;
+        if (!isAllowedAtlasMediaType(master.type)) {
+          throw new Error('This photograph could not make a supported copy.');
+        }
+        const mediaId = crypto.randomUUID();
+        const pathname = createAtlasMediaPath(entryId, mediaId, master.type);
         const thumbnailPathname = createAtlasThumbnailPath(
           entryId,
           mediaId,
@@ -203,14 +134,16 @@ export function MemoryPhotos({
           operationProgress[operation] = percentage / 100;
           setProgress(
             Math.round(
-              ((index * 2 + operationProgress[0] + operationProgress[1]) /
-                uploadOperations) *
+              ((index +
+                0.25 +
+                ((operationProgress[0] + operationProgress[1]) / 2) * 0.75) /
+                files.length) *
                 100,
             ),
           );
         };
         const [blobResult, thumbnailResult] = await Promise.allSettled([
-          upload(pathname, file, {
+          upload(pathname, master, {
             access: 'private',
             handleUploadUrl: '/api/atlas/media/upload',
             clientPayload,
@@ -236,8 +169,8 @@ export function MemoryPhotos({
           mediaId,
           pathname: blob.pathname,
           thumbnailPathname: thumbnailBlob.pathname,
-          width: dimensions.width,
-          height: dimensions.height,
+          width: dimensions.masterWidth,
+          height: dimensions.masterHeight,
           altText: title.trim() || placeLabel.trim() || placeName?.trim() || '',
         });
 
@@ -252,6 +185,7 @@ export function MemoryPhotos({
           setMessage(
             `${index ? `${index} ${index === 1 ? 'photo was' : 'photos were'} added. ` : ''}${result.message}`,
           );
+          setMessageIsError(true);
           return;
         }
 
@@ -261,12 +195,20 @@ export function MemoryPhotos({
       }
 
       setProgress(100);
+      setMessage(
+        `${files.length} ${files.length === 1 ? 'photo was' : 'photos were'} added privately.`,
+      );
     } catch (error) {
       console.error('Atlas photo upload failed:', error);
       if (pendingUpload) {
         await discardAtlasMediaUploadAction({ entryId, ...pendingUpload });
       }
-      setMessage('The photo could not be uploaded. Please try again.');
+      setMessageIsError(true);
+      setMessage(
+        error instanceof Error
+          ? error.message
+          : 'The photo could not be uploaded. Please try again.',
+      );
     } finally {
       setUploading(false);
       if (inputRef.current) inputRef.current.value = '';
@@ -280,9 +222,11 @@ export function MemoryPhotos({
     }
 
     setMessage('');
+    setMessageIsError(false);
     const result = await deleteAtlasMediaAction(photo.id);
     if (!result.ok) {
       setMessage(result.message);
+      setMessageIsError(true);
       setRemoveArmed(null);
       return;
     }
@@ -305,7 +249,7 @@ export function MemoryPhotos({
               ? 'Opening the photographs kept with this place…'
               : media.length
                 ? `${media.length} of ${ATLAS_MEDIA_MAX_FILES} kept with this place`
-                : 'Add the image that brings this place back.'}
+                : 'Upload the images that bring this place back.'}
           </p>
         </div>
         <label
@@ -319,12 +263,12 @@ export function MemoryPhotos({
               ? `${progress}%`
               : atLimit
                 ? 'Full'
-                : 'Add photos'}
+                : 'Upload photos'}
           <input
             ref={inputRef}
             type="file"
             multiple
-            accept={ATLAS_MEDIA_ALLOWED_TYPES.join(',')}
+            accept="image/jpeg,image/png,image/webp,image/heic,image/heif,.heic,.heif"
             disabled={loading || uploading || atLimit}
             onChange={(event) => {
               const files = Array.from(event.target.files ?? []);
@@ -333,6 +277,10 @@ export function MemoryPhotos({
           />
         </label>
       </div>
+      <p className={styles.photoUploadGuidance}>
+        JPG, PNG, WebP, HEIC, or HEIF · Up to 25 MB each ·{' '}
+        {ATLAS_MEDIA_MAX_FILES - media.length} remaining
+      </p>
 
       {uploading ? (
         <div
@@ -389,7 +337,11 @@ export function MemoryPhotos({
       ) : null}
 
       {message ? (
-        <p className={styles.photoMessage} role="alert">
+        <p
+          className={styles.photoMessage}
+          data-error={messageIsError ? 'true' : undefined}
+          role={messageIsError ? 'alert' : 'status'}
+        >
           {message}
         </p>
       ) : null}

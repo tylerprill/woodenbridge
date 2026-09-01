@@ -450,14 +450,18 @@ async function selectPhotos(files: File[]) {
 }
 
 async function reachStories(user: ReturnType<typeof userEvent.setup>) {
-  await user.click(screen.getByRole('button', { name: 'Find the journey' }));
+  await user.click(
+    screen.getByRole('button', { name: /^Review \d+ photos?$/ }),
+  );
   expect(
     screen.getByRole('heading', {
       level: 1,
       name: 'See where the journey took shape.',
     }),
   ).toBeVisible();
-  await user.click(screen.getByRole('button', { name: 'Tell the stories' }));
+  await user.click(
+    screen.getByRole('button', { name: 'Add optional details' }),
+  );
   expect(
     screen.getByRole('heading', {
       level: 1,
@@ -597,6 +601,54 @@ describe('bulk photo import workspace', () => {
     await user.click(screen.getByRole('button', { name: 'Use this date' }));
     await user.click(screen.getByRole('button', { name: 'Next memory' }));
     expect(screen.getByText('Memory 2 of 2')).toBeVisible();
+  });
+
+  it('filters exceptions and confirms low-confidence dates in bulk', async () => {
+    const user = userEvent.setup();
+    jest
+      .mocked(analyzeAtlasImportPhoto)
+      .mockImplementation(async (file) => analyzedFileDatePhoto(file));
+    render(<PhotoImportWorkspace />);
+
+    await selectPhotos([
+      new File(['first'], 'first.jpg', { type: 'image/jpeg' }),
+      new File(['second'], 'second.jpg', { type: 'image/jpeg' }),
+    ]);
+    await user.click(screen.getByRole('button', { name: 'Review 2 photos' }));
+    await user.click(screen.getByRole('button', { name: 'Needs attention 2' }));
+    await user.click(
+      screen.getByRole('button', { name: 'Confirm 2 file dates' }),
+    );
+
+    expect(screen.getByText('Everything is ready.')).toBeVisible();
+    expect(
+      screen.queryByRole('button', { name: /Confirm \d+ file dates?/ }),
+    ).not.toBeInTheDocument();
+    await user.click(
+      screen.getByRole('button', { name: 'Add optional details' }),
+    );
+    expect(
+      screen.queryByRole('button', { name: 'Use this date' }),
+    ).not.toBeInTheDocument();
+  });
+
+  it('suggests titles and skips the remaining optional details', async () => {
+    const user = userEvent.setup();
+    render(<PhotoImportWorkspace />);
+
+    await selectPhotos([
+      new File(['first'], 'first.jpg', { type: 'image/jpeg' }),
+      new File(['second'], 'second.jpg', { type: 'image/jpeg' }),
+    ]);
+    await reachStories(user);
+    expect(screen.getByRole('textbox', { name: /^Title/ })).not.toHaveValue('');
+    await user.click(
+      screen.getByRole('button', { name: 'Skip optional details' }),
+    );
+
+    expect(
+      screen.getByRole('textbox', { name: /^Chapter title/ }),
+    ).toBeVisible();
   });
 
   it.each([
@@ -940,7 +992,7 @@ describe('bulk photo import workspace', () => {
 
     expect(
       screen.getByRole('heading', {
-        name: 'An interrupted private import is waiting.',
+        name: 'An interrupted private upload is waiting.',
       }),
     ).toBeVisible();
     expect(screen.queryByLabelText('Choose photos')).not.toBeInTheDocument();
@@ -972,7 +1024,7 @@ describe('bulk photo import workspace', () => {
 
     expect(screen.queryByLabelText('Choose photos')).not.toBeInTheDocument();
     expect(
-      screen.getByText(/original files are not retained by the browser/i),
+      screen.getByText(/browser no longer has the original files/i),
     ).toBeVisible();
     await user.click(
       screen.getByRole('button', { name: 'Clear private draft' }),
@@ -993,7 +1045,7 @@ describe('bulk photo import workspace', () => {
     render(<PhotoImportWorkspace />);
 
     expect(
-      screen.getByRole('navigation', { name: 'Photo import progress' }),
+      screen.getByRole('navigation', { name: 'Photo upload progress' }),
     ).toBeVisible();
     await selectPhotos([
       new File(['summit'], 'summit.jpg', { type: 'image/jpeg' }),
@@ -1001,7 +1053,7 @@ describe('bulk photo import workspace', () => {
     expect(
       screen.getByRole('button', { name: 'Remove summit.jpg' }),
     ).toBeVisible();
-    await user.click(screen.getByRole('button', { name: 'Leave import' }));
+    await user.click(screen.getByRole('button', { name: 'Leave upload' }));
 
     const dialog = screen.getByRole('alertdialog', {
       name: 'Your unfinished review will close.',
@@ -1027,7 +1079,7 @@ describe('bulk photo import workspace', () => {
         latitude === 43.4203 ? michigan.promise : kyoto.promise,
       );
 
-    await user.click(screen.getByRole('button', { name: 'Find the journey' }));
+    await user.click(screen.getByRole('button', { name: 'Review 1 photo' }));
     await user.click(screen.getByRole('button', { name: 'Review pin' }));
     fireEvent.click(screen.getByRole('button', { name: 'Place Michigan pin' }));
     fireEvent.click(screen.getByRole('button', { name: 'Place Kyoto pin' }));
@@ -1062,7 +1114,9 @@ describe('bulk photo import workspace', () => {
       await michigan.promise;
     });
 
-    await user.click(screen.getByRole('button', { name: 'Tell the stories' }));
+    await user.click(
+      screen.getByRole('button', { name: 'Add optional details' }),
+    );
     expect(screen.getByRole('textbox', { name: /^Place/ })).toHaveValue(
       'Kyoto, Japan',
     );
@@ -1113,7 +1167,7 @@ describe('bulk photo import workspace', () => {
       expect(resolveAtlasImportPlaceAction).toHaveBeenCalledTimes(1),
     );
     const continueButton = screen.getByRole('button', {
-      name: 'Find the journey',
+      name: 'Review 1 photo',
     });
     await waitFor(() => expect(continueButton).toBeEnabled());
     await user.click(continueButton);
@@ -1139,10 +1193,12 @@ describe('bulk photo import workspace', () => {
     });
     await waitFor(() =>
       expect(
-        screen.getByRole('button', { name: 'Tell the stories' }),
+        screen.getByRole('button', { name: 'Add optional details' }),
       ).toBeEnabled(),
     );
-    await user.click(screen.getByRole('button', { name: 'Tell the stories' }));
+    await user.click(
+      screen.getByRole('button', { name: 'Add optional details' }),
+    );
     expect(screen.getByRole('textbox', { name: /^Place/ })).toHaveValue(
       'Sandusky, Michigan',
     );
@@ -1267,7 +1323,7 @@ describe('bulk photo import workspace', () => {
     jest
       .mocked(resolveAtlasImportPlaceAction)
       .mockImplementation(() => recognition.promise);
-    await user.click(screen.getByRole('button', { name: 'Find the journey' }));
+    await user.click(screen.getByRole('button', { name: 'Review 1 photo' }));
     await user.click(screen.getByRole('button', { name: 'Review pin' }));
     fireEvent.click(screen.getByRole('button', { name: 'Place Michigan pin' }));
     expect(
@@ -1324,7 +1380,7 @@ describe('bulk photo import workspace', () => {
     await selectPhotos([
       new File(['kyoto'], 'kyoto.jpg', { type: 'image/jpeg' }),
     ]);
-    await user.click(screen.getByRole('button', { name: 'Find the journey' }));
+    await user.click(screen.getByRole('button', { name: 'Review 1 photo' }));
     await user.click(screen.getByRole('button', { name: 'Choose place' }));
     const moveCenter = screen.getByRole('button', {
       name: 'Move map center to Kyoto',
@@ -1426,7 +1482,7 @@ describe('bulk photo import workspace', () => {
       expect(analyzeAtlasImportPhoto).toHaveBeenCalledTimes(50),
     );
     const continueButton = screen.getByRole('button', {
-      name: 'Find the journey',
+      name: 'Review 50 photos',
     });
     await waitFor(() => expect(continueButton).toBeEnabled());
     await user.click(continueButton);
@@ -1466,7 +1522,7 @@ describe('bulk photo import workspace', () => {
     );
     await waitFor(() =>
       expect(
-        screen.getByRole('button', { name: 'Tell the stories' }),
+        screen.getByRole('button', { name: 'Add optional details' }),
       ).toBeEnabled(),
     );
     const previewSources = jest
@@ -1554,7 +1610,7 @@ describe('bulk photo import workspace', () => {
       new File(['west'], 'west.jpg', { type: 'image/jpeg' }),
       new File(['east'], 'east.jpg', { type: 'image/jpeg' }),
     ]);
-    await user.click(screen.getByRole('button', { name: 'Find the journey' }));
+    await user.click(screen.getByRole('button', { name: 'Review 2 photos' }));
 
     expect(resolveAtlasImportPlaceAction).toHaveBeenCalledTimes(2);
     expect(
@@ -1610,7 +1666,7 @@ describe('bulk photo import workspace', () => {
       new File(['michigan'], 'michigan.jpg', { type: 'image/jpeg' }),
       new File(['kyoto'], 'kyoto.jpg', { type: 'image/jpeg' }),
     ]);
-    await user.click(screen.getByRole('button', { name: 'Find the journey' }));
+    await user.click(screen.getByRole('button', { name: 'Review 2 photos' }));
 
     expect(resolveAtlasImportPlaceAction).toHaveBeenCalledTimes(3);
     expect(
@@ -1633,7 +1689,7 @@ describe('bulk photo import workspace', () => {
     await selectPhotos([
       new File(['summit'], 'summit.jpg', { type: 'image/jpeg' }),
     ]);
-    await user.click(screen.getByRole('button', { name: 'Find the journey' }));
+    await user.click(screen.getByRole('button', { name: 'Review 1 photo' }));
 
     expect(resolveAtlasImportPlaceAction).toHaveBeenCalledTimes(1);
     expect(
@@ -1682,11 +1738,11 @@ describe('bulk photo import workspace', () => {
       ),
     ).toBeVisible();
     expect(
-      screen.getByRole('button', { name: 'Find the journey' }),
+      screen.getByRole('button', { name: 'Review 5 photos' }),
     ).toBeEnabled();
 
     await userEvent.click(
-      screen.getByRole('button', { name: 'Find the journey' }),
+      screen.getByRole('button', { name: 'Review 5 photos' }),
     );
     expect(
       screen.getAllByText(

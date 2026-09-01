@@ -40,7 +40,7 @@ export default async function CollectionPage({
         </div>
         <div className="collection-heading-actions">
           <Link href="/dashboard/import">
-            <PhotoIcon aria-hidden="true" /> Import photos
+            <PhotoIcon aria-hidden="true" /> Upload photos
           </Link>
           <div className="collection-count">
             <BookmarkIcon aria-hidden="true" />
@@ -113,9 +113,9 @@ export default async function CollectionPage({
           <h2 id="empty-collection-title">
             Your collection is ready for its first place.
           </h2>
-          <p>Drop a pin, write what matters, and it will appear here.</p>
+          <p>Upload photographs or place a memory directly on your atlas.</p>
           <div className="collection-empty-actions">
-            <Link href="/dashboard/import">Import photos</Link>
+            <Link href="/dashboard/import">Upload photos</Link>
             <Link href="/dashboard">Open your atlas</Link>
           </div>
         </section>

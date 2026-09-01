@@ -9,9 +9,14 @@ import {
   MapPinIcon,
   TrashIcon,
 } from '@heroicons/react/24/outline';
+import { useMemo, useState } from 'react';
 import type { AtlasEntry, AtlasView } from '@/app/lib/atlas/definitions';
 import AtlasMap from './atlas-map-loader';
-import { formatImportDate, getImportStatusCopy } from './photo-import-helpers';
+import {
+  formatImportDate,
+  getImportStatusCopy,
+  needsFileDateConfirmation,
+} from './photo-import-helpers';
 import type { ImportItem } from './photo-import-types';
 import { ImportPhotoPreview } from './photo-import-ui';
 import styles from './photo-import.module.css';
@@ -28,6 +33,8 @@ export function PhotoImportReviewStep({
   blockingCount,
   onEditLocation,
   onRemove,
+  onRemoveMany,
+  onConfirmFileDates,
   onBack,
   onContinue,
 }: {
@@ -42,9 +49,30 @@ export function PhotoImportReviewStep({
   blockingCount: number;
   onEditLocation: (id: string) => void;
   onRemove: (id: string) => void;
+  onRemoveMany: (ids: string[]) => void;
+  onConfirmFileDates: () => void;
   onBack: () => void;
   onContinue: () => void;
 }) {
+  const [attentionOnly, setAttentionOnly] = useState(false);
+  const attentionItems = useMemo(
+    () =>
+      items.filter(
+        (item) =>
+          item.state === 'duplicate' ||
+          item.state === 'error' ||
+          item.latitude === null ||
+          item.longitude === null ||
+          needsFileDateConfirmation(item),
+      ),
+    [items],
+  );
+  const visibleItems = attentionOnly ? attentionItems : items;
+  const removableIds = items
+    .filter((item) => item.state === 'duplicate' || item.state === 'error')
+    .map((item) => item.clientItemId);
+  const fileDateCount = items.filter(needsFileDateConfirmation).length;
+
   return (
     <main className={styles.reviewLayout}>
       <section
@@ -68,50 +96,100 @@ export function PhotoImportReviewStep({
             </span>
           </div>
         </div>
-        <ol className={styles.reviewCards}>
-          {items.map((item, index) => (
-            <li key={item.clientItemId} data-state={item.state}>
-              <figure>
-                <ImportPhotoPreview item={item} />
-              </figure>
-              <div className={styles.reviewCardCopy}>
-                <small>Memory {String(index + 1).padStart(2, '0')}</small>
-                <h3>{item.placeLabel || 'Place needs review'}</h3>
-                <p>
-                  <CalendarDaysIcon aria-hidden="true" />{' '}
-                  {formatImportDate(item.visitedOn)}
-                </p>
-                <span data-status={item.state}>
-                  {item.state === 'ready' ? (
-                    <CheckCircleIcon aria-hidden="true" />
-                  ) : (
-                    <ExclamationTriangleIcon aria-hidden="true" />
-                  )}
-                  {getImportStatusCopy(item)}
-                </span>
-                {item.error ? <em>{item.error}</em> : null}
-              </div>
-              <div className={styles.reviewCardActions}>
-                {item.state !== 'duplicate' && item.state !== 'error' ? (
+        <div className={styles.reviewToolbar}>
+          <div
+            className={styles.reviewFilters}
+            role="group"
+            aria-label="Filter photo review"
+          >
+            <button
+              type="button"
+              aria-pressed={!attentionOnly}
+              data-active={!attentionOnly ? 'true' : undefined}
+              onClick={() => setAttentionOnly(false)}
+            >
+              All {items.length}
+            </button>
+            <button
+              type="button"
+              aria-pressed={attentionOnly}
+              data-active={attentionOnly ? 'true' : undefined}
+              onClick={() => setAttentionOnly(true)}
+            >
+              Needs attention {attentionItems.length}
+            </button>
+          </div>
+          <div className={styles.reviewBulkActions}>
+            {fileDateCount ? (
+              <button type="button" onClick={onConfirmFileDates}>
+                <CheckCircleIcon aria-hidden="true" /> Confirm {fileDateCount}{' '}
+                file {fileDateCount === 1 ? 'date' : 'dates'}
+              </button>
+            ) : null}
+            {removableIds.length ? (
+              <button type="button" onClick={() => onRemoveMany(removableIds)}>
+                <TrashIcon aria-hidden="true" /> Remove {removableIds.length}{' '}
+                unusable
+              </button>
+            ) : null}
+          </div>
+        </div>
+        {visibleItems.length ? (
+          <ol className={styles.reviewCards}>
+            {visibleItems.map((item) => (
+              <li key={item.clientItemId} data-state={item.state}>
+                <figure>
+                  <ImportPhotoPreview item={item} />
+                </figure>
+                <div className={styles.reviewCardCopy}>
+                  <small>
+                    Memory {String(items.indexOf(item) + 1).padStart(2, '0')}
+                  </small>
+                  <h3>{item.placeLabel || 'Place needs review'}</h3>
+                  <p>
+                    <CalendarDaysIcon aria-hidden="true" />{' '}
+                    {formatImportDate(item.visitedOn)}
+                  </p>
+                  <span data-status={item.state}>
+                    {item.state === 'ready' ? (
+                      <CheckCircleIcon aria-hidden="true" />
+                    ) : (
+                      <ExclamationTriangleIcon aria-hidden="true" />
+                    )}
+                    {getImportStatusCopy(item)}
+                  </span>
+                  {item.error ? <em>{item.error}</em> : null}
+                </div>
+                <div className={styles.reviewCardActions}>
+                  {item.state !== 'duplicate' && item.state !== 'error' ? (
+                    <button
+                      type="button"
+                      onClick={() => onEditLocation(item.clientItemId)}
+                    >
+                      <MapPinIcon aria-hidden="true" />
+                      {item.latitude === null ? 'Choose place' : 'Review pin'}
+                    </button>
+                  ) : null}
                   <button
                     type="button"
-                    onClick={() => onEditLocation(item.clientItemId)}
+                    onClick={() => onRemove(item.clientItemId)}
+                    aria-label={`Remove ${item.fileName}`}
                   >
-                    <MapPinIcon aria-hidden="true" />
-                    {item.latitude === null ? 'Choose place' : 'Review pin'}
+                    <TrashIcon aria-hidden="true" /> Remove
                   </button>
-                ) : null}
-                <button
-                  type="button"
-                  onClick={() => onRemove(item.clientItemId)}
-                  aria-label={`Remove ${item.fileName}`}
-                >
-                  <TrashIcon aria-hidden="true" /> Remove
-                </button>
-              </div>
-            </li>
-          ))}
-        </ol>
+                </div>
+              </li>
+            ))}
+          </ol>
+        ) : (
+          <div className={styles.reviewClear} role="status">
+            <CheckCircleIcon aria-hidden="true" />
+            <p>
+              <strong>Everything is ready.</strong>
+              No photos need attention.
+            </p>
+          </div>
+        )}
       </section>
 
       <aside className={styles.journeyMap} aria-label="Detected journey map">
@@ -136,8 +214,14 @@ export function PhotoImportReviewStep({
         </div>
       </aside>
       <footer className={styles.actionBar}>
-        <button type="button" onClick={onBack}>
-          <ArrowLeftIcon aria-hidden="true" /> Add or remove photos
+        <button
+          type="button"
+          aria-label="Add or remove photos"
+          onClick={onBack}
+        >
+          <ArrowLeftIcon aria-hidden="true" />
+          <span className={styles.longActionLabel}>Add or remove photos</span>
+          <span className={styles.shortActionLabel}>Photos</span>
         </button>
         <button
           type="button"
@@ -155,7 +239,7 @@ export function PhotoImportReviewStep({
                 ? `Remove ${blockingCount} unreadable ${blockingCount === 1 ? 'photo' : 'photos'}`
                 : unresolvedCount
                   ? `Review ${unresolvedCount} ${unresolvedCount === 1 ? 'place' : 'places'}`
-                  : 'Tell the stories'}
+                  : 'Add optional details'}
           <ArrowRightIcon aria-hidden="true" />
         </button>
       </footer>

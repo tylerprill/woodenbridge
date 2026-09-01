@@ -36,6 +36,9 @@ describe('dashboard navigation', () => {
       '/dashboard',
     );
     expect(
+      within(atlas).getByRole('link', { name: 'Upload photos' }),
+    ).toHaveAttribute('href', '/dashboard/import');
+    expect(
       within(atlas).getByRole('link', { name: 'My places' }),
     ).toHaveAttribute('href', '/dashboard/places');
     expect(

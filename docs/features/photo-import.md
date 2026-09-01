@@ -7,16 +7,31 @@ never used as location evidence.
 
 ## Product flow
 
-1. **Choose photos** — select up to 50 JPEG, PNG, WebP, HEIC, or HEIF files.
-2. **Review the journey** — inspect the detected local capture date, exact GPS
-   confidence, and reverse-geocoded place for every photograph. Missing or
-   uncertain locations must be corrected explicitly.
-3. **Tell the stories** — give every memory a title and optional field note.
+**Upload photos** is a primary Atlas navigation item and the preferred way to
+add camera-roll images. The Atlas and Places empty states route to the same
+flow; placing a memory manually remains a secondary option.
+
+1. **Upload photos** — drag in or choose up to 50 JPEG, PNG, WebP, HEIC, or
+   HEIF files. On supported mobile devices, take a new photograph directly.
+   Every selected image stays visible with its current status and can be
+   removed individually.
+2. **Review the journey** — review all photographs or filter to only those that
+   need attention. Detected local capture dates, GPS confidence, and
+   reverse-geocoded places are visible. Low-confidence file dates can be
+   confirmed together, and unreadable or duplicate files can be removed
+   together. Missing locations must still be corrected explicitly.
+3. **Optional details** — Field Atlas suggests a title from the detected place,
+   date, or filename. Travelers can edit the title, place label, date, and field
+   note, or skip the remaining optional details.
 4. **Shape the Chapter** — choose private Chapter copy and a cover, or create
    memories without a Chapter.
 
 The final action names its effect (for example, “Create 6 memories and 1
 chapter”). Nothing becomes a visible Atlas memory before that confirmation.
+
+Adding photographs to an existing memory follows the same source formats,
+25 MB limit, browser normalization, metadata removal, private upload path, and
+clear success/error messaging as the journey uploader.
 
 ## Metadata truth and privacy
 
