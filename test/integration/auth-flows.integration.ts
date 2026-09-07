@@ -1262,13 +1262,15 @@ describe('production authentication flows against PostgreSQL', () => {
         SELECT NOW() AS transaction_now
       `;
 
+      // NOW() is fixed when a transaction starts, so establish the clock gap
+      // before starting the newer transaction. Waiting afterward cannot move it.
+      await newer.sql`SELECT pg_sleep(0.02)`;
       await newer.sql`BEGIN`;
       await newer.sql`
         SELECT pg_advisory_xact_lock(
           hashtextextended(${`login-email:${emailHash}`}, 0)
         )
       `;
-      await newer.sql`SELECT pg_sleep(0.02)`;
       const pending = await newer.sql<{ id: string; attempted_at: Date }>`
         INSERT INTO login_attempts (email_hash, ip_hash)
         VALUES (${emailHash}, ${ipHash})
