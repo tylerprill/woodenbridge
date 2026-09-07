@@ -1,6 +1,6 @@
 import { randomUUID } from 'node:crypto';
 
-import { auth } from '@/auth';
+import { auth } from '@/auth.session';
 import { createAtlasImportBatchAction } from '@/app/lib/actions/atlas-import';
 import { setManagedUserAccountStatus } from '@/app/lib/actions/owner-users';
 import type { CreateAtlasImportBatchInput } from '@/app/lib/atlas/import-definitions';
@@ -30,7 +30,7 @@ import {
 } from '@/app/lib/auth/session-record';
 import { db, sql, type VercelPoolClient } from '@/app/lib/db';
 
-jest.mock('@/auth', () => ({ auth: jest.fn() }));
+jest.mock('@/auth.session', () => ({ auth: jest.fn() }));
 jest.mock('next/cache', () => ({ revalidatePath: jest.fn() }));
 jest.mock('next/navigation', () => ({
   redirect: jest.fn((destination: string) => {

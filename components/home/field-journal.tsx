@@ -1,66 +1,73 @@
 import {
-  BookmarkIcon,
-  GlobeAmericasIcon,
+  BookOpenIcon,
+  CheckCircleIcon,
   MapIcon,
+  PhotoIcon,
 } from '@heroicons/react/24/outline';
 import Link from 'next/link';
 
 const principles = [
   {
+    icon: PhotoIcon,
+    metric: 'One batch',
+    title: 'Select the trip once.',
+    copy: 'Photos keep their captured order while the whole journey moves forward together.',
+  },
+  {
     icon: MapIcon,
-    title: 'Drop a pin',
-    copy: 'Mark any place you have visited or hope to remember someday.',
+    metric: 'Exceptions only',
+    title: 'Skip the obvious checks.',
+    copy: 'Clear place and date matches move on. Only uncertain photos ask for your attention.',
   },
   {
-    icon: GlobeAmericasIcon,
-    title: 'Tell the story',
-    copy: 'Add a photo, a brief title, and the details that made it yours.',
-  },
-  {
-    icon: BookmarkIcon,
-    title: 'Keep your atlas',
-    copy: 'Return to every journey through one thoughtful, personal map.',
+    icon: BookOpenIcon,
+    metric: 'One final choice',
+    title: 'Finish in the right shape.',
+    copy: 'Keep individual memories or gather the trip into a chapter—without rebuilding either.',
   },
 ];
 
-export function FieldJournal() {
+export function FieldJournal({ isLoggedIn = false }: { isLoggedIn?: boolean }) {
   return (
     <>
       <section
-        id="journal"
-        className="journal-section"
+        id="how-it-works"
+        className="journal-section efficiency-section"
         aria-labelledby="journal-title"
       >
         <div className="journal-intro">
-          <p className="section-kicker">The field journal · 02</p>
+          <p className="section-kicker">Why it’s faster · 02</p>
           <h2 id="journal-title">
-            More than a pin on a map.
-            <span>A memory with a place.</span>
+            Your attention goes
+            <span>only where it matters.</span>
           </h2>
           <p>
-            Field Atlas gives every journey a home. Preserve the places,
-            photographs, and small details you want to carry forward.
+            Field Atlas handles the repeatable first pass, then gets out of your
+            way. You stay responsible for the moments that need judgment.
           </p>
         </div>
 
-        <div className="principle-list">
-          {principles.map(({ icon: Icon, title, copy }, index) => (
-            <article className="principle-item" key={title}>
-              <span className="principle-number">0{index + 1}</span>
+        <ol className="principle-list">
+          {principles.map(({ icon: Icon, metric, title, copy }, index) => (
+            <li className="principle-item" key={title}>
+              <span className="principle-number" aria-hidden="true">
+                0{index + 1}
+              </span>
               <span className="principle-icon">
                 <Icon aria-hidden="true" />
               </span>
               <div>
+                <small>{metric}</small>
                 <h3>{title}</h3>
                 <p>{copy}</p>
               </div>
-            </article>
+            </li>
           ))}
-        </div>
+        </ol>
       </section>
 
       <section
-        id="about"
+        id="privacy"
         className="collection-callout"
         aria-labelledby="collection-title"
       >
@@ -69,16 +76,33 @@ export function FieldJournal() {
           <span />
           <span />
         </div>
-        <p className="section-kicker">Your own field atlas</p>
+        <p className="section-kicker">Private by default · 03</p>
         <h2 id="collection-title">
-          Keep a record of everywhere wonder takes you.
+          Your next chapter is already in your camera roll.
         </h2>
         <p>
-          Pin the places you have been, preserve what happened there, and keep
-          the journeys still ahead within reach.
+          Start with the photos you already have. Every imported memory begins
+          private, every place remains editable, and nothing is shared until you
+          choose.
         </p>
-        <Link href="/sign-up" className="callout-action">
-          Create your atlas
+        <ul className="callout-trust" aria-label="Privacy promises">
+          <li>
+            <CheckCircleIcon aria-hidden="true" /> Private on arrival
+          </li>
+          <li>
+            <CheckCircleIcon aria-hidden="true" /> Places stay editable
+          </li>
+          <li>
+            <CheckCircleIcon aria-hidden="true" /> Share only when ready
+          </li>
+        </ul>
+        <Link
+          href={
+            isLoggedIn ? '/dashboard/import' : '/sign-up?intent=photo-import'
+          }
+          className="callout-action"
+        >
+          {isLoggedIn ? 'Upload another journey' : 'Upload your first journey'}
           <span aria-hidden="true">↗</span>
         </Link>
       </section>

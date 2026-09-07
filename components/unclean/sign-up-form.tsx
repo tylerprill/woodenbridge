@@ -15,6 +15,7 @@ import {
   MIN_PASSWORD_LENGTH,
 } from '@/app/lib/auth/password';
 import type { SignUpState } from '@/app/lib/auth/sign-up';
+import type { PostAuthIntent } from '@/app/lib/auth/post-auth-intent';
 
 function SubmitButton() {
   const { pending } = useFormStatus();
@@ -33,9 +34,11 @@ function SubmitButton() {
 
 export function SignUpFieldsForm({
   action,
+  intent,
   state,
 }: {
   action: (formData: FormData) => void;
+  intent?: PostAuthIntent;
   state: SignUpState;
 }) {
   const [fields, setFields] = useState(
@@ -55,6 +58,7 @@ export function SignUpFieldsForm({
 
   return (
     <form className="auth-form" action={action}>
+      {intent ? <input name="intent" type="hidden" value={intent} /> : null}
       <div className="auth-field-row">
         <div className="auth-field">
           <label htmlFor="first_name">First name</label>
@@ -172,11 +176,11 @@ export function SignUpFieldsForm({
   );
 }
 
-export default function SignUpForm() {
+export default function SignUpForm({ intent }: { intent?: PostAuthIntent }) {
   const [state, dispatch] = useActionState<SignUpState, FormData>(
     createUser,
     undefined,
   );
 
-  return <SignUpFieldsForm action={dispatch} state={state} />;
+  return <SignUpFieldsForm action={dispatch} intent={intent} state={state} />;
 }

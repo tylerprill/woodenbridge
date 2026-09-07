@@ -17,6 +17,10 @@ import {
 import { authenticate } from '@/app/lib/actions';
 import type { LoginState } from '@/app/lib/auth/login';
 import {
+  withPostAuthIntent,
+  type PostAuthIntent,
+} from '@/app/lib/auth/post-auth-intent';
+import {
   readRememberedEmail,
   writeRememberedEmail,
 } from '@/app/lib/auth/remembered-email';
@@ -35,9 +39,11 @@ function SubmitButton({ pending }: { pending: boolean }) {
 }
 
 export default function LoginForm({
+  intent,
   resetComplete = false,
   verificationComplete = false,
 }: {
+  intent?: PostAuthIntent;
   resetComplete?: boolean;
   verificationComplete?: boolean;
 }) {
@@ -80,6 +86,7 @@ export default function LoginForm({
 
   return (
     <form className="auth-form" action={dispatch} onSubmit={handleSubmit}>
+      {intent ? <input name="intent" type="hidden" value={intent} /> : null}
       {resetComplete ? (
         <p className="auth-notice" role="status">
           Your password has been changed. Sign in with your new password.
@@ -165,7 +172,9 @@ export default function LoginForm({
 
       <p className="auth-inline-help">
         Waiting for a verification code?{' '}
-        <Link href="/verify-email">Verify your email</Link>
+        <Link href={withPostAuthIntent('/verify-email', intent)}>
+          Verify your email
+        </Link>
       </p>
     </form>
   );

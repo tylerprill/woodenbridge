@@ -1,6 +1,10 @@
 import type { Metadata } from 'next';
 import Link from 'next/link';
 
+import {
+  getPostAuthIntent,
+  withPostAuthIntent,
+} from '@/app/lib/auth/post-auth-intent';
 import { AuthShell } from '@/components/clean/auth-shell';
 import LoginForm from '@/components/unclean/login-form';
 
@@ -14,11 +18,13 @@ export default async function LoginPage({
   searchParams,
 }: {
   searchParams: Promise<{
+    intent?: string | string[];
     reset?: string | string[];
     verified?: string | string[];
   }>;
 }) {
   const params = await searchParams;
+  const intent = getPostAuthIntent(params.intent);
   const resetComplete = params.reset === 'success';
   const verificationComplete = params.verified === 'success';
 
@@ -34,11 +40,15 @@ export default async function LoginPage({
       storyTitle="Your next memory is waiting."
       footer={
         <p className="auth-signup-prompt">
-          New to the atlas? <Link href="/sign-up">Create an account</Link>
+          New to the atlas?{' '}
+          <Link href={withPostAuthIntent('/sign-up', intent)}>
+            Create an account
+          </Link>
         </p>
       }
     >
       <LoginForm
+        intent={intent}
         resetComplete={resetComplete}
         verificationComplete={verificationComplete}
       />

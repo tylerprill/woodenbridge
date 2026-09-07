@@ -2,6 +2,10 @@ import type { Metadata } from 'next';
 import Link from 'next/link';
 
 import { getEmailVerificationChallengeCookie } from '@/app/lib/auth/email-verification-cookie';
+import {
+  getPostAuthIntent,
+  withPostAuthIntent,
+} from '@/app/lib/auth/post-auth-intent';
 import { AuthShell } from '@/components/clean/auth-shell';
 import VerifyEmailForm from '@/components/unclean/verify-email-form';
 
@@ -17,9 +21,13 @@ export const metadata: Metadata = {
 export default async function VerifyEmailPage({
   searchParams,
 }: {
-  searchParams: Promise<{ sent?: string | string[] }>;
+  searchParams: Promise<{
+    intent?: string | string[];
+    sent?: string | string[];
+  }>;
 }) {
   const params = await searchParams;
+  const intent = getPostAuthIntent(params.intent);
   const challengeId = await getEmailVerificationChallengeCookie();
   const hasChallenge = Boolean(challengeId);
 
@@ -39,13 +47,17 @@ export default async function VerifyEmailPage({
       storyTitle="Make sure this atlas finds its owner."
       footer={
         <p className="auth-signup-prompt">
-          Already verified? <Link href="/login">Return to sign in</Link>
+          Already verified?{' '}
+          <Link href={withPostAuthIntent('/login', intent)}>
+            Return to sign in
+          </Link>
         </p>
       }
     >
       <VerifyEmailForm
         hasChallenge={hasChallenge}
         codeSent={params.sent === '1'}
+        intent={intent}
       />
     </AuthShell>
   );

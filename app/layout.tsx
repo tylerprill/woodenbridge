@@ -2,7 +2,6 @@ import type { Metadata, Viewport } from 'next';
 import { connection } from 'next/server';
 
 import '@/app/global.css';
-import 'maplibre-gl/dist/maplibre-gl.css';
 import {
   getSiteManifestHref,
   SITE_DESCRIPTION,

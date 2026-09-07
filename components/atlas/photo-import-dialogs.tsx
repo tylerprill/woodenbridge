@@ -35,6 +35,10 @@ function ImportDialogShell({
 
   useEffect(() => {
     returnFocusRef.current = document.activeElement;
+    const previousBodyOverflow = document.body.style.overflow;
+    const previousRootOverflow = document.documentElement.style.overflow;
+    document.body.style.overflow = 'hidden';
+    document.documentElement.style.overflow = 'hidden';
     const dialog = dialogRef.current;
     dialog?.querySelector<HTMLElement>(FOCUSABLE)?.focus();
 
@@ -62,6 +66,8 @@ function ImportDialogShell({
     document.addEventListener('keydown', onKeyDown);
     return () => {
       document.removeEventListener('keydown', onKeyDown);
+      document.body.style.overflow = previousBodyOverflow;
+      document.documentElement.style.overflow = previousRootOverflow;
       if (returnFocusRef.current instanceof HTMLElement) {
         returnFocusRef.current.focus();
       }

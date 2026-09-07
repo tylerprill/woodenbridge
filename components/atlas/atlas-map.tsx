@@ -8,6 +8,7 @@ import maplibregl, {
   type MapLayerMouseEvent,
   type MapMouseEvent,
 } from 'maplibre-gl';
+import 'maplibre-gl/dist/maplibre-gl.css';
 
 import type { AtlasEntry, AtlasView } from '@/app/lib/atlas/definitions';
 import {

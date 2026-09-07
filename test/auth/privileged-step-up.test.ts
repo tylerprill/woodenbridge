@@ -1,9 +1,9 @@
-import { auth } from '@/auth';
+import { auth } from '@/auth.session';
 import { hasUserPasskey } from '@/app/lib/auth/passkey-state';
 import { requirePrivilegedStepUp } from '@/app/lib/auth/session';
 import { redirect } from 'next/navigation';
 
-jest.mock('@/auth', () => ({ auth: jest.fn() }));
+jest.mock('@/auth.session', () => ({ auth: jest.fn() }));
 
 jest.mock('@/app/lib/auth/passkey-state', () => ({
   hasUserPasskey: jest.fn(),

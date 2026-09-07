@@ -44,6 +44,10 @@ export function PhotoImportChapterStep({
   onCreateMemories: () => void;
   onCreateChapter: () => void;
 }) {
+  const createChapterLabel = busy
+    ? 'Creating journey…'
+    : `Create ${items.length} memories and 1 chapter`;
+
   return (
     <main className={styles.chapterLayout}>
       <section
@@ -165,25 +169,44 @@ export function PhotoImportChapterStep({
         </ol>
       </section>
       <footer className={styles.actionBar}>
-        <button type="button" onClick={onBack} disabled={locked}>
-          <ArrowLeftIcon aria-hidden="true" /> Return to memories
+        <button
+          type="button"
+          aria-label="Return to memories"
+          onClick={onBack}
+          disabled={locked}
+        >
+          <ArrowLeftIcon aria-hidden="true" />
+          <span className={styles.longActionLabel}>Return to memories</span>
+          <span className={styles.shortActionLabel}>Back</span>
         </button>
         <div className={styles.finalActions}>
           {lockedCreateChapter !== true ? (
-            <button type="button" onClick={onCreateMemories} disabled={busy}>
-              Create memories only
+            <button
+              type="button"
+              aria-label="Create memories only"
+              onClick={onCreateMemories}
+              disabled={busy}
+            >
+              <span className={styles.longActionLabel}>
+                Create memories only
+              </span>
+              <span className={styles.shortActionLabel}>Memories</span>
             </button>
           ) : null}
           {lockedCreateChapter !== false ? (
             <button
               type="button"
               className={styles.primaryButton}
+              aria-label={createChapterLabel}
               disabled={busy || !chapterTitle.trim()}
               onClick={onCreateChapter}
             >
-              {busy
-                ? 'Creating journey…'
-                : `Create ${items.length} memories and 1 chapter`}
+              <span className={styles.longActionLabel}>
+                {createChapterLabel}
+              </span>
+              <span className={styles.shortActionLabel}>
+                {busy ? 'Creating…' : 'Chapter'}
+              </span>
               <ArrowRightIcon aria-hidden="true" />
             </button>
           ) : null}

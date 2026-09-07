@@ -31,11 +31,14 @@ import {
   signUpSchema,
   type SignUpState,
 } from './auth/sign-up';
-
-const AUTHENTICATED_HOME = '/dashboard';
+import {
+  getPostAuthDestination,
+  getPostAuthIntent,
+  withPostAuthIntent,
+} from './auth/post-auth-intent';
 
 function redirectToAuthenticatedHome(formData: FormData) {
-  formData.set('redirectTo', AUTHENTICATED_HOME);
+  formData.set('redirectTo', getPostAuthDestination(formData.get('intent')));
   return formData;
 }
 
@@ -73,6 +76,7 @@ export async function createUser(
   prevState: SignUpState,
   formData: FormData,
 ): Promise<SignUpState> {
+  const postAuthIntent = getPostAuthIntent(formData.get('intent'));
   const potentialUser = getSignUpInput(formData);
   const parsedCredentials = signUpSchema.safeParse(potentialUser);
 
@@ -104,7 +108,7 @@ export async function createUser(
   if (!allowed) {
     recordSecurityEvent('signup.rate_limited', 'limited');
     await setEmailVerificationChallengeCookie(challengeId);
-    redirect('/verify-email?sent=1');
+    redirect(withPostAuthIntent('/verify-email?sent=1', postAuthIntent));
   }
 
   const passwordRejection = await getNewPasswordRejection(user.password, {
@@ -153,5 +157,5 @@ export async function createUser(
     ]);
   });
 
-  redirect('/verify-email?sent=1');
+  redirect(withPostAuthIntent('/verify-email?sent=1', postAuthIntent));
 }

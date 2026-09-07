@@ -4,7 +4,7 @@ import { after } from 'next/server';
 import { redirect } from 'next/navigation';
 import { z } from 'zod';
 
-import { signOut } from '@/auth';
+import { signOut } from '@/auth.session';
 import {
   clearEmailVerificationChallengeCookie,
   getEmailVerificationChallengeCookie,
@@ -17,6 +17,10 @@ import {
   type EmailVerificationUser,
 } from '@/app/lib/auth/email-verification';
 import { issuePendingRegistrationVerification } from '@/app/lib/auth/email-verification-flow';
+import {
+  getPostAuthIntent,
+  withPostAuthIntent,
+} from '@/app/lib/auth/post-auth-intent';
 import { sendWelcomeEmail } from '@/app/lib/auth/recovery-email';
 import { getClientIpHash } from '@/app/lib/auth/security';
 import { recordSecurityEvent } from '@/app/lib/auth/security-events';
@@ -73,6 +77,7 @@ export async function submitEmailVerificationCode(
   previousState: EmailVerificationState,
   formData: FormData,
 ): Promise<EmailVerificationState> {
+  const postAuthIntent = getPostAuthIntent(formData.get('intent'));
   const parsedCode = z
     .string()
     .trim()
@@ -152,10 +157,13 @@ export async function submitEmailVerificationCode(
     }
   });
 
-  redirect('/login?verified=success');
+  redirect(withPostAuthIntent('/login?verified=success', postAuthIntent));
 }
 
-export async function restartEmailVerification() {
+export async function restartEmailVerification(formData?: FormData) {
+  const postAuthIntent = getPostAuthIntent(formData?.get('intent'));
   await clearEmailVerificationChallengeCookie();
-  await signOut({ redirectTo: '/sign-up' });
+  await signOut({
+    redirectTo: withPostAuthIntent('/sign-up', postAuthIntent),
+  });
 }

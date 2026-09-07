@@ -72,6 +72,24 @@ export function PhotoImportReviewStep({
     .filter((item) => item.state === 'duplicate' || item.state === 'error')
     .map((item) => item.clientItemId);
   const fileDateCount = items.filter(needsFileDateConfirmation).length;
+  const continueLabel = processing
+    ? 'Finishing photo review…'
+    : locatingCount
+      ? `Finding ${locatingCount} ${locatingCount === 1 ? 'place' : 'places'}…`
+      : blockingCount
+        ? `Remove ${blockingCount} unreadable ${blockingCount === 1 ? 'photo' : 'photos'}`
+        : unresolvedCount
+          ? `Review ${unresolvedCount} ${unresolvedCount === 1 ? 'place' : 'places'}`
+          : 'Add optional details';
+  const compactContinueLabel = processing
+    ? 'Finishing…'
+    : locatingCount
+      ? `Finding ${locatingCount}`
+      : blockingCount
+        ? `Remove ${blockingCount} ${blockingCount === 1 ? 'file' : 'files'}`
+        : unresolvedCount
+          ? `Review ${unresolvedCount}`
+          : 'Details';
 
   return (
     <main className={styles.reviewLayout}>
@@ -226,20 +244,16 @@ export function PhotoImportReviewStep({
         <button
           type="button"
           className={styles.primaryButton}
+          aria-label={continueLabel}
           disabled={Boolean(
             processing || unresolvedCount || locatingCount || blockingCount,
           )}
           onClick={onContinue}
         >
-          {processing
-            ? 'Finishing photo review…'
-            : locatingCount
-              ? `Finding ${locatingCount} ${locatingCount === 1 ? 'place' : 'places'}…`
-              : blockingCount
-                ? `Remove ${blockingCount} unreadable ${blockingCount === 1 ? 'photo' : 'photos'}`
-                : unresolvedCount
-                  ? `Review ${unresolvedCount} ${unresolvedCount === 1 ? 'place' : 'places'}`
-                  : 'Add optional details'}
+          <span className={styles.longActionLabel}>{continueLabel}</span>
+          <span className={styles.shortActionLabel}>
+            {compactContinueLabel}
+          </span>
           <ArrowRightIcon aria-hidden="true" />
         </button>
       </footer>

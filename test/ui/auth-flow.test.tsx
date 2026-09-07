@@ -5,6 +5,7 @@
 import { render, screen } from '@testing-library/react';
 
 import type { SignUpState } from '@/app/lib/auth/sign-up';
+import { PHOTO_IMPORT_INTENT } from '@/app/lib/auth/post-auth-intent';
 import { SignUpFieldsForm } from '@/components/unclean/sign-up-form';
 import VerifyEmailForm, {
   VerificationCodeForm,
@@ -71,5 +72,29 @@ describe('account creation and verification UI', () => {
       screen.getByText(/stays separate from active accounts/i),
     ).toBeVisible();
     expect(screen.queryByLabelText('Email address')).not.toBeInTheDocument();
+  });
+
+  it('preserves the photo-import intent when returning to account creation', () => {
+    render(
+      <VerifyEmailForm
+        hasChallenge={false}
+        codeSent={false}
+        intent={PHOTO_IMPORT_INTENT}
+      />,
+    );
+
+    expect(
+      screen.getByRole('link', { name: 'Return to create account' }),
+    ).toHaveAttribute('href', '/sign-up?intent=photo-import');
+  });
+
+  it('submits the photo-import intent with the verification code', () => {
+    const { container } = render(
+      <VerificationCodeForm codeSent={false} intent={PHOTO_IMPORT_INTENT} />,
+    );
+
+    expect(
+      container.querySelector('form.auth-form input[name="intent"]'),
+    ).toHaveValue(PHOTO_IMPORT_INTENT);
   });
 });

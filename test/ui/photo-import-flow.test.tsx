@@ -6,6 +6,7 @@ import { createRef } from 'react';
 import { fireEvent, render, screen } from '@testing-library/react';
 
 import { PhotoImportChooseStep } from '@/components/atlas/photo-import-choose-step';
+import { ImportLeaveDialog } from '@/components/atlas/photo-import-dialogs';
 import {
   getImportStatusCopy,
   needsFileDateConfirmation,
@@ -48,6 +49,25 @@ function importItem(
 }
 
 describe('photo journey import UI', () => {
+  it('locks background scrolling while an import dialog is open', () => {
+    const { unmount } = render(
+      <ImportLeaveDialog
+        hasDraft={false}
+        armed={false}
+        busy={false}
+        onKeepWorking={jest.fn()}
+        onArmOrDiscard={jest.fn()}
+      />,
+    );
+
+    expect(document.body.style.overflow).toBe('hidden');
+    expect(document.documentElement.style.overflow).toBe('hidden');
+
+    unmount();
+    expect(document.body.style.overflow).toBe('');
+    expect(document.documentElement.style.overflow).toBe('');
+  });
+
   it('discloses source limits, place lookup, and private defaults before selection', () => {
     render(
       <PhotoImportChooseStep

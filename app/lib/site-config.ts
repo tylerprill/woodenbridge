@@ -3,7 +3,7 @@ export const SITE_NAME = 'Field Atlas';
 export const SITE_TITLE = 'Field Atlas | Personal Travel Map & Photo Journal';
 
 export const SITE_DESCRIPTION =
-  'Create a personal travel map with pins, photos, and field notes. Field Atlas keeps every place you have visited in one private, beautiful travel journal.';
+  'Upload a trip, recognize its places and dates, and turn your photos into private mapped memories or a travel chapter with Field Atlas.';
 
 export function getSiteManifestHref(
   deploymentEnvironment = process.env.VERCEL_ENV,

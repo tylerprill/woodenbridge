@@ -1,11 +1,11 @@
-import { auth, signOut } from '@/auth';
+import { auth, signOut } from '@/auth.session';
 import { logOut, logOutEverywhere } from '@/app/lib/actions/auth';
 import {
   revokeAllAuthenticatedSessions,
   revokeAuthenticatedSession,
 } from '@/app/lib/auth/session-record';
 
-jest.mock('@/auth', () => ({
+jest.mock('@/auth.session', () => ({
   auth: jest.fn(),
   signOut: jest.fn(),
 }));

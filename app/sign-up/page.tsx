@@ -1,6 +1,10 @@
 import type { Metadata } from 'next';
 import Link from 'next/link';
 
+import {
+  getPostAuthIntent,
+  withPostAuthIntent,
+} from '@/app/lib/auth/post-auth-intent';
 import { AuthShell } from '@/components/clean/auth-shell';
 import SignUpForm from '@/components/unclean/sign-up-form';
 
@@ -10,7 +14,14 @@ export const metadata: Metadata = {
   robots: { index: false, follow: false },
 };
 
-export default function SignUpPage() {
+export default async function SignUpPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ intent?: string | string[] }>;
+}) {
+  const params = await searchParams;
+  const intent = getPostAuthIntent(params.intent);
+
   return (
     <AuthShell
       headingId="sign-up-title"
@@ -23,11 +34,12 @@ export default function SignUpPage() {
       storyTitle="Keep the places worth remembering."
       footer={
         <p className="auth-signup-prompt">
-          Already have an atlas? <Link href="/login">Sign in</Link>
+          Already have an atlas?{' '}
+          <Link href={withPostAuthIntent('/login', intent)}>Sign in</Link>
         </p>
       }
     >
-      <SignUpForm />
+      <SignUpForm intent={intent} />
     </AuthShell>
   );
 }

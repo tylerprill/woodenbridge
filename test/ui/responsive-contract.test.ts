@@ -25,6 +25,46 @@ describe('responsive and route-level UI contracts', () => {
     );
   });
 
+  it('keeps the landing-page hero continuous across phone and tablet seams', () => {
+    const css = readFileSync(join(root, 'app/global.css'), 'utf8');
+    const medium = css.match(
+      /@media \(min-width: 901px\) and \(max-width: 1100px\) \{[\s\S]*?@media/,
+    )?.[0];
+    const tablet = css.match(
+      /@media \(max-width: 900px\) \{[\s\S]*?@media/,
+    )?.[0];
+    const phone = css.match(
+      /@media \(max-width: 520px\) \{[\s\S]*?@media/,
+    )?.[0];
+
+    expect(tablet).toMatch(/\.hero-art \{[\s\S]*?width: min\(100%, 27rem\);/);
+    expect(medium).toMatch(
+      /\.hero-section \{[\s\S]*?grid-template-columns: 1fr;/,
+    );
+    expect(css).toMatch(
+      /\.bridge-grid \{[\s\S]*?repeat\([\s\S]*?auto-fit,[\s\S]*?minmax\(min\(100%, 18rem\), 1fr\)/,
+    );
+    expect(css).toMatch(
+      /@media \(min-width: 642px\) and \(max-width: 947px\)[\s\S]*?\.bridge-card:last-child:nth-child\(odd\)/,
+    );
+    expect(css).toMatch(
+      /\.feature-product-preview \{[\s\S]*?aspect-ratio: 6 \/ 5;/,
+    );
+    expect(phone).toMatch(
+      /\.hero-copy h1 \{[\s\S]*?font-size: clamp\(2\.9rem, 11\.25vw, 3\.65rem\);/,
+    );
+    expect(phone).toMatch(
+      /\.home-footer nav \{[\s\S]*?flex-wrap: wrap;[\s\S]*?justify-content: center;/,
+    );
+    expect(css).toMatch(/\.site-nav a \{[\s\S]*?min-height: 2\.75rem;/);
+    expect(css).toMatch(
+      /\.header-action-secondary \{[\s\S]*?min-width: 2\.75rem;/,
+    );
+    expect(css).toMatch(
+      /@media \(min-width: 521px\) and \(max-width: 1100px\)[\s\S]*?\.home-footer \{[\s\S]*?grid-template-columns: 1fr auto;[\s\S]*?\.home-footer nav \{[\s\S]*?grid-column: 1 \/ -1;/,
+    );
+  });
+
   it('keeps the photo-import surface within a 320px viewport', () => {
     const css = readFileSync(
       join(root, 'components/atlas/photo-import.module.css'),
@@ -40,22 +80,49 @@ describe('responsive and route-level UI contracts', () => {
     expect(compactPage).not.toMatch(/margin-inline:\s*-/);
   });
 
-  it('uses one compact spacing rhythm across the mobile upload flow', () => {
+  it('uses fluid compact spacing and keeps upload actions in flow', () => {
     const css = readFileSync(
       join(root, 'components/atlas/photo-import.module.css'),
       'utf8',
     );
+    const compactLayout = css.match(
+      /@media \(max-width: 1120px\) \{[\s\S]*?@media/,
+    )?.[0];
     const mobile = css.match(
       /@media \(max-width: 760px\) \{[\s\S]*?@media/,
     )?.[0];
     const compact = css.match(/@media \(max-width: 480px\) \{[\s\S]*\}/)?.[0];
 
-    expect(mobile).toContain('--import-mobile-gap: 1rem');
+    expect(mobile).toContain(
+      '--import-mobile-card-padding: clamp(1rem, 3vw, 1.425rem)',
+    );
+    expect(mobile).toContain('--import-mobile-gap: clamp(1rem, 2.5vw, 1.2rem)');
     expect(mobile).toMatch(
       /\.chooseLayout,[\s\S]*?\.chapterLayout \{[\s\S]*?gap: var\(--import-mobile-gap\);/,
     );
-    expect(compact).toMatch(
-      /\.dropCard,[\s\S]*?\.chapterOrder \{[\s\S]*?padding: 1rem;/,
+    expect(mobile).toMatch(
+      /\.dropCard,[\s\S]*?\.chapterOrder \{[\s\S]*?padding: var\(--import-mobile-card-padding\);[\s\S]*?border-radius: var\(--import-mobile-card-radius\);/,
+    );
+    expect(compactLayout).toMatch(
+      /\.journeyMap \{[\s\S]*?height: clamp\(16rem, 43vw, 30rem\);[\s\S]*?min-height: 0;/,
+    );
+    expect(compactLayout).toMatch(
+      /\.storyPhoto figure \{[\s\S]*?min-height: clamp\([\s\S]*?60vw[\s\S]*?\);/,
+    );
+    expect(compactLayout).toMatch(
+      /\.actionBar \{[\s\S]*?position: static;[\s\S]*?bottom: auto;/,
+    );
+    expect(mobile).toMatch(
+      /\.storyLayout > \.actionBar \{[\s\S]*?grid-row: 3;[\s\S]*?\.storyRail \{[\s\S]*?grid-row: 4;/,
+    );
+    expect(mobile).toMatch(
+      /\.storyActions,[\s\S]*?\.finalActions \{[\s\S]*?flex-direction: row;[\s\S]*?align-items: center;/,
+    );
+    expect(mobile).toMatch(
+      /\.longActionLabel \{[\s\S]*?display: none;[\s\S]*?\.shortActionLabel \{[\s\S]*?display: inline;/,
+    );
+    expect(mobile).toMatch(
+      /\.chapterCover button \{[\s\S]*?aspect-ratio: 16 \/ 9;[\s\S]*?min-height: 0;/,
     );
     expect(compact).toMatch(
       /\.actionBar \{[\s\S]*?padding: 0\.625rem;[\s\S]*?gap: 0\.5rem;/,
@@ -64,7 +131,13 @@ describe('responsive and route-level UI contracts', () => {
       /\.storyForm \.sectionHeading \{[\s\S]*?display: flex;[\s\S]*?gap: 0\.75rem;/,
     );
     expect(compact).toMatch(
-      /\.longActionLabel \{[\s\S]*?display: none;[\s\S]*?\.shortActionLabel \{[\s\S]*?display: inline;/,
+      /\.chapterLayout \.actionBar \{[\s\S]*?grid-template-columns: minmax\(0, auto\) minmax\(0, 1fr\);/,
+    );
+    expect(compact).toMatch(
+      /\.chapterLayout \.finalActions \{[\s\S]*?flex-direction: row;[\s\S]*?gap: 0\.3rem;/,
+    );
+    expect(compact).toMatch(
+      /\.leaveDialog > div:last-child \{[\s\S]*?justify-content: stretch;/,
     );
   });
 

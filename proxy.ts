@@ -6,7 +6,7 @@ import {
   type NextRequest,
 } from 'next/server';
 
-import { auth } from './auth';
+import { auth } from './auth.session';
 import {
   CSP_NONCE_HEADER,
   createContentSecurityPolicy,
@@ -45,10 +45,15 @@ export async function proxy(request: NextRequest, event: NextFetchEvent) {
     nonce,
     isDevelopment: process.env.NODE_ENV === 'development',
   });
-  const authResponse = await runAuthProxy(request, event);
+  // The public landing page reads the session once to personalize its CTAs.
+  // Running the Auth.js proxy there would validate the same session twice.
+  const authResponse =
+    request.nextUrl.pathname === '/'
+      ? undefined
+      : await runAuthProxy(request, event);
 
-  if (authResponse?.headers.get('x-middleware-next') !== '1') {
-    const response = authResponse ?? NextResponse.next();
+  if (authResponse && authResponse.headers.get('x-middleware-next') !== '1') {
+    const response = authResponse;
     response.headers.set('Content-Security-Policy', contentSecurityPolicy);
     return response;
   }
@@ -60,7 +65,9 @@ export async function proxy(request: NextRequest, event: NextFetchEvent) {
   const response = NextResponse.next({
     request: { headers: requestHeaders },
   });
-  copyAuthResponseHeaders(authResponse, response);
+  if (authResponse) {
+    copyAuthResponseHeaders(authResponse, response);
+  }
   response.headers.set('Content-Security-Policy', contentSecurityPolicy);
 
   return response;

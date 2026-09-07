@@ -15,6 +15,10 @@ import {
   submitEmailVerificationCode,
   type EmailVerificationState,
 } from '@/app/lib/actions/email-verification';
+import {
+  withPostAuthIntent,
+  type PostAuthIntent,
+} from '@/app/lib/auth/post-auth-intent';
 
 function SubmitButton({
   idleLabel,
@@ -50,7 +54,7 @@ function FormMessage({ state }: { state: EmailVerificationState }) {
   );
 }
 
-function StartRegistration() {
+function StartRegistration({ intent }: { intent?: PostAuthIntent }) {
   return (
     <div className="auth-form">
       <p className="auth-notice" role="status">
@@ -58,7 +62,10 @@ function StartRegistration() {
         stays separate from active accounts until this browser confirms the code
         sent to your inbox.
       </p>
-      <Link className="auth-submit" href="/sign-up">
+      <Link
+        className="auth-submit"
+        href={withPostAuthIntent('/sign-up', intent)}
+      >
         <span>Return to create account</span>
         <ArrowRightIcon aria-hidden="true" />
       </Link>
@@ -70,7 +77,13 @@ function StartRegistration() {
   );
 }
 
-export function VerificationCodeForm({ codeSent }: { codeSent: boolean }) {
+export function VerificationCodeForm({
+  codeSent,
+  intent,
+}: {
+  codeSent: boolean;
+  intent?: PostAuthIntent;
+}) {
   const [verifyState, verifyDispatch] = useActionState(
     submitEmailVerificationCode,
     undefined,
@@ -89,6 +102,7 @@ export function VerificationCodeForm({ codeSent }: { codeSent: boolean }) {
       ) : null}
 
       <form className="auth-form" action={verifyDispatch}>
+        {intent ? <input name="intent" type="hidden" value={intent} /> : null}
         <div className="auth-field">
           <label htmlFor="verification-code">Verification code</label>
           <div className="auth-input-wrap auth-code-input-wrap">
@@ -121,12 +135,14 @@ export function VerificationCodeForm({ codeSent }: { codeSent: boolean }) {
 
       <div className="auth-verification-actions">
         <form action={resendDispatch}>
+          {intent ? <input name="intent" type="hidden" value={intent} /> : null}
           <button className="auth-text-button" type="submit">
             <ArrowPathIcon aria-hidden="true" />
             Send another code
           </button>
         </form>
         <form action={restartEmailVerification}>
+          {intent ? <input name="intent" type="hidden" value={intent} /> : null}
           <button className="auth-text-button" type="submit">
             Use a different email
           </button>
@@ -141,13 +157,15 @@ export function VerificationCodeForm({ codeSent }: { codeSent: boolean }) {
 export default function VerifyEmailForm({
   hasChallenge,
   codeSent,
+  intent,
 }: {
   hasChallenge: boolean;
   codeSent: boolean;
+  intent?: PostAuthIntent;
 }) {
   return hasChallenge ? (
-    <VerificationCodeForm codeSent={codeSent} />
+    <VerificationCodeForm codeSent={codeSent} intent={intent} />
   ) : (
-    <StartRegistration />
+    <StartRegistration intent={intent} />
   );
 }

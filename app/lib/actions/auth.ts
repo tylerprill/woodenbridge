@@ -1,6 +1,6 @@
 'use server';
 
-import { auth, signOut } from '@/auth';
+import { auth, signOut } from '@/auth.session';
 import {
   revokeAllAuthenticatedSessions,
   revokeAuthenticatedSession,

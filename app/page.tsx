@@ -23,6 +23,8 @@ export const metadata: Metadata = {
     'personal travel map',
     'travel journal app',
     'photo travel journal',
+    'travel photo upload',
+    'map photos by location',
     'map your travels',
     'visited places map',
   ],
@@ -67,9 +69,9 @@ export default async function HomePage() {
       <AmbientBackground />
       <SiteHeader user={user} />
       <main id="main-content">
-        <HeroSection />
+        <HeroSection isLoggedIn={Boolean(user)} />
         <FeaturedBridges />
-        <FieldJournal />
+        <FieldJournal isLoggedIn={Boolean(user)} />
       </main>
       <HomeFooter isLoggedIn={Boolean(user)} />
     </div>

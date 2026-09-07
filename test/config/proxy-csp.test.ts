@@ -1,10 +1,10 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { unstable_doesMiddlewareMatch } from 'next/experimental/testing/server';
 
-import { auth } from '@/auth';
+import { auth } from '@/auth.session';
 import { config, proxy } from '@/proxy';
 
-jest.mock('@/auth', () => ({
+jest.mock('@/auth.session', () => ({
   auth: jest.fn(),
 }));
 
@@ -21,6 +21,17 @@ function nonceFromPolicy(policy: string) {
 }
 
 describe('CSP proxy composition', () => {
+  it('adds the rendering nonce without repeating auth on the public landing page', async () => {
+    const previousCallCount = authProxy.mock.calls.length;
+
+    const response = await proxy(request('/'), {} as never);
+    const policy = response.headers.get('content-security-policy') ?? '';
+    const nonce = nonceFromPolicy(policy);
+
+    expect(authProxy).toHaveBeenCalledTimes(previousCallCount);
+    expect(response.headers.get('x-middleware-request-x-nonce')).toBe(nonce);
+  });
+
   it('forwards one nonce to rendering and returns the matching enforced policy', async () => {
     const authResponse = NextResponse.next();
     authResponse.headers.append(

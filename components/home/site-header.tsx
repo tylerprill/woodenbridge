@@ -9,9 +9,9 @@ import { BrandLockup } from '@/components/clean/brand-lockup';
 import { HeaderLogoutButton } from '@/components/home/header-logout-button';
 
 const navigation = [
-  { label: 'Explore', href: '#featured' },
-  { label: 'Journal', href: '#journal' },
-  { label: 'About', href: '#about' },
+  { label: 'Photo upload', href: '#photo-upload' },
+  { label: 'Why it’s faster', href: '#how-it-works' },
+  { label: 'Private by default', href: '#privacy' },
 ];
 
 type SiteHeaderProps = {
@@ -59,7 +59,10 @@ export function SiteHeader({ user }: SiteHeaderProps) {
           <Link className="header-action header-action-secondary" href="/login">
             Sign in
           </Link>
-          <Link className="header-action header-action-primary" href="/sign-up">
+          <Link
+            className="header-action header-action-primary"
+            href="/sign-up?intent=photo-import"
+          >
             Create account
             <span aria-hidden="true">↗</span>
           </Link>
