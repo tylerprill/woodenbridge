@@ -2,7 +2,7 @@ const { createHash } = require('node:crypto');
 const { readFile, readdir } = require('node:fs/promises');
 const { resolve } = require('node:path');
 
-const { createClient } = require('@vercel/postgres');
+const { Client } = require('pg');
 
 function getMigrationConnectionString() {
   const connectionString =
@@ -33,7 +33,7 @@ async function main() {
   const migrationFiles = (await readdir(migrationsDirectory))
     .filter((fileName) => fileName.endsWith('.sql'))
     .sort();
-  const client = createClient({
+  const client = new Client({
     connectionString: getMigrationConnectionString(),
   });
   let migrationLockAcquired = false;
