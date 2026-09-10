@@ -31,6 +31,7 @@ export function PhotoImportReviewStep({
   locatingCount,
   processing,
   blockingCount,
+  mapSuspended,
   onEditLocation,
   onRemove,
   onRemoveMany,
@@ -47,6 +48,7 @@ export function PhotoImportReviewStep({
   locatingCount: number;
   processing: boolean;
   blockingCount: number;
+  mapSuspended: boolean;
   onEditLocation: (id: string) => void;
   onRemove: (id: string) => void;
   onRemoveMany: (ids: string[]) => void;
@@ -211,18 +213,20 @@ export function PhotoImportReviewStep({
       </section>
 
       <aside className={styles.journeyMap} aria-label="Detected journey map">
-        <AtlasMap
-          entries={mapEntries}
-          initialView={initialView}
-          interactionLocked={false}
-          selectedId={null}
-          placementMode={false}
-          focusRequest={{ id: null, nonce: 0 }}
-          fitRequest={1}
-          onSelect={onEditLocation}
-          onPlace={() => undefined}
-          onViewChange={() => undefined}
-        />
+        {mapSuspended ? null : (
+          <AtlasMap
+            entries={mapEntries}
+            initialView={initialView}
+            interactionLocked={false}
+            selectedId={null}
+            placementMode={false}
+            focusRequest={{ id: null, nonce: 0 }}
+            fitRequest={1}
+            onSelect={onEditLocation}
+            onPlace={() => undefined}
+            onViewChange={() => undefined}
+          />
+        )}
         <div className={styles.mapLegend}>
           <MapPinIcon aria-hidden="true" />
           <span>

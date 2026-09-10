@@ -4,6 +4,7 @@
   --atlas-line: rgba(16, 35, 29, 0.14);
   position: relative;
   width: 100%;
+  height: calc(100vh - 2rem);
   height: calc(100svh - 2rem);
   min-height: 42rem;
   overflow: hidden;
@@ -34,6 +35,15 @@
 .mapCanvas {
   z-index: 0;
   filter: saturate(0.82) sepia(0.04) contrast(1);
+}
+
+/* MapLibre assigns position: relative to its container after mount. Keep the
+   canvas bound to the full Atlas frame regardless of stylesheet load order. */
+.mapFrame > .mapCanvas {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
 }
 
 .pointerLight {
@@ -1622,6 +1632,22 @@
   font-size: 0.68rem;
 }
 
+.mapError button {
+  min-height: 2.55rem;
+  margin-top: 0.85rem;
+  padding-inline: 1rem;
+  border-radius: 999px;
+  background: var(--forest-950);
+  color: var(--paper-light);
+  font-size: 0.68rem;
+  font-weight: 800;
+}
+
+.mapError button:hover,
+.mapError button:focus-visible {
+  background: var(--timber);
+}
+
 .mapFallback {
   display: grid;
   z-index: 4;
@@ -1757,11 +1783,27 @@
   }
 }
 
+@media (max-width: 900px) {
+  .workspace {
+    min-height: 0;
+  }
+}
+
 @media (max-width: 760px) {
   .workspace {
+    height: calc(100vh - 5.5rem);
     height: calc(100svh - 5.5rem);
     min-height: 0;
     border-radius: 1.45rem;
+  }
+
+  .mapCanvas {
+    filter: none;
+  }
+
+  .pointerLight,
+  .mapGrain {
+    display: none;
   }
 
   .atlasHeader {

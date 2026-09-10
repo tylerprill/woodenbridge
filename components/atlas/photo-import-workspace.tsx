@@ -1573,6 +1573,7 @@ export function PhotoImportWorkspace({
           locatingCount={locatingCount}
           processing={selectionProcessing}
           blockingCount={blockingCount}
+          mapSuspended={Boolean(locationItem)}
           onEditLocation={setLocationEditorId}
           onRemove={removeItem}
           onRemoveMany={removeItems}
