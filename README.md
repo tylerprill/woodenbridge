@@ -92,6 +92,7 @@ E2E_TEST_PASSWORD=... \
 npm run seed:e2e
 
 DATABASE_URL=postgresql://...@127.0.0.1:5432/field_atlas_e2e \
+E2E_DATABASE_ADAPTER=pg \
 POSTGRES_URL=postgresql://...@127.0.0.1:5432/field_atlas_e2e \
 E2E_TEST_EMAIL=field-atlas-e2e@example.test \
 E2E_TEST_PASSWORD=... \
