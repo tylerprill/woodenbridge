@@ -11,16 +11,15 @@ jest.mock('@vercel/postgres', () => {
   };
 });
 
-jest.mock('@vercel/blob', () => ({ del: jest.fn() }));
 jest.mock('next/cache', () => ({ revalidatePath: jest.fn() }));
 jest.mock('@/app/lib/auth/session', () => ({
   requireVerifiedSession: jest.fn(),
 }));
 jest.mock('@/app/lib/atlas/media-storage', () => ({
-  getAtlasBlobToken: () => 'blob-test-token',
+  deleteAtlasMediaObjects: jest.fn(),
 }));
 
-import { del } from '@vercel/blob';
+import { deleteAtlasMediaObjects } from '@/app/lib/atlas/media-storage';
 import {
   archiveAtlasEntryAction,
   updateAtlasEntryAction,
@@ -101,7 +100,7 @@ describe('Atlas entry active-import mutation guard', () => {
       ok: false,
       error: 'conflict',
     });
-    expect(del).not.toHaveBeenCalled();
+    expect(deleteAtlasMediaObjects).not.toHaveBeenCalled();
     expect(
       __testMocks.clientQuery.mock.calls.some(([query]) =>
         normalizeQuery(query).includes('SELECT storage_path, thumbnail_path'),

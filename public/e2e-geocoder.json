@@ -1,0 +1,10 @@
+{
+  "name": "Field Atlas Test Point",
+  "display_name": "Field Atlas Test Point, Detroit, Michigan, United States",
+  "address": {
+    "city": "Detroit",
+    "state": "Michigan",
+    "country": "United States",
+    "country_code": "us"
+  }
+}

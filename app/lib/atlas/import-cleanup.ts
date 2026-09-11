@@ -1,9 +1,7 @@
 import 'server-only';
 
-import { del } from '@vercel/blob';
-
 import { db, sql } from '@/app/lib/db';
-import { getAtlasBlobToken } from './media-storage';
+import { deleteAtlasMediaObjects } from './media-storage';
 import { ATLAS_IMPORT_CLEANUP_FENCE_MINUTES } from './import-validation';
 
 const CLEANUP_LEASE_MINUTES = 15;
@@ -14,6 +12,7 @@ type CleanupClaim = {
   id: string;
   user_id: string;
   cleanup_started_at: Date;
+  cleanup_attempts: number;
 };
 
 async function releaseImportCleanupLease(claim: CleanupClaim) {
@@ -22,7 +21,7 @@ async function releaseImportCleanupLease(claim: CleanupClaim) {
     SET cleanup_started_at = NULL, updated_at = NOW()
     WHERE id = ${claim.id}
       AND user_id = ${claim.user_id}
-      AND cleanup_started_at = ${claim.cleanup_started_at.toISOString()}
+      AND cleanup_attempts = ${claim.cleanup_attempts}
       AND status = 'cancel_pending'
   `;
 }
@@ -58,7 +57,7 @@ async function cleanupClaimedImportBatch(claim: CleanupClaim) {
   const paths = Array.from(new Set(pathResult.rows.map((row) => row.pathname)));
 
   try {
-    if (paths.length) await del(paths, { token: getAtlasBlobToken() });
+    if (paths.length) await deleteAtlasMediaObjects(paths);
 
     const client = await db.connect();
     try {
@@ -71,10 +70,10 @@ async function cleanupClaimedImportBatch(claim: CleanupClaim) {
             AND user_id = $2
             AND status = 'cancel_pending'
             AND cleanup_not_before <= NOW()
-            AND cleanup_started_at = $3
+            AND cleanup_attempts = $3
           FOR UPDATE
         `,
-        [claim.id, claim.user_id, claim.cleanup_started_at],
+        [claim.id, claim.user_id, claim.cleanup_attempts],
       );
       if (!locked.rows[0]) {
         await client.query('ROLLBACK');
@@ -142,12 +141,16 @@ async function claimImportBatchForCleanup() {
         FOR UPDATE SKIP LOCKED
       )
       UPDATE atlas_import_batches AS batch
-      SET cleanup_started_at = NOW(),
+      SET cleanup_started_at = date_trunc('milliseconds', clock_timestamp()),
           cleanup_attempts = cleanup_attempts + 1,
           updated_at = NOW()
       FROM candidate
       WHERE batch.id = candidate.id
-      RETURNING batch.id, batch.user_id, batch.cleanup_started_at
+      RETURNING
+        batch.id,
+        batch.user_id,
+        batch.cleanup_started_at,
+        batch.cleanup_attempts
     `,
     [CLEANUP_LEASE_MINUTES],
   );

@@ -85,6 +85,12 @@ To run the authenticated or full suite locally, seed an equivalently isolated
 local database first. `E2E_TEST_PASSWORD` must contain 15–128 characters:
 
 ```bash
+export E2E_MEDIA_STORAGE_ADAPTER=filesystem
+export NEXT_PUBLIC_E2E_MEDIA_STORAGE_ADAPTER=filesystem
+export E2E_MEDIA_STORAGE_ROOT="$(node -p "require('node:path').join(require('node:os').tmpdir(), 'field-atlas-e2e-media-local')")"
+export VERCEL=0
+export VERCEL_ENV=
+
 E2E_DATABASE_SEED=1 \
 E2E_DATABASE_URL=postgresql://...@127.0.0.1:5432/field_atlas_e2e \
 E2E_TEST_EMAIL=field-atlas-e2e@example.test \
@@ -93,7 +99,10 @@ npm run seed:e2e
 
 DATABASE_URL=postgresql://...@127.0.0.1:5432/field_atlas_e2e \
 E2E_DATABASE_ADAPTER=pg \
+E2E_REQUIRE_FULL_IMPORT=1 \
 POSTGRES_URL=postgresql://...@127.0.0.1:5432/field_atlas_e2e \
+ATLAS_GEOCODER_ENDPOINT=http://127.0.0.1:3100/e2e-geocoder.json \
+CRON_SECRET=local-e2e-cleanup-secret \
 E2E_TEST_EMAIL=field-atlas-e2e@example.test \
 E2E_TEST_PASSWORD=... \
 NEXT_PUBLIC_ATLAS_STYLE_URL=http://127.0.0.1:3100/e2e-map-style.json \
@@ -104,10 +113,18 @@ Use the same environment with `npm run test:e2e:full` to include the public
 suite. Set `E2E_SHARED_CHAPTER_ID` when that run should also audit a shared
 chapter. The local style keeps the required authenticated gate independent of
 third-party tile availability; production continues to use the configured map
-provider.
+provider. The authenticated suite also uses a filesystem media store confined
+to the operating system's temporary directory. Its full-import canary sends
+real image bytes through the upload API, verifies persistence and private media
+delivery, recovers a committed upload whose browser response was lost, and
+proves cancelled-import cleanup without touching Vercel Blob.
 
 Set `E2E_BASE_URL` when auditing an already-running production build. If it is
 unset, Playwright starts the built application on its configured local port.
+The destructive full-import canary only runs against that Playwright-owned
+loopback server with both guarded filesystem-adapter flags enabled; it always
+skips external-server audits. CI sets `E2E_REQUIRE_FULL_IMPORT=1`, which turns a
+missing isolation condition into a test failure instead of a silent skip.
 
 ## Contributing
 
