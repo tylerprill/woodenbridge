@@ -18,6 +18,26 @@ describe('responsive and route-level UI contracts', () => {
     expect(mobile).not.toContain('min-height: 35rem');
   });
 
+  it('keeps MapLibre full-frame and provides legacy iOS height fallbacks', () => {
+    const atlasCss = readFileSync(
+      join(root, 'components/atlas/atlas.module.css'),
+      'utf8',
+    );
+    const importCss = readFileSync(
+      join(root, 'components/atlas/photo-import.module.css'),
+      'utf8',
+    );
+
+    expect(atlasCss).toMatch(
+      /\.mapFrame > \.mapCanvas \{[\s\S]*?position: absolute;[\s\S]*?width: 100%;[\s\S]*?height: 100%;/,
+    );
+    expect(atlasCss).toContain('height: calc(100vh - 5.5rem)');
+    expect(atlasCss).toMatch(
+      /@media \(max-width: 900px\) \{[\s\S]*?\.workspace \{[\s\S]*?min-height: 0;/,
+    );
+    expect(importCss).toContain('height: min(29rem, 66vh)');
+  });
+
   it('uses a compact 2-by-2 owner summary on mobile', () => {
     const css = readFileSync(join(root, 'app/global.css'), 'utf8');
     expect(css).toMatch(

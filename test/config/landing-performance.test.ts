@@ -18,6 +18,30 @@ describe('landing-page performance boundaries', () => {
     );
   });
 
+  it('ships MapLibre v6 worker modules for both Next.js bundlers', () => {
+    const packageJson = JSON.parse(source('package.json')) as {
+      scripts: Record<string, string>;
+    };
+    const workerScript = source('scripts/copy-maplibre-worker.mjs');
+    const atlasMap = source('components/atlas/atlas-map.tsx');
+    const chapterMap = source('components/chapters/chapter-map.tsx');
+
+    expect(packageJson.scripts.prebuild).toBe(
+      'node ./scripts/copy-maplibre-worker.mjs',
+    );
+    expect(packageJson.scripts.predev).toBe(
+      'node ./scripts/copy-maplibre-worker.mjs',
+    );
+    expect(workerScript).toContain("'maplibre-gl-worker.mjs'");
+    expect(workerScript).toContain("'maplibre-gl-shared.mjs'");
+    expect(atlasMap).toContain(
+      "setWorkerUrl('/maplibre/maplibre-gl-worker.mjs')",
+    );
+    expect(chapterMap).toContain(
+      "setWorkerUrl('/maplibre/maplibre-gl-worker.mjs')",
+    );
+  });
+
   it('renders the decorative ambient layer without a client-side pointer loop', () => {
     const ambient = source('components/home/ambient-background.tsx');
     const css = source('app/global.css');

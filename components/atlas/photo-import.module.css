@@ -1037,6 +1037,7 @@
 .journeyMap {
   position: sticky;
   top: 1rem;
+  min-height: min(47rem, calc(100vh - 2rem));
   min-height: min(47rem, calc(100dvh - 2rem));
   overflow: hidden;
   border: 1px solid var(--import-line);
@@ -1719,6 +1720,7 @@
 
 .locationMap {
   position: relative;
+  height: min(38rem, 65vh);
   height: min(38rem, 65dvh);
   overflow: hidden;
   background: #dfe3da;
@@ -2334,11 +2336,13 @@
 
   .locationDialog,
   .leaveDialog {
+    max-height: calc(100vh - 0.5rem);
     max-height: calc(100dvh - 0.5rem);
     border-radius: 1.5rem 1.5rem 0 0;
   }
 
   .locationMap {
+    height: min(29rem, 66vh);
     height: min(29rem, 66dvh);
   }
 

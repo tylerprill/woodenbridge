@@ -40,3 +40,24 @@ export function getAtlasFitPadding(
 
   return { top, right: horizontal, bottom, left: horizontal };
 }
+
+/**
+ * Keeps a selected pin visible beside the desktop memory drawer without
+ * feeding MapLibre impossible padding on a phone-sized canvas.
+ */
+export function getAtlasFocusPadding(
+  width: number,
+  height: number,
+): AtlasMapPadding {
+  const safeWidth = Number.isFinite(width) ? Math.max(0, width) : 0;
+  const safeHeight = Number.isFinite(height) ? Math.max(0, height) : 0;
+
+  if (safeWidth <= 760) return getAtlasFitPadding(safeWidth, safeHeight);
+
+  const left = Math.min(80, Math.max(0, Math.floor((safeWidth - 2) / 2)));
+  const right = Math.min(360, Math.max(0, safeWidth - left - 2));
+  const top = Math.min(90, Math.max(0, Math.floor((safeHeight - 2) / 2)));
+  const bottom = Math.min(80, Math.max(0, safeHeight - top - 2));
+
+  return { top, right, bottom, left };
+}

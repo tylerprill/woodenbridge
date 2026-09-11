@@ -1,12 +1,13 @@
 'use client';
 
 import { useEffect, useMemo, useRef, useState } from 'react';
-import maplibregl, {
-  LngLatBounds,
-  type GeoJSONSource,
-  type Map as MapLibreMap,
-  type MapLayerMouseEvent,
-  type MapMouseEvent,
+import * as maplibregl from 'maplibre-gl';
+import type {
+  ErrorEvent as MapLibreErrorEvent,
+  GeoJSONSource,
+  Map as MapLibreMap,
+  MapLayerMouseEvent,
+  MapMouseEvent,
 } from 'maplibre-gl';
 import 'maplibre-gl/dist/maplibre-gl.css';
 
@@ -22,7 +23,7 @@ import {
   addAtlasLayers,
   updateAtlasSource,
 } from './atlas-layers';
-import { getAtlasFitPadding } from './atlas-map-camera';
+import { getAtlasFitPadding, getAtlasFocusPadding } from './atlas-map-camera';
 import styles from './atlas.module.css';
 
 type FocusRequest = {
@@ -60,6 +61,9 @@ type AtlasMapProps = {
 };
 
 const DEFAULT_STYLE = 'https://tiles.openfreemap.org/styles/positron';
+const MAP_LOAD_TIMEOUT_MS = 15_000;
+
+maplibregl.setWorkerUrl('/maplibre/maplibre-gl-worker.mjs');
 
 // Keep place metadata out of the MapLibre update key. The React tooltip and
 // drawer consume that metadata directly, so enrichment does not need to
@@ -99,7 +103,7 @@ function fitEntries(map: MapLibreMap, entries: AtlasEntry[]) {
     return;
   }
 
-  const bounds = new LngLatBounds();
+  const bounds = new maplibregl.LngLatBounds();
   entries.forEach((entry) => bounds.extend([entry.longitude, entry.latitude]));
   const container = map.getContainer();
   try {
@@ -133,6 +137,7 @@ export default function AtlasMap({
 }: AtlasMapProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const mapRef = useRef<MapLibreMap | null>(null);
+  const initialViewRef = useRef(initialView);
   const entriesRef = useRef(entries);
   const placementRef = useRef(placementMode);
   const onSelectRef = useRef(onSelect);
@@ -143,6 +148,7 @@ export default function AtlasMap({
   const pointerFrameRef = useRef<number | null>(null);
   const [mapLoaded, setMapLoaded] = useState(false);
   const [mapError, setMapError] = useState(false);
+  const [mapAttempt, setMapAttempt] = useState(0);
   const [tooltip, setTooltip] = useState<AtlasTooltip | null>(null);
   const mapDataKeyValue = useMemo(() => mapDataKey(entries), [entries]);
   const renderedMapDataKeyRef = useRef<string | null>(null);
@@ -170,13 +176,18 @@ export default function AtlasMap({
   useEffect(() => {
     if (!containerRef.current || mapRef.current) return;
 
+    const container = containerRef.current;
+    const startingView = initialViewRef.current;
+    const compactRenderer =
+      typeof window.matchMedia === 'function' &&
+      window.matchMedia('(max-width: 760px), (pointer: coarse)').matches;
     let map: MapLibreMap;
     try {
       map = new maplibregl.Map({
-        container: containerRef.current,
+        container,
         style: process.env.NEXT_PUBLIC_ATLAS_STYLE_URL || DEFAULT_STYLE,
-        center: [initialView.longitude, initialView.latitude],
-        zoom: initialView.zoom,
+        center: [startingView.longitude, startingView.latitude],
+        zoom: startingView.zoom,
         bearing: 0,
         pitch: 0,
         minZoom: 1,
@@ -193,7 +204,8 @@ export default function AtlasMap({
         scrollZoom: true,
         touchPitch: false,
         touchZoomRotate: true,
-        canvasContextAttributes: { antialias: true },
+        canvasContextAttributes: { antialias: false },
+        pixelRatio: Math.min(Math.max(window.devicePixelRatio || 1, 1), 2),
         fadeDuration: 180,
       });
     } catch (error) {
@@ -214,18 +226,33 @@ export default function AtlasMap({
       'bottom-left',
     );
 
+    let resizeFrame: number | null = null;
+    const scheduleResize = () => {
+      if (resizeFrame !== null) cancelAnimationFrame(resizeFrame);
+      resizeFrame = requestAnimationFrame(() => {
+        resizeFrame = null;
+        if (mapRef.current === map) map.resize();
+      });
+    };
+    const resizeObserver =
+      typeof ResizeObserver === 'undefined'
+        ? null
+        : new ResizeObserver(scheduleResize);
+    resizeObserver?.observe(container);
+    const visualViewport = window.visualViewport;
+    window.addEventListener('resize', scheduleResize);
+    window.addEventListener('orientationchange', scheduleResize);
+    visualViewport?.addEventListener('resize', scheduleResize);
+    scheduleResize();
+
+    const loadTimer = window.setTimeout(() => {
+      if (mapRef.current === map) setMapError(true);
+    }, MAP_LOAD_TIMEOUT_MS);
+
     const handleLoad = () => {
+      window.clearTimeout(loadTimer);
+      scheduleResize();
       try {
-        map.setProjection({ type: 'globe' });
-        map.setSky({
-          'sky-color': '#d8ded6',
-          'horizon-color': '#f5f2e9',
-          'fog-color': '#dfe5dc',
-          'fog-ground-blend': 0.7,
-          'horizon-fog-blend': 0.7,
-          'sky-horizon-blend': 0.82,
-          'atmosphere-blend': 0.82,
-        });
         addAtlasLayers(map, entriesRef.current);
         renderedMapDataKeyRef.current = mapDataKey(entriesRef.current);
         setMapLoaded(true);
@@ -233,12 +260,29 @@ export default function AtlasMap({
       } catch (error) {
         console.error('Atlas map setup failed:', error);
         setMapError(true);
+        return;
+      }
+
+      if (!compactRenderer) {
+        try {
+          map.setProjection({ type: 'globe' });
+          map.setSky({
+            'sky-color': '#d8ded6',
+            'horizon-color': '#f5f2e9',
+            'fog-color': '#dfe5dc',
+            'fog-ground-blend': 0.7,
+            'horizon-fog-blend': 0.7,
+            'sky-horizon-blend': 0.82,
+            'atmosphere-blend': 0.82,
+          });
+        } catch (error) {
+          console.error('Atlas map visual enhancement failed:', error);
+        }
       }
     };
 
-    const handleError = (event: ErrorEvent) => {
+    const handleError = (event: MapLibreErrorEvent) => {
       if (event?.error) console.error('Atlas map error:', event.error);
-      if (!map.isStyleLoaded()) setMapError(true);
     };
 
     const handleMoveEnd = () => {
@@ -377,12 +421,18 @@ export default function AtlasMap({
     map.on('movestart', () => setTooltip(null));
 
     return () => {
-      if (pointerFrameRef.current)
+      window.clearTimeout(loadTimer);
+      resizeObserver?.disconnect();
+      window.removeEventListener('resize', scheduleResize);
+      window.removeEventListener('orientationchange', scheduleResize);
+      visualViewport?.removeEventListener('resize', scheduleResize);
+      if (resizeFrame !== null) cancelAnimationFrame(resizeFrame);
+      if (pointerFrameRef.current !== null)
         cancelAnimationFrame(pointerFrameRef.current);
       map.remove();
       mapRef.current = null;
     };
-  }, [initialView]);
+  }, [mapAttempt]);
 
   useEffect(() => {
     const map = mapRef.current;
@@ -436,13 +486,21 @@ export default function AtlasMap({
     );
     if (!entry) return;
 
-    map.easeTo({
-      center: [entry.longitude, entry.latitude],
-      zoom: Math.max(map.getZoom(), 7),
-      padding: { top: 90, right: 360, bottom: 80, left: 80 },
-      duration: 950,
-      essential: true,
-    });
+    const container = map.getContainer();
+    try {
+      map.easeTo({
+        center: [entry.longitude, entry.latitude],
+        zoom: Math.max(map.getZoom(), 7),
+        padding: getAtlasFocusPadding(
+          container.clientWidth,
+          container.clientHeight,
+        ),
+        duration: 950,
+        essential: true,
+      });
+    } catch (error) {
+      console.error('Atlas map camera focus failed:', error);
+    }
   }, [focusRequest, mapLoaded]);
 
   useEffect(() => {
@@ -473,6 +531,14 @@ export default function AtlasMap({
     visibleTooltip?.kind === 'entry'
       ? entries.find((entry) => entry.id === visibleTooltip.entryId)
       : null;
+
+  const retryMap = () => {
+    setMapLoaded(false);
+    setMapError(false);
+    setTooltip(null);
+    renderedMapDataKeyRef.current = null;
+    setMapAttempt((attempt) => attempt + 1);
+  };
 
   return (
     <div
@@ -540,7 +606,10 @@ export default function AtlasMap({
       {mapError ? (
         <div className={styles.mapError} role="alert">
           <strong>The map is taking the long way around.</strong>
-          <span>Check your connection, then refresh the atlas.</span>
+          <span>Check your connection, then try loading it again.</span>
+          <button type="button" onClick={retryMap}>
+            Try again
+          </button>
         </div>
       ) : null}
     </div>

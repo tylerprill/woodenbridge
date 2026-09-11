@@ -2646,6 +2646,7 @@ body {
 .dashboard-shell {
   display: grid;
   grid-template-columns: 17rem minmax(0, 1fr);
+  min-height: 100vh;
   min-height: 100svh;
   background:
     radial-gradient(
@@ -2660,6 +2661,7 @@ body {
   position: sticky;
   top: 0;
   z-index: 10;
+  height: 100vh;
   height: 100svh;
   padding: 1rem 0 1rem 1rem;
 }
@@ -2841,6 +2843,7 @@ body {
 
 .dashboard-main:has(> .atlas-workspace-root),
 .dashboard-main:has(> .atlas-route-loading) {
+  height: 100vh;
   height: 100svh;
   overflow: hidden;
   padding: 1rem;
@@ -5379,6 +5382,7 @@ input[type='number']::-webkit-outer-spin-button {
 
   .dashboard-main:has(> .atlas-workspace-root),
   .dashboard-main:has(> .atlas-route-loading) {
+    height: calc(100vh - 5.3rem);
     height: calc(100svh - 5.3rem);
     padding: 0 0.75rem 0.75rem;
   }

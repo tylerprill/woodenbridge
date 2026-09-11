@@ -1381,7 +1381,9 @@ describe('bulk photo import workspace', () => {
       new File(['kyoto'], 'kyoto.jpg', { type: 'image/jpeg' }),
     ]);
     await user.click(screen.getByRole('button', { name: 'Review 1 photo' }));
+    expect(screen.getAllByTestId('atlas-map')).toHaveLength(1);
     await user.click(screen.getByRole('button', { name: 'Choose place' }));
+    expect(screen.getAllByTestId('atlas-map')).toHaveLength(1);
     const moveCenter = screen.getByRole('button', {
       name: 'Move map center to Kyoto',
     });

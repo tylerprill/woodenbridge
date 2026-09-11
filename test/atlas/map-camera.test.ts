@@ -1,4 +1,7 @@
-import { getAtlasFitPadding } from '@/components/atlas/atlas-map-camera';
+import {
+  getAtlasFitPadding,
+  getAtlasFocusPadding,
+} from '@/components/atlas/atlas-map-camera';
 
 describe('Atlas map camera padding', () => {
   it('fits safely inside the compact mobile journey map', () => {
@@ -25,6 +28,37 @@ describe('Atlas map camera padding', () => {
 
   it('never produces invalid padding for a zero-size transition frame', () => {
     expect(getAtlasFitPadding(0, 0)).toEqual({
+      top: 0,
+      right: 0,
+      bottom: 0,
+      left: 0,
+    });
+  });
+
+  it('uses compact focus padding that stays inside a phone canvas', () => {
+    const padding = getAtlasFocusPadding(320, 568);
+
+    expect(padding).toEqual({
+      top: 91,
+      right: 38,
+      bottom: 140,
+      left: 38,
+    });
+    expect(padding.left + padding.right).toBeLessThan(320);
+    expect(padding.top + padding.bottom).toBeLessThan(568);
+  });
+
+  it('preserves room for the desktop memory drawer when focusing a pin', () => {
+    expect(getAtlasFocusPadding(1000, 752)).toEqual({
+      top: 90,
+      right: 360,
+      bottom: 80,
+      left: 80,
+    });
+  });
+
+  it('keeps focus padding valid through a zero-size resize frame', () => {
+    expect(getAtlasFocusPadding(0, 0)).toEqual({
       top: 0,
       right: 0,
       bottom: 0,
