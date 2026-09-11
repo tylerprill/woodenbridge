@@ -91,7 +91,11 @@ jobs:
           node-version-file: .nvmrc
           cache: npm
       - run: npm ci
-      - run: npm run build
+      - name: Build without runtime database credentials
+        run: npm run build
+        env:
+          DATABASE_URL: ''
+          POSTGRES_URL: ''
 
   database-integration:
     name: PostgreSQL migrations and authorization
