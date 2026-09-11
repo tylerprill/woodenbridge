@@ -1,7 +1,13 @@
 import { handleUpload } from '@vercel/blob/client';
 
 import { getVerifiedSession } from '@/app/lib/auth/session';
-import { POST } from '@/app/api/atlas/media/upload/route';
+import { POST, PUT } from '@/app/api/atlas/media/upload/route';
+import {
+  getAtlasBlobToken,
+  getE2EAtlasMediaStorageConfiguration,
+  isE2EAtlasMediaStorageEnabled,
+  putE2EAtlasMediaObject,
+} from '@/app/lib/atlas/media-storage';
 import {
   markAtlasMediaUploadCompleted,
   reserveAtlasMediaUploadVariant,
@@ -12,7 +18,10 @@ jest.mock('@/app/lib/auth/session', () => ({
   getVerifiedSession: jest.fn(),
 }));
 jest.mock('@/app/lib/atlas/media-storage', () => ({
-  getAtlasBlobToken: () => 'test-blob-token',
+  getAtlasBlobToken: jest.fn(),
+  getE2EAtlasMediaStorageConfiguration: jest.fn(),
+  isE2EAtlasMediaStorageEnabled: jest.fn(),
+  putE2EAtlasMediaObject: jest.fn(),
 }));
 jest.mock('@/app/lib/atlas/upload-intents', () => ({
   markAtlasMediaUploadCompleted: jest.fn(),
@@ -38,15 +47,206 @@ function uploadRequest(body: unknown) {
   });
 }
 
+function filesystemUploadRequest({
+  body = new Uint8Array([1, 2, 3]),
+  origin = 'http://127.0.0.1:3100',
+  path = pathname,
+  payload = clientPayload,
+  contentType = 'image/jpeg',
+}: {
+  body?: BodyInit;
+  origin?: string;
+  path?: string;
+  payload?: string;
+  contentType?: string;
+} = {}) {
+  return new Request(
+    `${origin}/api/atlas/media/upload?pathname=${encodeURIComponent(path)}`,
+    {
+      method: 'PUT',
+      headers: {
+        'content-type': contentType,
+        origin,
+        'x-atlas-upload-payload': Buffer.from(payload).toString('base64url'),
+      },
+      body,
+    },
+  );
+}
+
 describe('atlas Blob upload authorization route', () => {
   beforeEach(() => {
     jest.mocked(handleUpload).mockReset();
     jest.mocked(getVerifiedSession).mockReset();
+    jest.mocked(getAtlasBlobToken).mockReset();
+    jest.mocked(getE2EAtlasMediaStorageConfiguration).mockReset();
+    jest.mocked(isE2EAtlasMediaStorageEnabled).mockReset();
+    jest.mocked(putE2EAtlasMediaObject).mockReset();
     jest.mocked(markAtlasMediaUploadCompleted).mockReset();
     jest.mocked(reserveAtlasMediaUploadVariant).mockReset();
+    jest.mocked(isE2EAtlasMediaStorageEnabled).mockReturnValue(false);
+    jest.mocked(getAtlasBlobToken).mockReturnValue('test-blob-token');
+    jest.mocked(getE2EAtlasMediaStorageConfiguration).mockResolvedValue({
+      appOrigin: 'http://127.0.0.1:3100',
+      root: '/tmp/field-atlas-e2e-media-test',
+    });
+    jest.mocked(putE2EAtlasMediaObject).mockImplementation(
+      async (input) =>
+        ({
+          pathname: input.pathname,
+        }) as never,
+    );
     jest.mocked(reserveAtlasMediaUploadVariant).mockResolvedValue({
       validUntil: Date.now() + 60_000,
     });
+  });
+
+  it('keeps the filesystem upload endpoint unavailable without its explicit E2E flag', async () => {
+    const response = await PUT(filesystemUploadRequest());
+
+    expect(response.status).toBe(404);
+    expect(getE2EAtlasMediaStorageConfiguration).not.toHaveBeenCalled();
+    expect(getVerifiedSession).not.toHaveBeenCalled();
+    expect(putE2EAtlasMediaObject).not.toHaveBeenCalled();
+  });
+
+  it('keeps the production Blob endpoint unavailable in filesystem mode', async () => {
+    jest.mocked(isE2EAtlasMediaStorageEnabled).mockReturnValue(true);
+
+    const response = await POST(
+      uploadRequest({
+        type: 'blob.generate-client-token',
+        payload: { pathname, clientPayload, multipart: true },
+      }),
+    );
+
+    expect(response.status).toBe(404);
+    expect(getVerifiedSession).not.toHaveBeenCalled();
+    expect(getAtlasBlobToken).not.toHaveBeenCalled();
+    expect(handleUpload).not.toHaveBeenCalled();
+  });
+
+  it('rejects filesystem uploads outside the configured same origin', async () => {
+    jest.mocked(isE2EAtlasMediaStorageEnabled).mockReturnValue(true);
+    const request = filesystemUploadRequest();
+    request.headers.set('origin', 'http://localhost:3100');
+
+    const response = await PUT(request);
+
+    expect(response.status).toBe(404);
+    expect(getVerifiedSession).not.toHaveBeenCalled();
+    expect(putE2EAtlasMediaObject).not.toHaveBeenCalled();
+  });
+
+  it('rejects a filesystem upload with a mismatched Host header', async () => {
+    jest.mocked(isE2EAtlasMediaStorageEnabled).mockReturnValue(true);
+    const request = filesystemUploadRequest();
+    request.headers.set('host', 'localhost:3100');
+
+    const response = await PUT(request);
+
+    expect(response.status).toBe(404);
+    expect(getVerifiedSession).not.toHaveBeenCalled();
+    expect(putE2EAtlasMediaObject).not.toHaveBeenCalled();
+  });
+
+  it('requires an authenticated user for filesystem uploads', async () => {
+    jest.mocked(isE2EAtlasMediaStorageEnabled).mockReturnValue(true);
+    jest.mocked(getVerifiedSession).mockResolvedValue(null);
+
+    const response = await PUT(filesystemUploadRequest());
+
+    expect(response.status).toBe(401);
+    expect(reserveAtlasMediaUploadVariant).not.toHaveBeenCalled();
+    expect(putE2EAtlasMediaObject).not.toHaveBeenCalled();
+  });
+
+  it('writes and marks an authenticated filesystem upload in order', async () => {
+    const userId = '17d69b97-9d24-4e07-a461-271263c71c52';
+    jest.mocked(isE2EAtlasMediaStorageEnabled).mockReturnValue(true);
+    jest.mocked(getVerifiedSession).mockResolvedValue({
+      user: { id: userId },
+    } as never);
+
+    const response = await PUT(filesystemUploadRequest());
+
+    expect(response.status).toBe(200);
+    await expect(response.json()).resolves.toEqual({ pathname });
+    expect(reserveAtlasMediaUploadVariant).toHaveBeenCalledWith({
+      userId,
+      entryId,
+      mediaId,
+      pathname,
+      thumbnailPathname,
+      variant: 'original',
+    });
+    expect(putE2EAtlasMediaObject).toHaveBeenCalledWith({
+      pathname,
+      contentType: 'image/jpeg',
+      bytes: new Uint8Array([1, 2, 3]),
+    });
+    expect(markAtlasMediaUploadCompleted).toHaveBeenCalledWith({
+      tokenPayload: {
+        userId,
+        entryId,
+        mediaId,
+        pathname,
+        thumbnailPathname,
+        variant: 'original',
+      },
+      pathname,
+    });
+    expect(
+      jest.mocked(reserveAtlasMediaUploadVariant).mock.invocationCallOrder[0],
+    ).toBeLessThan(
+      jest.mocked(putE2EAtlasMediaObject).mock.invocationCallOrder[0],
+    );
+    expect(
+      jest.mocked(putE2EAtlasMediaObject).mock.invocationCallOrder[0],
+    ).toBeLessThan(
+      jest.mocked(markAtlasMediaUploadCompleted).mock.invocationCallOrder[0],
+    );
+  });
+
+  it('rejects an unpaired payload before reserving or writing bytes', async () => {
+    const mismatchedThumbnail = `atlas/memories/${entryId}/40504744-8e58-49c8-b4e7-bcb029a96dc5.thumbnail.webp`;
+    jest.mocked(isE2EAtlasMediaStorageEnabled).mockReturnValue(true);
+    jest.mocked(getVerifiedSession).mockResolvedValue({
+      user: { id: '17d69b97-9d24-4e07-a461-271263c71c52' },
+    } as never);
+
+    const response = await PUT(
+      filesystemUploadRequest({
+        payload: JSON.stringify({
+          entryId,
+          mediaId,
+          pathname,
+          thumbnailPathname: mismatchedThumbnail,
+        }),
+      }),
+    );
+
+    expect(response.status).toBe(400);
+    expect(reserveAtlasMediaUploadVariant).not.toHaveBeenCalled();
+    expect(putE2EAtlasMediaObject).not.toHaveBeenCalled();
+  });
+
+  it('enforces the thumbnail content type before reserving storage', async () => {
+    jest.mocked(isE2EAtlasMediaStorageEnabled).mockReturnValue(true);
+    jest.mocked(getVerifiedSession).mockResolvedValue({
+      user: { id: '17d69b97-9d24-4e07-a461-271263c71c52' },
+    } as never);
+
+    const response = await PUT(
+      filesystemUploadRequest({
+        path: thumbnailPathname,
+        contentType: 'image/jpeg',
+      }),
+    );
+
+    expect(response.status).toBe(400);
+    expect(reserveAtlasMediaUploadVariant).not.toHaveBeenCalled();
+    expect(putE2EAtlasMediaObject).not.toHaveBeenCalled();
   });
 
   it('rejects token generation without a verified session', async () => {

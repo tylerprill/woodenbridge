@@ -206,13 +206,18 @@ jobs:
           --health-retries 5
     env:
       APP_URL: http://127.0.0.1:3100
+      ATLAS_GEOCODER_ENDPOINT: http://127.0.0.1:3100/e2e-geocoder.json
       AUTH_URL: http://127.0.0.1:3100
       DATABASE_URL: postgresql://field_atlas_runtime:runtime-only-e2e-password-2026-safe@127.0.0.1:5432/field_atlas_e2e
+      CRON_SECRET: field-atlas-e2e-cleanup-secret-2026
       E2E_CHAPTER_ID: 6a67afcf-768f-4fe4-8c62-41b58a19840d
       E2E_DATABASE_ADAPTER: pg
       E2E_ENTRY_ID: 0a934c64-997f-43c2-88a3-8b102d517781
+      E2E_MEDIA_STORAGE_ADAPTER: filesystem
+      E2E_REQUIRE_FULL_IMPORT: '1'
       E2E_TEST_EMAIL: field-atlas-e2e@example.test
       E2E_TEST_PASSWORD: field-atlas-e2e-password-2026
+      NEXT_PUBLIC_E2E_MEDIA_STORAGE_ADAPTER: filesystem
       NEXT_PUBLIC_ATLAS_STYLE_URL: http://127.0.0.1:3100/e2e-map-style.json
       PASSKEY_ORIGIN: http://127.0.0.1:3100
       PASSKEY_RP_ID: 127.0.0.1
@@ -220,6 +225,11 @@ jobs:
     steps:
       - name: Check out repository
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: Configure isolated media storage
+        shell: bash
+        run: |
+          media_storage_root="$RUNNER_TEMP/field-atlas-e2e-media-$GITHUB_RUN_ID-$GITHUB_RUN_ATTEMPT"
+          printf 'E2E_MEDIA_STORAGE_ROOT=%s\n' "$media_storage_root" >> "$GITHUB_ENV"
       - name: Set up Node.js
         uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
@@ -250,12 +260,23 @@ jobs:
           E2E_DATABASE_URL: postgresql://migration_owner:migration-owner-password@127.0.0.1:5432/field_atlas_e2e
       - name: Install Chromium and operating-system dependencies
         run: npx playwright install --with-deps chromium
-      - name: Audit authenticated desktop and mobile flows
+      - name: Audit authenticated UI and the full photo-import lifecycle
         run: >-
           npm run test:e2e:authenticated --
           --project=chromium
           --project=mobile-chromium
           --project=mobile-chromium-landscape
+      - name: Verify isolated media storage cleanup
+        shell: bash
+        run: |
+          if [ ! -d "$E2E_MEDIA_STORAGE_ROOT" ] || [ -L "$E2E_MEDIA_STORAGE_ROOT" ]; then
+            echo "::error::The isolated E2E media storage root is missing or unsafe."
+            exit 1
+          fi
+          if find "$E2E_MEDIA_STORAGE_ROOT" -mindepth 1 -print -quit | grep -q .; then
+            echo "::error::The full photo-import lifecycle left isolated media behind."
+            exit 1
+          fi
       - name: Upload browser audit artifacts
         if: ${{ !cancelled() }}
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1

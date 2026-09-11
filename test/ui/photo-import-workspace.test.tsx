@@ -13,7 +13,6 @@ import {
 } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 
-import { upload } from '@vercel/blob/client';
 import {
   cancelAtlasImportBatchAction,
   createAtlasImportBatchAction,
@@ -29,6 +28,7 @@ import type {
   AtlasImportBatch,
   CreateAtlasImportBatchInput,
 } from '@/app/lib/atlas/import-definitions';
+import { uploadAtlasMedia } from '@/app/lib/atlas/media-upload-client';
 import {
   analyzeAtlasImportPhoto,
   prepareAtlasImportPhoto,
@@ -111,7 +111,9 @@ jest.mock('@/components/atlas/atlas-map-loader', () => ({
   ),
 }));
 
-jest.mock('@vercel/blob/client', () => ({ upload: jest.fn() }));
+jest.mock('@/app/lib/atlas/media-upload-client', () => ({
+  uploadAtlasMedia: jest.fn(),
+}));
 
 jest.mock('@/app/lib/actions/atlas-import', () => ({
   cancelAtlasImportBatchAction: jest.fn(),
@@ -386,14 +388,16 @@ function installSuccessfulBackend() {
     ok: true,
     data: { batchId: 'batch-1', itemId: 'item-1', prepared: true },
   });
-  jest.mocked(upload).mockImplementation(async (pathname, _blob, options) => {
-    options.onUploadProgress?.({
-      loaded: 1,
-      total: 1,
-      percentage: 100,
+  jest
+    .mocked(uploadAtlasMedia)
+    .mockImplementation(async (pathname, _blob, options) => {
+      options.onUploadProgress?.({
+        loaded: 1,
+        total: 1,
+        percentage: 100,
+      });
+      return { pathname } as never;
     });
-    return { pathname } as never;
-  });
   jest.mocked(registerAtlasMediaAction).mockResolvedValue({
     ok: true,
     data: {
@@ -740,7 +744,7 @@ describe('bulk photo import workspace', () => {
       events.push(`prepare:${file.name}`);
       return preparedPhoto(file);
     });
-    jest.mocked(upload).mockImplementation(async (pathname) => {
+    jest.mocked(uploadAtlasMedia).mockImplementation(async (pathname) => {
       events.push(`upload:${pathname}`);
       return { pathname } as never;
     });
@@ -856,7 +860,7 @@ describe('bulk photo import workspace', () => {
   it('preserves the private draft and retries a failed upload without recreating the batch', async () => {
     const user = userEvent.setup();
     jest
-      .mocked(upload)
+      .mocked(uploadAtlasMedia)
       .mockRejectedValueOnce(new Error('Connection lost during upload.'))
       .mockRejectedValueOnce(new Error('Connection lost during upload.'))
       .mockImplementation(async (pathname) => ({ pathname }) as never);
@@ -890,7 +894,7 @@ describe('bulk photo import workspace', () => {
   it('keeps multi-photo memories-only creation retryable after the private batch locks', async () => {
     const user = userEvent.setup();
     jest
-      .mocked(upload)
+      .mocked(uploadAtlasMedia)
       .mockRejectedValueOnce(new Error('Connection lost during upload.'))
       .mockRejectedValueOnce(new Error('Connection lost during upload.'))
       .mockImplementation(async (pathname) => ({ pathname }) as never);
@@ -932,7 +936,7 @@ describe('bulk photo import workspace', () => {
   it('keeps a locked chapter retryable without offering memories-only finalization', async () => {
     const user = userEvent.setup();
     jest
-      .mocked(upload)
+      .mocked(uploadAtlasMedia)
       .mockRejectedValueOnce(new Error('Connection lost during upload.'))
       .mockRejectedValueOnce(new Error('Connection lost during upload.'))
       .mockImplementation(async (pathname) => ({ pathname }) as never);
@@ -1756,7 +1760,7 @@ describe('bulk photo import workspace', () => {
   it('probes a retry and uploads only the missing sibling after an upload response is lost', async () => {
     const user = userEvent.setup();
     jest
-      .mocked(upload)
+      .mocked(uploadAtlasMedia)
       .mockRejectedValueOnce(new Error('Original response was lost.'))
       .mockRejectedValueOnce(new Error('Thumbnail upload failed.'))
       .mockImplementation(async (pathname) => ({ pathname }) as never);
@@ -1787,8 +1791,10 @@ describe('bulk photo import workspace', () => {
       ).toBeVisible(),
     );
     expect(getAtlasImportMediaPairStatusAction).toHaveBeenCalledTimes(1);
-    expect(upload).toHaveBeenCalledTimes(3);
-    expect(jest.mocked(upload).mock.calls[2][0]).toMatch(/\.thumbnail\.jpg$/);
+    expect(uploadAtlasMedia).toHaveBeenCalledTimes(3);
+    expect(jest.mocked(uploadAtlasMedia).mock.calls[2][0]).toMatch(
+      /\.thumbnail\.jpg$/,
+    );
     expect(registerAtlasMediaAction).toHaveBeenCalledTimes(1);
   });
 });

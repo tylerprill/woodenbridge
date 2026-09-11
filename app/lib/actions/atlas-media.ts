@@ -1,6 +1,6 @@
 'use server';
 
-import { BlobNotFoundError, del, get, head } from '@vercel/blob';
+import { BlobNotFoundError } from '@vercel/blob';
 import { db, sql } from '@/app/lib/db';
 import { revalidatePath } from 'next/cache';
 import sharp, { type Metadata } from 'sharp';
@@ -24,7 +24,11 @@ import {
   getAtlasThumbnailDimensions,
   isAllowedAtlasMediaType,
 } from '@/app/lib/atlas/media-policy';
-import { getAtlasBlobToken } from '@/app/lib/atlas/media-storage';
+import {
+  deleteAtlasMediaObjects,
+  headAtlasMediaObject,
+  readAtlasMediaObject,
+} from '@/app/lib/atlas/media-storage';
 import { type AtlasMediaRow, toAtlasMedia } from '@/app/lib/atlas/rows';
 import {
   consumeAtlasMediaUploadIntent,
@@ -61,8 +65,8 @@ function hasPrivateImageMetadata(metadata: Metadata) {
   return Boolean(metadata.exif || metadata.xmp || metadata.iptc);
 }
 
-async function readPrivateBlob(pathname: string, token: string) {
-  const result = await get(pathname, { access: 'private', token });
+async function readPrivateBlob(pathname: string) {
+  const result = await readAtlasMediaObject(pathname);
   if (!result || result.statusCode === 304) {
     throw new Error('Imported media could not be read.');
   }
@@ -77,7 +81,6 @@ async function validateImportedMedia({
   blobSize,
   thumbnailSize,
   expected,
-  token,
 }: {
   pathname: string;
   thumbnailPathname: string;
@@ -86,7 +89,6 @@ async function validateImportedMedia({
   blobSize: number;
   thumbnailSize: number;
   expected: ImportMediaPreflight;
-  token: string;
 }) {
   if (
     expected.media_width !== width ||
@@ -101,8 +103,8 @@ async function validateImportedMedia({
   }
 
   const [masterBytes, thumbnailBytes] = await Promise.all([
-    readPrivateBlob(pathname, token),
-    readPrivateBlob(thumbnailPathname, token),
+    readPrivateBlob(pathname),
+    readPrivateBlob(thumbnailPathname),
   ]);
   if (
     masterBytes.byteLength !== blobSize ||
@@ -163,15 +165,13 @@ async function importedBlobCommitted({
   pathname,
   expectedContentType,
   expectedSize,
-  token,
 }: {
   pathname: string;
   expectedContentType: string;
   expectedSize: number;
-  token: string;
 }) {
   try {
-    const blob = await head(pathname, { token });
+    const blob = await headAtlasMediaObject(pathname);
     if (
       blob.pathname !== pathname ||
       blob.contentType !== expectedContentType ||
@@ -275,19 +275,16 @@ export async function getAtlasImportMediaPairStatusAction(
       };
     }
 
-    const token = getAtlasBlobToken();
     const [originalCommitted, thumbnailCommitted] = await Promise.all([
       importedBlobCommitted({
         pathname: mediaInput.pathname,
         expectedContentType: 'image/jpeg',
         expectedSize: row.prepared_byte_size,
-        token,
       }),
       importedBlobCommitted({
         pathname: mediaInput.thumbnailPathname,
         expectedContentType: expectedThumbnailContentType,
         expectedSize: row.thumbnail_byte_size,
-        token,
       }),
     ]);
     return {
@@ -361,8 +358,6 @@ export async function registerAtlasMediaAction(
   }
 
   const mediaInput = parsed.data;
-  const token = getAtlasBlobToken();
-
   try {
     // Reject foreign or fabricated Blob paths before making storage requests.
     // The transaction below repeats and locks these checks to close races.
@@ -436,8 +431,8 @@ export async function registerAtlasMediaAction(
     }
 
     const [blob, thumbnail] = await Promise.all([
-      head(mediaInput.pathname, { token }),
-      head(mediaInput.thumbnailPathname, { token }),
+      headAtlasMediaObject(mediaInput.pathname),
+      headAtlasMediaObject(mediaInput.thumbnailPathname),
     ]);
     const expectedThumbnailContentType = getAtlasThumbnailContentType(
       mediaInput.thumbnailPathname,
@@ -467,7 +462,6 @@ export async function registerAtlasMediaAction(
           blobSize: blob.size,
           thumbnailSize: thumbnail.size,
           expected: preflightRow,
-          token,
         })))
     ) {
       return {
@@ -883,11 +877,10 @@ export async function deleteAtlasMediaAction(
       };
     }
 
-    await del(
+    await deleteAtlasMediaObjects(
       [row.storage_path, row.thumbnail_path].filter(
         (pathname): pathname is string => Boolean(pathname),
       ),
-      { token: getAtlasBlobToken() },
     );
     const removed = await sql<{ id: string }>`
       DELETE FROM atlas_media

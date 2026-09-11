@@ -19,16 +19,18 @@ jest.mock('@vercel/postgres', () => {
   };
 });
 
-jest.mock('@vercel/blob', () => ({ del: jest.fn() }));
 jest.mock('@/app/lib/atlas/media-storage', () => ({
-  getAtlasBlobToken: () => 'blob-test-token',
+  deleteAtlasMediaObjects: jest.fn(),
 }));
 
-import { del } from '@vercel/blob';
+import { deleteAtlasMediaObjects } from '@/app/lib/atlas/media-storage';
 
 import {
   AtlasUploadIntentError,
   cleanupExpiredAtlasMediaUploadIntents,
+  consumeAtlasMediaUploadIntent,
+  discardAtlasMediaUploadIntent,
+  lockAtlasMediaUploadIntentForRegistration,
   markAtlasMediaUploadCompleted,
   reserveAtlasMediaUploadVariant,
 } from '@/app/lib/atlas/upload-intents';
@@ -73,7 +75,7 @@ describe('atlas media upload intent abuse controls', () => {
     __testMocks.connect.mockClear();
     __testMocks.taggedQuery.mockReset();
     __testMocks.textQuery.mockReset();
-    jest.mocked(del).mockReset();
+    jest.mocked(deleteAtlasMediaObjects).mockReset();
   });
 
   it('refuses to issue a Blob token after an import leaves uploading state', async () => {
@@ -294,6 +296,72 @@ describe('atlas media upload intent abuse controls', () => {
     expect(__testMocks.textQuery).not.toHaveBeenCalled();
   });
 
+  it.each(['original', 'thumbnail'] as const)(
+    'rejects an expired %s completion callback',
+    async (variant) => {
+      __testMocks.textQuery.mockResolvedValue({ rows: [], rowCount: 0 });
+
+      await expect(
+        markAtlasMediaUploadCompleted({
+          tokenPayload: {
+            userId,
+            entryId,
+            mediaId,
+            pathname,
+            thumbnailPathname,
+            variant,
+          },
+          pathname: variant === 'original' ? pathname : thumbnailPathname,
+        }),
+      ).rejects.toMatchObject<Partial<AtlasUploadIntentError>>({
+        code: 'invalid',
+      });
+
+      const callbackQuery = normalizeQuery(
+        __testMocks.textQuery.mock.calls[0]?.[0],
+      );
+      expect(callbackQuery).toContain('expires_at > clock_timestamp()');
+      expect(callbackQuery).toContain('consumed_at IS NULL');
+    },
+  );
+
+  it('keeps an expired reservation terminal after a cleanup lease is released', async () => {
+    const expired = new Date(Date.now() - 60_000);
+    __testMocks.clientQuery.mockResolvedValueOnce({
+      rows: [
+        {
+          media_id: mediaId,
+          user_id: userId,
+          entry_id: entryId,
+          original_path: pathname,
+          thumbnail_path: thumbnailPathname,
+          expires_at: expired,
+          consumed_at: null,
+          cleanup_started_at: null,
+        },
+      ],
+      rowCount: 1,
+    });
+    const client = (await __testMocks.connect()) as Parameters<
+      typeof lockAtlasMediaUploadIntentForRegistration
+    >[0];
+
+    await expect(
+      lockAtlasMediaUploadIntentForRegistration(client, intent),
+    ).resolves.toBe(false);
+    expect(
+      normalizeQuery(__testMocks.clientQuery.mock.calls[0]?.[0]),
+    ).toContain('expires_at > clock_timestamp()');
+
+    __testMocks.clientQuery.mockResolvedValueOnce({ rows: [], rowCount: 0 });
+    await expect(consumeAtlasMediaUploadIntent(client, intent)).resolves.toBe(
+      false,
+    );
+    expect(
+      normalizeQuery(__testMocks.clientQuery.mock.calls[1]?.[0]),
+    ).toContain('expires_at > clock_timestamp()');
+  });
+
   it('reserves abandoned pairs against the account storage budget', async () => {
     __testMocks.clientQuery.mockImplementation(async (query: string) => {
       const text = normalizeQuery(query);
@@ -339,6 +407,7 @@ describe('atlas media upload intent abuse controls', () => {
 
   it('keeps a failed orphan cleanup reserved and retryable', async () => {
     const cleanupStartedAt = new Date('2026-08-17T12:00:00.000Z');
+    const cleanupAttempts = 3;
     __testMocks.textQuery.mockResolvedValue({
       rows: [
         {
@@ -346,6 +415,7 @@ describe('atlas media upload intent abuse controls', () => {
           original_path: pathname,
           thumbnail_path: thumbnailPathname,
           cleanup_started_at: cleanupStartedAt,
+          cleanup_attempts: cleanupAttempts,
         },
       ],
       rowCount: 1,
@@ -359,15 +429,21 @@ describe('atlas media upload intent abuse controls', () => {
         return { rows: [], rowCount: 1 };
       },
     );
-    jest.mocked(del).mockRejectedValueOnce(new Error('Blob unavailable'));
+    jest
+      .mocked(deleteAtlasMediaObjects)
+      .mockRejectedValueOnce(new Error('Blob unavailable'));
 
     await expect(cleanupExpiredAtlasMediaUploadIntents()).rejects.toThrow(
       '1 expired atlas upload intent cleanups failed.',
     );
 
-    expect(del).toHaveBeenCalledWith([pathname, thumbnailPathname], {
-      token: 'blob-test-token',
-    });
+    expect(normalizeQuery(__testMocks.textQuery.mock.calls[0]?.[0])).toContain(
+      "cleanup_started_at = date_trunc('milliseconds', clock_timestamp())",
+    );
+    expect(deleteAtlasMediaObjects).toHaveBeenCalledWith([
+      pathname,
+      thumbnailPathname,
+    ]);
     const taggedQueries = __testMocks.taggedQuery.mock.calls.map(([strings]) =>
       taggedQueryText(strings as TemplateStringsArray),
     );
@@ -376,6 +452,12 @@ describe('atlas media upload intent abuse controls', () => {
         query.includes('SET cleanup_started_at = NULL'),
       ),
     ).toBe(true);
+    const releaseCall = __testMocks.taggedQuery.mock.calls.find(([strings]) =>
+      taggedQueryText(strings as TemplateStringsArray).includes(
+        'SET cleanup_started_at = NULL',
+      ),
+    );
+    expect(releaseCall?.slice(1)).toEqual([mediaId, cleanupAttempts]);
     expect(
       taggedQueries.some((query) =>
         query.includes('DELETE FROM atlas_media_upload_intents WHERE media_id'),
@@ -385,6 +467,7 @@ describe('atlas media upload intent abuse controls', () => {
 
   it('releases an expired reservation only after its exact Blob pair is deleted', async () => {
     const cleanupStartedAt = new Date('2026-08-17T12:00:00.000Z');
+    const cleanupAttempts = 7;
     __testMocks.textQuery.mockResolvedValue({
       rows: [
         {
@@ -392,6 +475,7 @@ describe('atlas media upload intent abuse controls', () => {
           original_path: pathname,
           thumbnail_path: thumbnailPathname,
           cleanup_started_at: cleanupStartedAt,
+          cleanup_attempts: cleanupAttempts,
         },
       ],
       rowCount: 1,
@@ -405,7 +489,7 @@ describe('atlas media upload intent abuse controls', () => {
         return { rows: [], rowCount: 1 };
       },
     );
-    jest.mocked(del).mockResolvedValue(undefined);
+    jest.mocked(deleteAtlasMediaObjects).mockResolvedValue(undefined);
 
     await expect(cleanupExpiredAtlasMediaUploadIntents()).resolves.toEqual({
       cleaned: 1,
@@ -418,8 +502,71 @@ describe('atlas media upload intent abuse controls', () => {
         ),
     );
     expect(cleanupDeleteIndex).toBeGreaterThanOrEqual(0);
-    expect(jest.mocked(del).mock.invocationCallOrder[0]).toBeLessThan(
+    const cleanupDeleteCall =
+      __testMocks.taggedQuery.mock.calls[cleanupDeleteIndex];
+    expect(
+      taggedQueryText(cleanupDeleteCall?.[0] as TemplateStringsArray),
+    ).toContain('cleanup_attempts = ?');
+    expect(cleanupDeleteCall?.slice(1)).toEqual([mediaId, cleanupAttempts]);
+    expect(
+      jest.mocked(deleteAtlasMediaObjects).mock.invocationCallOrder[0],
+    ).toBeLessThan(
       __testMocks.taggedQuery.mock.invocationCallOrder[cleanupDeleteIndex],
     );
+  });
+
+  it('uses a precision-safe monotonic lease when discarding an orphan reservation', async () => {
+    const cleanupStartedAt = new Date('2026-08-17T12:00:00.123Z');
+    const cleanupAttempts = 1;
+    __testMocks.taggedQuery.mockImplementation(
+      async (strings: TemplateStringsArray) => {
+        const query = taggedQueryText(strings);
+        if (query.startsWith('UPDATE atlas_media_upload_intents')) {
+          return {
+            rows: [
+              {
+                media_id: mediaId,
+                original_path: pathname,
+                thumbnail_path: thumbnailPathname,
+                cleanup_started_at: cleanupStartedAt,
+                cleanup_attempts: cleanupAttempts,
+              },
+            ],
+            rowCount: 1,
+          };
+        }
+        if (query.includes('SELECT id FROM atlas_media')) {
+          return { rows: [], rowCount: 0 };
+        }
+        return { rows: [], rowCount: 1 };
+      },
+    );
+    jest.mocked(deleteAtlasMediaObjects).mockResolvedValue(undefined);
+
+    await expect(discardAtlasMediaUploadIntent(intent)).resolves.toBe(true);
+
+    const claimQuery = taggedQueryText(
+      __testMocks.taggedQuery.mock.calls[0]?.[0] as TemplateStringsArray,
+    );
+    expect(claimQuery).toContain(
+      "cleanup_started_at = date_trunc('milliseconds', clock_timestamp())",
+    );
+    expect(deleteAtlasMediaObjects).toHaveBeenCalledWith([
+      pathname,
+      thumbnailPathname,
+    ]);
+    expect(
+      __testMocks.taggedQuery.mock.calls.some(([strings]) =>
+        taggedQueryText(strings as TemplateStringsArray).includes(
+          'DELETE FROM atlas_media_upload_intents WHERE media_id',
+        ),
+      ),
+    ).toBe(true);
+    const deleteCall = __testMocks.taggedQuery.mock.calls.find(([strings]) =>
+      taggedQueryText(strings as TemplateStringsArray).includes(
+        'DELETE FROM atlas_media_upload_intents WHERE media_id',
+      ),
+    );
+    expect(deleteCall?.slice(1)).toEqual([mediaId, cleanupAttempts]);
   });
 });

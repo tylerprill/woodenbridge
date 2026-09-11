@@ -5,7 +5,6 @@ import {
   PhotoIcon,
   TrashIcon,
 } from '@heroicons/react/24/outline';
-import { upload } from '@vercel/blob/client';
 import Image from 'next/image';
 import { useRef, useState } from 'react';
 
@@ -21,6 +20,7 @@ import {
   createAtlasThumbnailPath,
   isAllowedAtlasMediaType,
 } from '@/app/lib/atlas/media-policy';
+import { uploadAtlasMedia } from '@/app/lib/atlas/media-upload-client';
 import {
   analyzeAtlasImportPhoto,
   prepareAtlasImportPhoto,
@@ -143,16 +143,12 @@ export function MemoryPhotos({
           );
         };
         const [blobResult, thumbnailResult] = await Promise.allSettled([
-          upload(pathname, master, {
-            access: 'private',
-            handleUploadUrl: '/api/atlas/media/upload',
+          uploadAtlasMedia(pathname, master, {
             clientPayload,
             multipart: true,
             onUploadProgress: ({ percentage }) => reportProgress(0, percentage),
           }),
-          upload(thumbnailPathname, thumbnail, {
-            access: 'private',
-            handleUploadUrl: '/api/atlas/media/upload',
+          uploadAtlasMedia(thumbnailPathname, thumbnail, {
             clientPayload,
             multipart: false,
             onUploadProgress: ({ percentage }) => reportProgress(1, percentage),
