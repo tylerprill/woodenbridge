@@ -10,17 +10,20 @@ import AtlasMap from '@/components/atlas/atlas-map';
 const mockMapConstructor = jest.fn();
 const mockEventHandlers = new Map<string, (event?: unknown) => void>();
 
-jest.mock('maplibre-gl', () => ({
-  __esModule: true,
-  default: {
+jest.mock(
+  'maplibre-gl',
+  () => ({
+    __esModule: true,
     Map: function MockMap(...args: unknown[]) {
       return mockMapConstructor(...args);
     },
     AttributionControl: jest.fn(),
     ScaleControl: jest.fn(),
-  },
-  LngLatBounds: jest.fn(),
-}));
+    LngLatBounds: jest.fn(),
+    setWorkerUrl: jest.fn(),
+  }),
+  { virtual: true },
+);
 
 const initialView: AtlasView = {
   latitude: 22,

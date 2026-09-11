@@ -94,6 +94,7 @@ describe('CSP proxy composition', () => {
     '/dashboard/archive.v2',
     '/sign-up',
     '/shared/chapters/example',
+    '/maplibre-private',
   ])('matches document route %s', (url) => {
     expect(unstable_doesMiddlewareMatch({ config, nextConfig: {}, url })).toBe(
       true,
@@ -104,6 +105,8 @@ describe('CSP proxy composition', () => {
     '/api/auth/session',
     '/_next/static/chunks/app.js',
     '/_next/image',
+    '/maplibre/maplibre-gl-worker.mjs',
+    '/maplibre/maplibre-gl-shared.mjs',
     '/icon.svg',
     '/manifest.webmanifest',
     '/robots.txt',

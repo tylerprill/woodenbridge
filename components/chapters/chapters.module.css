@@ -2150,6 +2150,13 @@
     linear-gradient(145deg, #eff0e8 0%, #e2e5dc 52%, #d9ded5 100%);
 }
 
+.chapterMapFailure {
+  position: absolute;
+  inset: 0;
+  z-index: 2;
+  height: auto;
+}
+
 .chapterMapDeferredStatus {
   display: grid;
   max-width: 18rem;

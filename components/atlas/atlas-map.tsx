@@ -1,12 +1,13 @@
 'use client';
 
 import { useEffect, useMemo, useRef, useState } from 'react';
-import maplibregl, {
-  LngLatBounds,
-  type GeoJSONSource,
-  type Map as MapLibreMap,
-  type MapLayerMouseEvent,
-  type MapMouseEvent,
+import * as maplibregl from 'maplibre-gl';
+import type {
+  ErrorEvent as MapLibreErrorEvent,
+  GeoJSONSource,
+  Map as MapLibreMap,
+  MapLayerMouseEvent,
+  MapMouseEvent,
 } from 'maplibre-gl';
 import 'maplibre-gl/dist/maplibre-gl.css';
 
@@ -62,6 +63,8 @@ type AtlasMapProps = {
 const DEFAULT_STYLE = 'https://tiles.openfreemap.org/styles/positron';
 const MAP_LOAD_TIMEOUT_MS = 15_000;
 
+maplibregl.setWorkerUrl('/maplibre/maplibre-gl-worker.mjs');
+
 // Keep place metadata out of the MapLibre update key. The React tooltip and
 // drawer consume that metadata directly, so enrichment does not need to
 // rebuild the map source or move the camera.
@@ -100,7 +103,7 @@ function fitEntries(map: MapLibreMap, entries: AtlasEntry[]) {
     return;
   }
 
-  const bounds = new LngLatBounds();
+  const bounds = new maplibregl.LngLatBounds();
   entries.forEach((entry) => bounds.extend([entry.longitude, entry.latitude]));
   const container = map.getContainer();
   try {
@@ -278,7 +281,7 @@ export default function AtlasMap({
       }
     };
 
-    const handleError = (event: ErrorEvent) => {
+    const handleError = (event: MapLibreErrorEvent) => {
       if (event?.error) console.error('Atlas map error:', event.error);
     };
 
