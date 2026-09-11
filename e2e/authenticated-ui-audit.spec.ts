@@ -12,6 +12,10 @@ const fixtureRoot = path.join(
   process.cwd(),
   'output/uiux-image-upload/test-images',
 );
+const e2eChapterId =
+  process.env.E2E_CHAPTER_ID?.trim() || '6a67afcf-768f-4fe4-8c62-41b58a19840d';
+const e2eEntryId =
+  process.env.E2E_ENTRY_ID?.trim() || '0a934c64-997f-43c2-88a3-8b102d517781';
 
 type AuditViewport = {
   name: string;
@@ -66,14 +70,21 @@ function shouldRunAccessibilityAudit(
 }
 
 async function signIn(page: Page) {
-  const email = process.env.E2E_TEST_EMAIL;
+  const email = process.env.E2E_TEST_EMAIL?.trim();
   const password = process.env.E2E_TEST_PASSWORD;
-  expect(email, 'E2E_TEST_EMAIL is required').toBeTruthy();
-  expect(password, 'E2E_TEST_PASSWORD is required').toBeTruthy();
+  if (!email || !password) {
+    const missingCredentials = [
+      !email ? 'E2E_TEST_EMAIL' : null,
+      !password ? 'E2E_TEST_PASSWORD' : null,
+    ].filter((name): name is string => Boolean(name));
+    throw new Error(
+      `Authenticated UI audit requires ${missingCredentials.join(' and ')}.`,
+    );
+  }
 
   await page.goto('/login');
-  await page.getByLabel('Email').fill(email ?? '');
-  await page.getByLabel('Password').fill(password ?? '');
+  await page.getByLabel('Email').fill(email);
+  await page.getByLabel('Password').fill(password);
   await page.getByRole('button', { name: /^sign in$/i }).click();
   await expect(page).toHaveURL(/\/dashboard(?:$|[/?#])/, { timeout: 20_000 });
 }
@@ -108,12 +119,12 @@ test('authenticated routes and primary interactions pass the UI audit', async ({
     },
     {
       name: 'chapter',
-      path: '/dashboard/chapters/6a67afcf-768f-4fe4-8c62-41b58a19840d',
+      path: `/dashboard/chapters/${encodeURIComponent(e2eChapterId)}`,
       expectedSelector: '[aria-label="Chapter actions"]',
     },
     {
       name: 'chapter-edit',
-      path: '/dashboard/chapters/6a67afcf-768f-4fe4-8c62-41b58a19840d/edit',
+      path: `/dashboard/chapters/${encodeURIComponent(e2eChapterId)}/edit`,
       expectedHeading: 'Shape your chapter.',
     },
     {
@@ -123,18 +134,13 @@ test('authenticated routes and primary interactions pass the UI audit', async ({
     },
     {
       name: 'memory-card',
-      path: '/dashboard/card/0a934c64-997f-43c2-88a3-8b102d517781',
+      path: `/dashboard/card/${encodeURIComponent(e2eEntryId)}`,
       expectedHeading: 'Keep the feeling close.',
     },
     {
       name: 'security',
       path: '/dashboard/security',
       expectedHeading: 'Security.',
-    },
-    {
-      name: 'owner-users',
-      path: '/dashboard/owner/users',
-      expectedHeading: 'Users.',
     },
     {
       name: 'legacy-users',

@@ -20,6 +20,7 @@
     "database:provision-runtime": "node -r dotenv/config ./scripts/provision-runtime-database-role.js",
     "role:set": "node -r dotenv/config ./scripts/set-user-role.js",
     "seed": "node -r dotenv/config ./scripts/seed.js",
+    "seed:e2e": "node -r dotenv/config ./scripts/seed-e2e.js",
     "start": "next start",
     "start80": "next start -p 80",
     "test": "jest",

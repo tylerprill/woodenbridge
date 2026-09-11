@@ -75,13 +75,32 @@ Set `E2E_SHARED_CHAPTER_ID` to include the public shared-chapter viewport and
 map interaction audits. Without it, those fixture-dependent checks are omitted
 or explicitly skipped.
 
-The authenticated and full suites are opt-in because they require a configured
-test account and the private fixtures referenced by the authenticated spec:
+CI provisions a disposable `field_atlas_e2e` PostgreSQL database, seeds a
+verified test user plus deterministic atlas records, and runs the authenticated
+desktop and mobile audit automatically. The seed is fail-closed: it accepts only
+that database name on a loopback host, requires an explicit opt-in, and never
+falls back to the application's database URL.
+
+To run the authenticated or full suite locally, seed an equivalently isolated
+local database first. `E2E_TEST_PASSWORD` must contain 15–128 characters:
 
 ```bash
-E2E_TEST_EMAIL=... E2E_TEST_PASSWORD=... npm run test:e2e:authenticated
-E2E_TEST_EMAIL=... E2E_TEST_PASSWORD=... E2E_SHARED_CHAPTER_ID=... npm run test:e2e:full
+E2E_DATABASE_SEED=1 \
+E2E_DATABASE_URL=postgresql://...@127.0.0.1:5432/field_atlas_e2e \
+E2E_TEST_EMAIL=field-atlas-e2e@example.test \
+E2E_TEST_PASSWORD=... \
+npm run seed:e2e
+
+DATABASE_URL=postgresql://...@127.0.0.1:5432/field_atlas_e2e \
+POSTGRES_URL=postgresql://...@127.0.0.1:5432/field_atlas_e2e \
+E2E_TEST_EMAIL=field-atlas-e2e@example.test \
+E2E_TEST_PASSWORD=... \
+npm run test:e2e:authenticated
 ```
+
+Use the same environment with `npm run test:e2e:full` to include the public
+suite. Set `E2E_SHARED_CHAPTER_ID` when that run should also audit a shared
+chapter.
 
 Set `E2E_BASE_URL` when auditing an already-running production build. If it is
 unset, Playwright starts the built application on its configured local port.
