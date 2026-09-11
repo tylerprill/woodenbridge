@@ -1,0 +1,14 @@
+{
+  "version": 8,
+  "name": "Field Atlas deterministic browser-test style",
+  "sources": {},
+  "layers": [
+    {
+      "id": "field-atlas-e2e-background",
+      "type": "background",
+      "paint": {
+        "background-color": "#e4e5dc"
+      }
+    }
+  ]
+}

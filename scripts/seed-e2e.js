@@ -49,6 +49,15 @@ function getE2ESeedConfiguration(environment) {
     throw new Error('E2E_DATABASE_URL must target a loopback host.');
   }
 
+  const overridesAuthorityHost = Array.from(
+    connection.searchParams.keys(),
+  ).some((key) => key.toLowerCase() === 'host');
+  if (overridesAuthorityHost) {
+    throw new Error(
+      'E2E_DATABASE_URL must not override its loopback host with a query parameter.',
+    );
+  }
+
   if (connection.pathname !== `/${E2E_FIXTURE.databaseName}`) {
     throw new Error(
       `E2E_DATABASE_URL must target the ${E2E_FIXTURE.databaseName} database.`,

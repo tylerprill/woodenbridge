@@ -58,10 +58,14 @@ function getE2ENativeConnectionString() {
     throw new Error('DATABASE_URL must be a valid PostgreSQL URL.');
   }
 
+  const overridesAuthorityHost = Array.from(
+    connection.searchParams.keys(),
+  ).some((key) => key.toLowerCase() === 'host');
   if (
     !['postgres:', 'postgresql:'].includes(connection.protocol) ||
     !LOOPBACK_HOSTS.has(connection.hostname.toLowerCase()) ||
-    connection.pathname !== `/${E2E_DATABASE_NAME}`
+    connection.pathname !== `/${E2E_DATABASE_NAME}` ||
+    overridesAuthorityHost
   ) {
     throw new Error(
       `The native E2E PostgreSQL adapter is restricted to the loopback ${E2E_DATABASE_NAME} database.`,

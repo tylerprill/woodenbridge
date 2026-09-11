@@ -582,7 +582,7 @@
 
 .filterDock button {
   display: flex;
-  min-height: 2.45rem;
+  min-height: 2.75rem;
   align-items: center;
   padding-inline: 0.85rem;
   border-radius: 999px;

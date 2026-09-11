@@ -15,6 +15,7 @@ import {
   createGentleChapterRoute,
   unwrapChapterCoordinates,
 } from '@/app/lib/chapters/route-geometry';
+import { sanitizeOpenFreeMapStyle } from '@/app/lib/maps/openfreemap-style';
 import styles from './chapters.module.css';
 
 const DEFAULT_STYLE =
@@ -200,7 +201,6 @@ export function ChapterMap({ entries }: { entries: ChapterMapMemory[] }) {
     try {
       map = new maplibregl.Map({
         container: containerRef.current,
-        style: DEFAULT_STYLE,
         center: [initialEntries[0].longitude, initialEntries[0].latitude],
         zoom: 3,
         attributionControl: false,
@@ -316,7 +316,7 @@ export function ChapterMap({ entries }: { entries: ChapterMapMemory[] }) {
     map.on('load', handleLoad);
     map.on('error', handleError);
 
-    return () => {
+    const cleanupMap = () => {
       window.clearTimeout(loadTimer);
       if (resizeFrame !== null) cancelAnimationFrame(resizeFrame);
       if (containmentFrame !== null) cancelAnimationFrame(containmentFrame);
@@ -338,6 +338,19 @@ export function ChapterMap({ entries }: { entries: ChapterMapMemory[] }) {
       map.remove();
       mapRef.current = null;
     };
+
+    try {
+      map.setStyle(DEFAULT_STYLE, {
+        transformStyle: sanitizeOpenFreeMapStyle,
+      });
+    } catch (error) {
+      console.error('Chapter map initialization failed:', error);
+      cleanupMap();
+      const errorTimer = window.setTimeout(() => setMapFailed(true), 0);
+      return () => window.clearTimeout(errorTimer);
+    }
+
+    return cleanupMap;
   }, [mapAttempt]);
 
   useEffect(() => {

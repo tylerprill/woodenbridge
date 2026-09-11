@@ -35,6 +35,8 @@ type AuditOptions = {
   expectedPath?: string | RegExp;
   expectedSelector?: string;
   expectedStatus?: number;
+  readyButton?: string | RegExp;
+  readySelector?: string;
   screenshot?: boolean;
 };
 
@@ -254,6 +256,23 @@ export async function auditCurrentPage(
     });
   }
 
+  if (options.readySelector) {
+    const readyContent = page.locator(options.readySelector).first();
+    if (options.readyButton && !(await readyContent.isVisible())) {
+      const readyButton = page.getByRole('button', {
+        name: options.readyButton,
+      });
+      if (await readyButton.isVisible()) {
+        // IntersectionObserver can replace this optional fallback while the
+        // click is resolving. The readiness assertion below is authoritative.
+        await readyButton.click({ timeout: 1_000 }).catch(() => undefined);
+      }
+    }
+    await expect(readyContent, `${label}: deferred UI ready`).toBeVisible({
+      timeout: 20_000,
+    });
+  }
+
   const viewport = page.viewportSize();
   const metrics = await page.evaluate(() => {
     const root = document.documentElement;
@@ -416,12 +435,11 @@ export async function auditCurrentPage(
   expect.soft(runtimeBrowserIssues, `${label}: browser issues`).toEqual([]);
 
   if (options.screenshot !== false) {
-    if (testInfo.project.name.includes('webkit')) {
-      // WebKit can restore a scroll anchor after the long-page paint pass once
-      // deferred images settle. Re-anchor viewport evidence at the page start.
-      await page.evaluate(() => window.scrollTo(0, 0));
-      await page.waitForFunction(() => window.scrollY <= 1);
-    }
+    // Deferred images, maps, and sticky navigation can restore a scroll anchor
+    // after the audit's long-page paint pass. Re-anchor every capture so the
+    // evidence starts from the same visible state in every browser.
+    await page.evaluate(() => window.scrollTo(0, 0));
+    await page.waitForFunction(() => window.scrollY <= 1);
     const screenshotPath = testInfo.outputPath(`${safeName(label)}.png`);
     // Playwright's WebKit full-page capture temporarily changes page styles,
     // which strict CSP correctly rejects. A viewport capture preserves useful

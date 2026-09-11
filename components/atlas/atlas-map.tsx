@@ -16,6 +16,7 @@ import {
   formatAtlasDate,
   getAtlasPlaceContextLabel,
 } from '@/app/lib/atlas/place';
+import { sanitizeOpenFreeMapStyle } from '@/app/lib/maps/openfreemap-style';
 import {
   ATLAS_CLUSTER_LAYER,
   ATLAS_PIN_LAYER,
@@ -185,7 +186,6 @@ export default function AtlasMap({
     try {
       map = new maplibregl.Map({
         container,
-        style: process.env.NEXT_PUBLIC_ATLAS_STYLE_URL || DEFAULT_STYLE,
         center: [startingView.longitude, startingView.latitude],
         zoom: startingView.zoom,
         bearing: 0,
@@ -420,7 +420,7 @@ export default function AtlasMap({
     map.on('mouseleave', ATLAS_CLUSTER_LAYER, handleClusterLeave);
     map.on('movestart', () => setTooltip(null));
 
-    return () => {
+    const cleanupMap = () => {
       window.clearTimeout(loadTimer);
       resizeObserver?.disconnect();
       window.removeEventListener('resize', scheduleResize);
@@ -432,6 +432,19 @@ export default function AtlasMap({
       map.remove();
       mapRef.current = null;
     };
+
+    try {
+      map.setStyle(process.env.NEXT_PUBLIC_ATLAS_STYLE_URL || DEFAULT_STYLE, {
+        transformStyle: sanitizeOpenFreeMapStyle,
+      });
+    } catch (error) {
+      console.error('Atlas map initialization failed:', error);
+      cleanupMap();
+      const errorTimer = window.setTimeout(() => setMapError(true), 0);
+      return () => window.clearTimeout(errorTimer);
+    }
+
+    return cleanupMap;
   }, [mapAttempt]);
 
   useEffect(() => {
@@ -543,6 +556,7 @@ export default function AtlasMap({
   return (
     <div
       className={styles.mapFrame}
+      data-map-state={mapError ? 'error' : mapLoaded ? 'ready' : 'loading'}
       data-placement={placementMode ? 'true' : 'false'}
       inert={interactionLocked ? true : undefined}
       onPointerMove={handlePointerMove}

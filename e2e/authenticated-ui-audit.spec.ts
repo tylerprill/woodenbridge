@@ -29,6 +29,8 @@ type AuthenticatedRoute = {
   expectedSelector?: string;
   name: string;
   path: string;
+  readyButton?: string | RegExp;
+  readySelector?: string;
 };
 
 const nativeMobileViewport: AuditViewport[] = [{ name: 'native' }];
@@ -87,20 +89,28 @@ async function signIn(page: Page) {
   await page.getByLabel('Password').fill(password);
   await page.getByRole('button', { name: /^sign in$/i }).click();
   await expect(page).toHaveURL(/\/dashboard(?:$|[/?#])/, { timeout: 20_000 });
+  await page.waitForLoadState('load');
+  await expect(page.locator('[data-map-state="ready"]')).toBeVisible({
+    timeout: 20_000,
+  });
 }
 
 test('authenticated routes and primary interactions pass the UI audit', async ({
   page,
 }, testInfo) => {
   test.setTimeout(180_000);
-  const monitor = monitorBrowserIssues(page);
   await signIn(page);
+  // This suite consumes login as test setup; the public UI audit owns the
+  // login page itself. Start route diagnostics at the authenticated boundary
+  // so the intentional server-action navigation cannot leak into page checks.
+  const monitor = monitorBrowserIssues(page);
 
   const routes: AuthenticatedRoute[] = [
     {
       name: 'atlas',
       path: '/dashboard',
       expectedHeading: /world$/,
+      readySelector: '[data-map-state="ready"]',
     },
     {
       name: 'upload',
@@ -121,6 +131,8 @@ test('authenticated routes and primary interactions pass the UI audit', async ({
       name: 'chapter',
       path: `/dashboard/chapters/${encodeURIComponent(e2eChapterId)}`,
       expectedSelector: '[aria-label="Chapter actions"]',
+      readyButton: 'Show route map',
+      readySelector: 'button[aria-label^="Stop 1:"]',
     },
     {
       name: 'chapter-edit',
@@ -172,6 +184,8 @@ test('authenticated routes and primary interactions pass the UI audit', async ({
           expectedPath: route.expectedPath,
           expectedSelector: route.expectedSelector,
           expectedStatus: 200,
+          readyButton: route.readyButton,
+          readySelector: route.readySelector,
         },
       );
     }
@@ -185,29 +199,62 @@ test('authenticated routes and primary interactions pass the UI audit', async ({
   await expect(
     page.getByRole('heading', { name: 'Your memories' }),
   ).toBeVisible();
-  await auditCurrentPage(page, testInfo, 'atlas-memory-list-mobile', monitor, {
-    accessibility: testInfo.project.name === 'chromium',
-  });
+  await auditCurrentPage(
+    page,
+    testInfo,
+    `atlas-memory-list-${isMobileProject(testInfo) ? 'native' : 'small-phone'}-${testInfo.project.name}`,
+    monitor,
+    {
+      accessibility: testInfo.project.name === 'chromium',
+      readySelector: '[data-map-state="ready"]',
+    },
+  );
 
-  await page.goto('/dashboard/import');
-  const chooser = page.locator('input[type="file"]').first();
-  await chooser.setInputFiles([
-    path.join(fixtureRoot, 'riverwalk-test.png'),
-    path.join(fixtureRoot, 'kyoto-test.png'),
-  ]);
-  await expect(page.getByText('2 photos selected')).toBeVisible({
-    timeout: 20_000,
-  });
-  await auditCurrentPage(page, testInfo, 'upload-selection-mobile', monitor, {
-    accessibility: testInfo.project.name === 'chromium',
-  });
-  await page.getByRole('button', { name: 'Review 2 photos' }).click();
-  await expect(
-    page.getByRole('heading', { name: /2 memories across the map/i }),
-  ).toBeVisible();
-  await auditCurrentPage(page, testInfo, 'upload-review-mobile', monitor, {
-    accessibility: testInfo.project.name === 'chromium',
-  });
+  const uploadViewports = isMobileProject(testInfo)
+    ? nativeMobileViewport
+    : [
+        { name: 'small-phone', width: 320, height: 568 },
+        { name: 'desktop', width: 1440, height: 900 },
+      ];
+
+  for (const viewport of uploadViewports) {
+    await applyViewport(page, viewport);
+    // A cold desktop browser can paint the server-rendered picker just before
+    // React attaches its change handler. Network idle is the observable point
+    // at which the upload surface is ready for an immediate automated selection.
+    await page.goto('/dashboard/import', { waitUntil: 'networkidle' });
+    const chooser = page.locator('input[type="file"]').first();
+    await chooser.setInputFiles([
+      path.join(fixtureRoot, 'riverwalk-test.png'),
+      path.join(fixtureRoot, 'kyoto-test.png'),
+    ]);
+    await expect(page.getByText('2 photos selected')).toBeVisible({
+      timeout: 20_000,
+    });
+    await auditCurrentPage(
+      page,
+      testInfo,
+      `upload-selection-${viewport.name}-${testInfo.project.name}`,
+      monitor,
+      {
+        accessibility: testInfo.project.name === 'chromium',
+      },
+    );
+    await page.getByRole('button', { name: 'Review 2 photos' }).click();
+    await expect(
+      page.getByRole('heading', { name: /2 memories across the map/i }),
+    ).toBeVisible();
+    await auditCurrentPage(
+      page,
+      testInfo,
+      `upload-review-${viewport.name}-${testInfo.project.name}`,
+      monitor,
+      {
+        accessibility: testInfo.project.name === 'chromium',
+        readySelector: '[data-map-state="ready"]',
+      },
+    );
+  }
 
   monitor.stop();
 });

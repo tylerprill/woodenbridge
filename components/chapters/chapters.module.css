@@ -330,7 +330,7 @@
   margin-top: 1.15rem;
   padding-top: 1rem;
   border-top: 1px solid var(--chapter-soft-line);
-  color: var(--timber);
+  color: var(--timber-ink);
   gap: 0.4rem;
   font-size: 0.67rem;
   font-weight: 800;
@@ -412,6 +412,7 @@
 .editorHeader > div:first-child > a,
 .chapterDetailNav a {
   display: inline-flex;
+  min-height: 2.75rem;
   align-items: center;
   margin-bottom: 1.3rem;
   color: var(--forest-600);
@@ -892,7 +893,7 @@
 .memoryOption > button {
   display: inline-flex;
   min-width: 4.2rem;
-  min-height: 2.35rem;
+  min-height: 2.75rem;
   align-items: center;
   justify-content: center;
   border: 1px solid rgba(16, 35, 29, 0.2);
@@ -3037,10 +3038,10 @@
   }
 
   .memoryOption > button {
-    width: 2.45rem;
-    min-width: 2.45rem;
-    height: 2.45rem;
-    min-height: 2.45rem;
+    width: 2.75rem;
+    min-width: 2.75rem;
+    height: 2.75rem;
+    min-height: 2.75rem;
     padding: 0;
   }
 

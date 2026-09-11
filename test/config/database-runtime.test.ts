@@ -153,6 +153,10 @@ describe('runtime database configuration', () => {
       'https://localhost/field_atlas_e2e',
       'restricted to the loopback field_atlas_e2e database',
     ],
+    [
+      'postgresql://runtime:password@127.0.0.1:5432/field_atlas_e2e?host=database.example.test',
+      'restricted to the loopback field_atlas_e2e database',
+    ],
     ['not-a-url', 'DATABASE_URL must be a valid PostgreSQL URL'],
   ])(
     'rejects an unsafe native E2E target: %s',

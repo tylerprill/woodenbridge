@@ -69,6 +69,14 @@ describe('E2E database seed guard', () => {
       'field_atlas_e2e database',
     ],
     [
+      'a query-parameter host override',
+      {
+        E2E_DATABASE_URL:
+          'postgresql://runtime:test-password@127.0.0.1:5432/field_atlas_e2e?host=database.example.test',
+      },
+      'must not override its loopback host',
+    ],
+    [
       'another email',
       { E2E_TEST_EMAIL: 'someone@example.test' },
       'E2E_TEST_EMAIL must be exactly',

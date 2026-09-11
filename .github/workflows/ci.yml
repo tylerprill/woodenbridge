@@ -213,6 +213,7 @@ jobs:
       E2E_ENTRY_ID: 0a934c64-997f-43c2-88a3-8b102d517781
       E2E_TEST_EMAIL: field-atlas-e2e@example.test
       E2E_TEST_PASSWORD: field-atlas-e2e-password-2026
+      NEXT_PUBLIC_ATLAS_STYLE_URL: http://127.0.0.1:3100/e2e-map-style.json
       PASSKEY_ORIGIN: http://127.0.0.1:3100
       PASSKEY_RP_ID: 127.0.0.1
       POSTGRES_URL: postgresql://field_atlas_runtime:runtime-only-e2e-password-2026-safe@127.0.0.1:5432/field_atlas_e2e

@@ -96,12 +96,15 @@ E2E_DATABASE_ADAPTER=pg \
 POSTGRES_URL=postgresql://...@127.0.0.1:5432/field_atlas_e2e \
 E2E_TEST_EMAIL=field-atlas-e2e@example.test \
 E2E_TEST_PASSWORD=... \
+NEXT_PUBLIC_ATLAS_STYLE_URL=http://127.0.0.1:3100/e2e-map-style.json \
 npm run test:e2e:authenticated
 ```
 
 Use the same environment with `npm run test:e2e:full` to include the public
 suite. Set `E2E_SHARED_CHAPTER_ID` when that run should also audit a shared
-chapter.
+chapter. The local style keeps the required authenticated gate independent of
+third-party tile availability; production continues to use the configured map
+provider.
 
 Set `E2E_BASE_URL` when auditing an already-running production build. If it is
 unset, Playwright starts the built application on its configured local port.
