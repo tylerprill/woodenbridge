@@ -65,6 +65,7 @@ function StartRegistration({ intent }: { intent?: PostAuthIntent }) {
       <Link
         className="auth-submit"
         href={withPostAuthIntent('/sign-up', intent)}
+        prefetch={false}
       >
         <span>Return to create account</span>
         <ArrowRightIcon aria-hidden="true" />

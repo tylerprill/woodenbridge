@@ -83,15 +83,34 @@ export function AtlasWorkspace({
   const viewSaveQueueRef = useRef<Promise<void>>(Promise.resolve());
   const entriesRef = useRef(initialData.entries);
   const searchInputRef = useRef<HTMLInputElement>(null);
+  const memoryListButtonRef = useRef<HTMLButtonElement>(null);
+  const drawerReturnFocusRef = useRef<HTMLElement | null>(null);
   const resolvingPlaceIdsRef = useRef(new Set<string>());
   const loadedMediaIdsRef = useRef(new Set<string>());
   const loadingMediaIdsRef = useRef(new Set<string>());
 
   const closeSelectedEntry = useCallback(() => {
+    const returnTarget = drawerReturnFocusRef.current;
     setDrawerDirty(false);
     setSelectedId(null);
     if (initialSelectedId) router.replace('/dashboard', { scroll: false });
+    requestAnimationFrame(() => {
+      const focusTarget =
+        returnTarget?.isConnected && !returnTarget.inert
+          ? returnTarget
+          : memoryListButtonRef.current;
+      focusTarget?.focus();
+      drawerReturnFocusRef.current = null;
+    });
   }, [initialSelectedId, router]);
+
+  const rememberDrawerOpener = useCallback(() => {
+    const activeElement = document.activeElement;
+    drawerReturnFocusRef.current =
+      activeElement instanceof HTMLElement && activeElement !== document.body
+        ? activeElement
+        : memoryListButtonRef.current;
+  }, []);
 
   useEffect(() => {
     entriesRef.current = entries;
@@ -210,6 +229,7 @@ export function AtlasWorkspace({
         return;
       }
 
+      rememberDrawerOpener();
       setSelectedId(id);
       setPlacementMode(false);
       setTrayOpen(false);
@@ -217,7 +237,13 @@ export function AtlasWorkspace({
       enrichPlace(id);
       void loadEntryMedia(id);
     },
-    [drawerDirty, enrichPlace, loadEntryMedia, selectedId],
+    [
+      drawerDirty,
+      enrichPlace,
+      loadEntryMedia,
+      rememberDrawerOpener,
+      selectedId,
+    ],
   );
 
   useEffect(() => {
@@ -288,6 +314,7 @@ export function AtlasWorkspace({
         }
 
         loadedMediaIdsRef.current.add(result.data.id);
+        rememberDrawerOpener();
         setEntries((current) => [
           result.data,
           ...current.filter((entry) => entry.id !== optimisticId),
@@ -336,7 +363,7 @@ export function AtlasWorkspace({
         setPlacementBusy(false);
       }
     },
-    [placementBusy],
+    [placementBusy, rememberDrawerOpener],
   );
 
   const rememberView = useCallback((view: AtlasView) => {
@@ -382,19 +409,14 @@ export function AtlasWorkspace({
           searchInputRef.current?.blur();
           setQuery('');
           setActiveSearchIndex(-1);
-        } else if (selectedId) {
-          if (drawerDirty) {
-            setNotice('Save or discard your changes before closing.');
-          } else {
-            closeSelectedEntry();
-          }
-        } else if (trayOpen) setTrayOpen(false);
+        } else if (selectedId) return;
+        else if (trayOpen) setTrayOpen(false);
         else setPlacementMode(false);
       }
     };
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [closeSelectedEntry, drawerDirty, selectedId, trayOpen]);
+  }, [selectedId, trayOpen]);
 
   useEffect(() => {
     if (!notice) return;
@@ -595,6 +617,7 @@ export function AtlasWorkspace({
           <span>Upload</span>
         </Link>
         <button
+          ref={memoryListButtonRef}
           type="button"
           onClick={() => {
             setTrayOpen((current) => !current);

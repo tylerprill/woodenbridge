@@ -19,7 +19,7 @@ export function PhotoImportCompletionStep({
   onRestart: () => void;
 }) {
   return (
-    <main className={styles.completion}>
+    <div className={styles.completion}>
       <div className={styles.completionMap} aria-hidden="true" inert>
         <AtlasMap
           entries={mapEntries}
@@ -66,6 +66,6 @@ export function PhotoImportCompletionStep({
           </button>
         </div>
       </section>
-    </main>
+    </div>
   );
 }

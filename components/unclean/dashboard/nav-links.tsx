@@ -11,6 +11,7 @@ import {
 import clsx from 'clsx';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
+import { useEffect, useRef } from 'react';
 
 import { hasRequiredRole, type AppRole } from '@/app/lib/auth/roles';
 
@@ -83,9 +84,25 @@ function NavigationSection({
 export default function NavLinks({ role }: { role: AppRole }) {
   const pathname = usePathname();
   const canManageAccounts = hasRequiredRole(role, 'admin');
+  const sectionsRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!window.matchMedia?.('(max-width: 900px)').matches) return;
+    const sections = sectionsRef.current;
+    const scroller = sections?.closest<HTMLElement>('.dashboard-nav');
+    const activeLink = sections?.querySelector<HTMLElement>(
+      '[aria-current="page"]',
+    );
+    if (!scroller || !activeLink) return;
+
+    const left =
+      activeLink.offsetLeft -
+      Math.max(0, (scroller.clientWidth - activeLink.offsetWidth) / 2);
+    scroller.scrollTo({ left: Math.max(0, left), behavior: 'auto' });
+  }, [pathname]);
 
   return (
-    <div className="dashboard-nav-sections">
+    <div ref={sectionsRef} className="dashboard-nav-sections">
       <NavigationSection
         id="dashboard-atlas-navigation"
         label="Your atlas"

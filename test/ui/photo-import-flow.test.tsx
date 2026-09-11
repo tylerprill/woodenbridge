@@ -68,6 +68,34 @@ describe('photo journey import UI', () => {
     expect(document.documentElement.style.overflow).toBe('');
   });
 
+  it('makes the upload workspace inert and guards focus while a dialog is open', () => {
+    const { unmount } = render(
+      <div>
+        <button type="button">Outside action</button>
+        <ImportLeaveDialog
+          hasDraft={false}
+          armed={false}
+          busy={false}
+          onKeepWorking={jest.fn()}
+          onArmOrDiscard={jest.fn()}
+        />
+      </div>,
+    );
+
+    const outside = screen.getByRole('button', { name: 'Outside action' });
+    const firstDialogAction = screen.getByRole('button', {
+      name: 'Keep working',
+    });
+    expect(outside).toHaveAttribute('inert');
+    expect(firstDialogAction).toHaveFocus();
+
+    outside.focus();
+    expect(firstDialogAction).toHaveFocus();
+
+    unmount();
+    expect(outside).not.toHaveAttribute('inert');
+  });
+
   it('discloses source limits, place lookup, and private defaults before selection', () => {
     render(
       <PhotoImportChooseStep

@@ -75,9 +75,11 @@ function createChapterMarkers(
   const offsets = createChapterMarkerOffsets(entries);
   return entries.map((entry, index) => {
     const element = document.createElement('button');
+    const markerLabel = document.createElement('span');
     element.type = 'button';
     element.className = styles.chapterMapMarker;
-    element.textContent = String(index + 1);
+    markerLabel.textContent = String(index + 1);
+    element.append(markerLabel);
     element.setAttribute(
       'aria-label',
       `Stop ${index + 1}: ${entry.title || 'Untitled memory'}, ${

@@ -15,6 +15,10 @@ It contains neither `'unsafe-inline'` nor `'unsafe-eval'`, and
 `script-src-attr 'none'` blocks event-handler attributes. Development adds only
 `'unsafe-eval'`, which Next.js and React require for debugging.
 
+Secure production responses also add `upgrade-insecure-requests`. Local HTTP
+production previews omit that directive so Safari does not rewrite same-origin
+assets to an HTTPS endpoint that the local server does not provide.
+
 ## Rendering decision
 
 The bundled Next.js 16 CSP guide states that request nonces require dynamic

@@ -1670,12 +1670,23 @@
 .locationDialog,
 .leaveDialog {
   width: min(100%, 56rem);
+  max-height: calc(100vh - 2rem);
+  max-height: calc(100dvh - 2rem);
   overflow: hidden;
   border: 1px solid rgba(255, 255, 255, 0.58);
   border-radius: 1.7rem;
   background: var(--paper-light);
   box-shadow: 0 2rem 6rem rgba(16, 35, 29, 0.32);
   animation: dialog-enter 220ms cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+.locationDialog {
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr);
+}
+
+.leaveDialog {
+  overflow-y: auto;
 }
 
 .locationDialog > header {
@@ -1722,6 +1733,7 @@
   position: relative;
   height: min(38rem, 65vh);
   height: min(38rem, 65dvh);
+  min-height: 0;
   overflow: hidden;
   background: #dfe3da;
 }
@@ -1920,6 +1932,24 @@
   .actionBar {
     position: static;
     bottom: auto;
+  }
+}
+
+@media (min-width: 1121px) and (max-width: 1300px) {
+  .reviewLayout {
+    grid-template-columns: 1fr;
+  }
+
+  .reviewList {
+    max-height: none;
+  }
+
+  .journeyMap {
+    position: relative;
+    top: auto;
+    height: clamp(16rem, 43vw, 30rem);
+    min-height: 0;
+    max-height: none;
   }
 }
 
@@ -2368,6 +2398,77 @@
 
   .leaveDialog button {
     width: 100%;
+  }
+}
+
+@media (max-height: 480px) {
+  .locationBackdrop {
+    align-items: end;
+    padding: 0.5rem;
+  }
+
+  .locationDialog,
+  .leaveDialog {
+    max-height: calc(100dvh - 1rem);
+    border-radius: 1.25rem;
+  }
+
+  .locationDialog > header {
+    padding: 0.75rem 1rem;
+  }
+
+  .locationDialog header p:last-child {
+    margin-top: 0.25rem;
+  }
+
+  .locationMap {
+    height: clamp(8rem, calc(100vh - 6.5rem), 24rem);
+    height: clamp(8rem, calc(100dvh - 6.5rem), 24rem);
+    min-height: 0;
+  }
+}
+
+@media (min-width: 901px) and (max-width: 1300px) {
+  .page[data-step='review'] {
+    padding-bottom: calc(7rem + env(safe-area-inset-bottom));
+  }
+
+  .reviewList {
+    max-height: min(47rem, calc(100vh - 10rem));
+    max-height: min(47rem, calc(100dvh - 10rem));
+    overflow-y: auto;
+    padding-bottom: 6rem;
+    overscroll-behavior: contain;
+    scroll-padding-bottom: 6rem;
+  }
+
+  .reviewLayout > .actionBar {
+    position: fixed;
+    right: clamp(1.5rem, 4vw, 4.5rem);
+    bottom: max(0.75rem, env(safe-area-inset-bottom));
+    left: calc(17rem + clamp(1.5rem, 4vw, 4.5rem));
+    z-index: 60;
+  }
+}
+
+@media (max-width: 900px) {
+  .page[data-step='review'] {
+    padding-bottom: calc(7rem + env(safe-area-inset-bottom));
+  }
+
+  .reviewLayout > .actionBar {
+    position: fixed;
+    right: 1rem;
+    bottom: max(0.75rem, env(safe-area-inset-bottom));
+    left: 1rem;
+    z-index: 60;
+  }
+}
+
+@media (max-width: 760px), (max-height: 480px) {
+  .editorField :is(input, textarea),
+  .locationControls button {
+    font-size: 1rem;
   }
 }
 

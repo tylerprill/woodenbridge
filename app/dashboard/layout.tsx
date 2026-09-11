@@ -18,12 +18,17 @@ export default async function DashboardLayout({
 
   return (
     <div className="dashboard-shell">
+      <a className="skip-link" href="#dashboard-main">
+        Skip to atlas content
+      </a>
       <SideNav
         role={session.role}
         userEmail={session.user.email}
         userName={getAccountDisplayName(session.user)}
       />
-      <main className="dashboard-main">{children}</main>
+      <main id="dashboard-main" className="dashboard-main" tabIndex={-1}>
+        {children}
+      </main>
     </div>
   );
 }

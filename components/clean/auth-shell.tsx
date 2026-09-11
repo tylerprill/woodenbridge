@@ -36,11 +36,11 @@ export function AuthShell({
 
       <section className="auth-layout" aria-labelledby={headingId}>
         <aside className="auth-story" aria-label="Field Atlas travel journal">
-          <BrandLockup className="auth-story-brand" />
+          <BrandLockup className="auth-story-brand" prefetch={false} />
 
           <div className="auth-story-copy">
             <p className="section-kicker">{storyEyebrow}</p>
-            <h1>{storyTitle}</h1>
+            <h2>{storyTitle}</h2>
             <p>{storyDescription}</p>
           </div>
 
@@ -58,9 +58,9 @@ export function AuthShell({
         </aside>
 
         <div className="auth-panel-wrap">
-          <BrandLockup className="auth-mobile-brand" />
+          <BrandLockup className="auth-mobile-brand" prefetch={false} />
 
-          <Link className="auth-back-link" href="/">
+          <Link className="auth-back-link" href="/" prefetch={false}>
             <ArrowLeftIcon aria-hidden="true" />
             Back to the atlas
           </Link>
@@ -68,7 +68,7 @@ export function AuthShell({
           <div className="auth-panel">
             <div className="auth-panel-heading">
               <p className="section-kicker">{panelEyebrow}</p>
-              <h2 id={headingId}>{panelTitle}</h2>
+              <h1 id={headingId}>{panelTitle}</h1>
               <p>{panelDescription}</p>
             </div>
 

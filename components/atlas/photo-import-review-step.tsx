@@ -94,7 +94,7 @@ export function PhotoImportReviewStep({
           : 'Details';
 
   return (
-    <main className={styles.reviewLayout}>
+    <div className={styles.reviewLayout}>
       <section
         className={styles.reviewList}
         aria-labelledby="review-list-title"
@@ -261,6 +261,6 @@ export function PhotoImportReviewStep({
           <ArrowRightIcon aria-hidden="true" />
         </button>
       </footer>
-    </main>
+    </div>
   );
 }

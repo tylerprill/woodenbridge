@@ -19,6 +19,16 @@ type AuthProxy = (
 
 const runAuthProxy = auth as unknown as AuthProxy;
 
+function isSecureRequest(request: NextRequest) {
+  const forwardedProtocol = request.headers
+    .get('x-forwarded-proto')
+    ?.split(',')[0]
+    ?.trim()
+    .toLowerCase();
+
+  return request.nextUrl.protocol === 'https:' || forwardedProtocol === 'https';
+}
+
 function copyAuthResponseHeaders(source: Response, target: NextResponse) {
   source.headers.forEach((value, key) => {
     const normalizedKey = key.toLowerCase();
@@ -41,9 +51,11 @@ function copyAuthResponseHeaders(source: Response, target: NextResponse) {
 
 export async function proxy(request: NextRequest, event: NextFetchEvent) {
   const nonce = randomBytes(16).toString('base64');
+  const isDevelopment = process.env.NODE_ENV === 'development';
   const contentSecurityPolicy = createContentSecurityPolicy({
     nonce,
-    isDevelopment: process.env.NODE_ENV === 'development',
+    isDevelopment,
+    upgradeInsecureRequests: !isDevelopment && isSecureRequest(request),
   });
   // The public landing page reads the session once to personalize its CTAs.
   // Running the Auth.js proxy there would validate the same session twice.

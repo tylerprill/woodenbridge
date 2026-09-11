@@ -24,6 +24,11 @@
     "start80": "next start -p 80",
     "test": "jest",
     "test:ci": "jest --runInBand",
+    "test:e2e": "npm run test:e2e:public",
+    "test:e2e:public": "npm run build && playwright test e2e/public-ui-audit.spec.ts",
+    "test:e2e:authenticated": "npm run build && playwright test e2e/authenticated-ui-audit.spec.ts",
+    "test:e2e:full": "npm run build && playwright test",
+    "test:e2e:report": "playwright show-report output/ui-audit/playwright-report",
     "test:integration:auth": "jest --config jest.integration.config.js --runInBand",
     "typecheck": "tsc --noEmit"
   },
@@ -53,6 +58,8 @@
     "zod": "^3.22.2"
   },
   "devDependencies": {
+    "@axe-core/playwright": "^4.13.0",
+    "@playwright/test": "^1.63.0",
     "@testing-library/jest-dom": "7.0.1",
     "@testing-library/react": "16.3.2",
     "@testing-library/user-event": "14.6.4",

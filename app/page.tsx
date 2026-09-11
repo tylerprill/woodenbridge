@@ -68,7 +68,7 @@ export default async function HomePage() {
       </a>
       <AmbientBackground />
       <SiteHeader user={user} />
-      <main id="main-content">
+      <main id="main-content" tabIndex={-1}>
         <HeroSection isLoggedIn={Boolean(user)} />
         <FeaturedBridges />
         <FieldJournal isLoggedIn={Boolean(user)} />

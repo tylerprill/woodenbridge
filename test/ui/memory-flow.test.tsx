@@ -85,4 +85,75 @@ describe('memory capture UI', () => {
     );
     expect(onUpdate).toHaveBeenCalledWith(saved);
   });
+
+  it('keeps keyboard focus inside the modal editor and closes with Escape', async () => {
+    const user = userEvent.setup();
+    const onClose = jest.fn();
+
+    render(
+      <>
+        <button type="button">Outside control</button>
+        <MemoryDrawer
+          entry={entry}
+          onClose={onClose}
+          onDirtyChange={jest.fn()}
+          onUpdate={jest.fn()}
+          onArchive={jest.fn()}
+          mediaLoading={false}
+          placeResolving={false}
+        />
+      </>,
+    );
+
+    const dialog = screen.getByRole('dialog', { name: 'Create memory' });
+    const close = screen.getByRole('button', { name: 'Close memory' });
+    const save = screen.getByRole('button', { name: 'Keep memory' });
+    const title = screen.getByRole('textbox', { name: 'Title' });
+    expect(dialog).toHaveAttribute('aria-modal', 'true');
+
+    await waitFor(() => expect(title).toHaveFocus());
+    save.focus();
+    await user.tab();
+    expect(close).toHaveFocus();
+    await user.tab({ shift: true });
+    expect(save).toHaveFocus();
+
+    screen.getByRole('button', { name: 'Outside control' }).focus();
+    await waitFor(() => expect(title).toHaveFocus());
+
+    await user.keyboard('{Escape}');
+    expect(onClose).toHaveBeenCalledTimes(1);
+  });
+
+  it('wraps reverse focus from the saved-memory heading into the drawer', async () => {
+    const user = userEvent.setup();
+    const savedEntry: AtlasEntry = {
+      ...entry,
+      title: 'Kyoto memory',
+      recordState: 'saved',
+    };
+
+    render(
+      <MemoryDrawer
+        entry={savedEntry}
+        onClose={jest.fn()}
+        onDirtyChange={jest.fn()}
+        onUpdate={jest.fn()}
+        onArchive={jest.fn()}
+        mediaLoading={false}
+        placeResolving={false}
+      />,
+    );
+
+    const heading = screen.getByRole('heading', { name: 'Edit memory' });
+    const remove = screen.getByRole('button', { name: 'Remove' });
+    const keepsake = screen.getByRole('link', { name: 'View keepsake' });
+
+    await waitFor(() => expect(heading).toHaveFocus());
+    await user.tab({ shift: true });
+    expect(remove).toHaveFocus();
+
+    await user.tab();
+    expect(keepsake).toHaveFocus();
+  });
 });

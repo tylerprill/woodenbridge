@@ -23,7 +23,10 @@ export default function ForgotPasswordPage() {
       storyTitle="Let’s find the way back."
       footer={
         <p className="auth-signup-prompt">
-          Remembered your password? <Link href="/login">Return to sign in</Link>
+          Remembered your password?{' '}
+          <Link href="/login" prefetch={false}>
+            Return to sign in
+          </Link>
         </p>
       }
     >
