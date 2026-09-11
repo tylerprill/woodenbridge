@@ -207,14 +207,14 @@ jobs:
     env:
       APP_URL: http://127.0.0.1:3100
       AUTH_URL: http://127.0.0.1:3100
-      DATABASE_URL: postgresql://field_atlas_runtime:runtime-only-e2e-password-2026-safe@127.0.0.1:5432/field_atlas_e2e
+      DATABASE_URL: postgresql://field_atlas_runtime:runtime-only-e2e-password-2026-safe@localhost:5432/field_atlas_e2e
       E2E_CHAPTER_ID: 6a67afcf-768f-4fe4-8c62-41b58a19840d
       E2E_ENTRY_ID: 0a934c64-997f-43c2-88a3-8b102d517781
       E2E_TEST_EMAIL: field-atlas-e2e@example.test
       E2E_TEST_PASSWORD: field-atlas-e2e-password-2026
       PASSKEY_ORIGIN: http://127.0.0.1:3100
       PASSKEY_RP_ID: 127.0.0.1
-      POSTGRES_URL: postgresql://field_atlas_runtime:runtime-only-e2e-password-2026-safe@127.0.0.1:5432/field_atlas_e2e
+      POSTGRES_URL: postgresql://field_atlas_runtime:runtime-only-e2e-password-2026-safe@localhost:5432/field_atlas_e2e
     steps:
       - name: Check out repository
         uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
