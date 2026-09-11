@@ -49,7 +49,7 @@ export function PhotoImportChapterStep({
     : `Create ${items.length} memories and 1 chapter`;
 
   return (
-    <main className={styles.chapterLayout}>
+    <div className={styles.chapterLayout}>
       <section
         className={styles.chapterCover}
         aria-label="Choose chapter cover"
@@ -212,6 +212,6 @@ export function PhotoImportChapterStep({
           ) : null}
         </div>
       </footer>
-    </main>
+    </div>
   );
 }

@@ -188,6 +188,34 @@ describe('responsive and route-level UI contracts', () => {
     expect(centerAction).toContain('min-height: 2.75rem');
   });
 
+  it('keeps authenticated compact controls at least 44px tall', () => {
+    const globalCss = readFileSync(join(root, 'app/global.css'), 'utf8');
+    const atlasCss = readFileSync(
+      join(root, 'components/atlas/atlas.module.css'),
+      'utf8',
+    );
+    const chapterCss = readFileSync(
+      join(root, 'components/chapters/chapters.module.css'),
+      'utf8',
+    );
+
+    expect(globalCss).toMatch(
+      /\.collection-filter a \{[\s\S]*?min-height: 2\.75rem;/,
+    );
+    expect(atlasCss).toMatch(
+      /\.filterDock button \{[\s\S]*?min-height: 2\.75rem;/,
+    );
+    expect(chapterCss).toMatch(
+      /\.editorHeader > div:first-child > a,[\s\S]*?min-height: 2\.75rem;/,
+    );
+    expect(chapterCss).toMatch(
+      /\.memoryOption > button \{[\s\S]*?min-height: 2\.75rem;/,
+    );
+    expect(chapterCss).toMatch(
+      /\.chapterCardRoute \{[\s\S]*?color: var\(--timber-ink\);/,
+    );
+  });
+
   it('reserves mobile route-map padding for marker radius and offsets', () => {
     const source = readFileSync(
       join(root, 'components/chapters/chapter-map.tsx'),

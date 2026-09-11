@@ -16,15 +16,18 @@ const FOCUSABLE =
 
 function ImportDialogShell({
   children,
+  descriptionId,
   labelId,
   role = 'dialog',
   onClose,
 }: {
   children: ReactNode;
+  descriptionId?: string;
   labelId: string;
   role?: 'dialog' | 'alertdialog';
   onClose: () => void;
 }) {
+  const backdropRef = useRef<HTMLDivElement>(null);
   const dialogRef = useRef<HTMLElement>(null);
   const returnFocusRef = useRef<Element | null>(null);
   const onCloseRef = useRef(onClose);
@@ -40,7 +43,34 @@ function ImportDialogShell({
     document.body.style.overflow = 'hidden';
     document.documentElement.style.overflow = 'hidden';
     const dialog = dialogRef.current;
-    dialog?.querySelector<HTMLElement>(FOCUSABLE)?.focus();
+    const backdrop = backdropRef.current;
+    const background = backdrop?.parentElement
+      ? Array.from(backdrop.parentElement.children).filter(
+          (element): element is HTMLElement =>
+            element instanceof HTMLElement && element !== backdrop,
+        )
+      : [];
+    const backgroundInertState = background.map((element) => ({
+      element,
+      wasInert: element.hasAttribute('inert'),
+    }));
+    background.forEach((element) => element.setAttribute('inert', ''));
+
+    const focusableElements = () =>
+      dialog
+        ? Array.from(dialog.querySelectorAll<HTMLElement>(FOCUSABLE)).filter(
+            (element) => {
+              const style = getComputedStyle(element);
+              return (
+                !element.hidden &&
+                style.display !== 'none' &&
+                style.visibility !== 'hidden'
+              );
+            },
+          )
+        : [];
+    const focusFirst = () => focusableElements()[0]?.focus();
+    focusFirst();
 
     const onKeyDown = (event: KeyboardEvent) => {
       if (event.key === 'Escape') {
@@ -49,13 +79,17 @@ function ImportDialogShell({
         return;
       }
       if (event.key !== 'Tab' || !dialog) return;
-      const focusable = Array.from(
-        dialog.querySelectorAll<HTMLElement>(FOCUSABLE),
-      ).filter((element) => element.offsetParent !== null);
+      const focusable = focusableElements();
       const first = focusable[0];
       const last = focusable.at(-1);
       if (!first || !last) return;
-      if (event.shiftKey && document.activeElement === first) {
+      const activeIndex = focusable.indexOf(
+        document.activeElement as HTMLElement,
+      );
+      if (activeIndex === -1) {
+        event.preventDefault();
+        (event.shiftKey ? last : first).focus();
+      } else if (event.shiftKey && document.activeElement === first) {
         event.preventDefault();
         last.focus();
       } else if (!event.shiftKey && document.activeElement === last) {
@@ -63,11 +97,25 @@ function ImportDialogShell({
         first.focus();
       }
     };
+    const onFocusIn = (event: FocusEvent) => {
+      if (
+        dialog &&
+        event.target instanceof Node &&
+        !dialog.contains(event.target)
+      ) {
+        focusFirst();
+      }
+    };
     document.addEventListener('keydown', onKeyDown);
+    document.addEventListener('focusin', onFocusIn);
     return () => {
       document.removeEventListener('keydown', onKeyDown);
+      document.removeEventListener('focusin', onFocusIn);
       document.body.style.overflow = previousBodyOverflow;
       document.documentElement.style.overflow = previousRootOverflow;
+      backgroundInertState.forEach(({ element, wasInert }) => {
+        if (!wasInert) element.removeAttribute('inert');
+      });
       if (returnFocusRef.current instanceof HTMLElement) {
         returnFocusRef.current.focus();
       }
@@ -75,7 +123,11 @@ function ImportDialogShell({
   }, []);
 
   return (
-    <div className={styles.locationBackdrop} role="presentation">
+    <div
+      ref={backdropRef}
+      className={styles.locationBackdrop}
+      role="presentation"
+    >
       <section
         ref={dialogRef}
         className={
@@ -84,6 +136,7 @@ function ImportDialogShell({
         role={role}
         aria-modal="true"
         aria-labelledby={labelId}
+        aria-describedby={descriptionId}
       >
         {children}
       </section>
@@ -116,14 +169,18 @@ export function ImportLocationDialog({
     longitude: initialView.longitude,
   });
   return (
-    <ImportDialogShell labelId="location-dialog-title" onClose={onClose}>
+    <ImportDialogShell
+      labelId="location-dialog-title"
+      descriptionId="location-dialog-description"
+      onClose={onClose}
+    >
       <header>
         <div>
           <p className="section-kicker">Review the exact pin</p>
           <h2 id="location-dialog-title">
             {item.placeLabel || 'Choose where this belongs.'}
           </h2>
-          <p>
+          <p id="location-dialog-description">
             Move the map with a pointer or arrow keys, then choose its center.
           </p>
         </div>
@@ -191,6 +248,7 @@ export function ImportLeaveDialog({
   return (
     <ImportDialogShell
       labelId="leave-dialog-title"
+      descriptionId="leave-dialog-description"
       role="alertdialog"
       onClose={onKeepWorking}
     >
@@ -199,7 +257,7 @@ export function ImportLeaveDialog({
       </span>
       <p className="section-kicker">Leave this photo upload?</p>
       <h2 id="leave-dialog-title">Your unfinished review will close.</h2>
-      <p>
+      <p id="leave-dialog-description">
         {hasDraft
           ? 'Field Atlas will also clear the private import draft and any prepared uploads.'
           : 'No memories have been created yet.'}

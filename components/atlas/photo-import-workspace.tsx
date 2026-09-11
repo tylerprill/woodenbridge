@@ -1501,7 +1501,7 @@ export function PhotoImportWorkspace({
       />
 
       {openRecovery ? (
-        <main className={styles.recoveryCard}>
+        <div className={styles.recoveryCard}>
           <span className={styles.dialogIcon} aria-hidden="true">
             <ArrowPathIcon />
           </span>
@@ -1544,7 +1544,7 @@ export function PhotoImportWorkspace({
               <TrashIcon aria-hidden="true" /> Clear private draft
             </button>
           </div>
-        </main>
+        </div>
       ) : null}
 
       {!openRecovery && step === 'choose' ? (

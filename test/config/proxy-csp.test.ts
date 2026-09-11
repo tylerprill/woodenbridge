@@ -52,6 +52,35 @@ describe('CSP proxy composition', () => {
     expect(response.headers.getSetCookie()).toContain(
       'authjs.session-token=refreshed; Path=/; HttpOnly; SameSite=Lax',
     );
+    expect(policy).toContain('upgrade-insecure-requests');
+  });
+
+  it('keeps local HTTP assets on HTTP for production-build browser testing', async () => {
+    authProxy.mockResolvedValueOnce(NextResponse.next());
+
+    const response = await proxy(
+      new NextRequest('http://127.0.0.1:3100/login'),
+      {} as never,
+    );
+
+    expect(response.headers.get('content-security-policy')).not.toContain(
+      'upgrade-insecure-requests',
+    );
+  });
+
+  it('does not let a forwarded HTTP value weaken an HTTPS response', async () => {
+    authProxy.mockResolvedValueOnce(NextResponse.next());
+
+    const response = await proxy(
+      new NextRequest('https://woodenbridge.example/login', {
+        headers: { 'x-forwarded-proto': 'http' },
+      }),
+      {} as never,
+    );
+
+    expect(response.headers.get('content-security-policy')).toContain(
+      'upgrade-insecure-requests',
+    );
   });
 
   it('uses an unpredictable nonce for each document request', async () => {

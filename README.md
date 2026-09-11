@@ -62,6 +62,53 @@ documented in the
 4. Drop a pin and explicitly save a title, place, date, field note, and photos.
 5. Revisit keepsakes in My Places or arrange them into a shareable chapter.
 
+## Browser UI audits
+
+The default Playwright gate exercises portable public routes and does not
+require a test login or seeded private records:
+
+```bash
+npm run test:e2e
+```
+
+Set `E2E_SHARED_CHAPTER_ID` to include the public shared-chapter viewport and
+map interaction audits. Without it, those fixture-dependent checks are omitted
+or explicitly skipped.
+
+CI provisions a disposable `field_atlas_e2e` PostgreSQL database, seeds a
+verified test user plus deterministic atlas records, and runs the authenticated
+desktop and mobile audit automatically. The seed is fail-closed: it accepts only
+that database name on a loopback host, requires an explicit opt-in, and never
+falls back to the application's database URL.
+
+To run the authenticated or full suite locally, seed an equivalently isolated
+local database first. `E2E_TEST_PASSWORD` must contain 15–128 characters:
+
+```bash
+E2E_DATABASE_SEED=1 \
+E2E_DATABASE_URL=postgresql://...@127.0.0.1:5432/field_atlas_e2e \
+E2E_TEST_EMAIL=field-atlas-e2e@example.test \
+E2E_TEST_PASSWORD=... \
+npm run seed:e2e
+
+DATABASE_URL=postgresql://...@127.0.0.1:5432/field_atlas_e2e \
+E2E_DATABASE_ADAPTER=pg \
+POSTGRES_URL=postgresql://...@127.0.0.1:5432/field_atlas_e2e \
+E2E_TEST_EMAIL=field-atlas-e2e@example.test \
+E2E_TEST_PASSWORD=... \
+NEXT_PUBLIC_ATLAS_STYLE_URL=http://127.0.0.1:3100/e2e-map-style.json \
+npm run test:e2e:authenticated
+```
+
+Use the same environment with `npm run test:e2e:full` to include the public
+suite. Set `E2E_SHARED_CHAPTER_ID` when that run should also audit a shared
+chapter. The local style keeps the required authenticated gate independent of
+third-party tile availability; production continues to use the configured map
+provider.
+
+Set `E2E_BASE_URL` when auditing an already-running production build. If it is
+unset, Playwright starts the built application on its configured local port.
+
 ## Contributing
 
 Contributions are welcome! If you have any ideas for new features, bug fixes, or improvements, please submit a pull request. Make sure to follow the existing code style and include relevant tests.

@@ -35,7 +35,9 @@ export default async function SignUpPage({
       footer={
         <p className="auth-signup-prompt">
           Already have an atlas?{' '}
-          <Link href={withPostAuthIntent('/login', intent)}>Sign in</Link>
+          <Link href={withPostAuthIntent('/login', intent)} prefetch={false}>
+            Sign in
+          </Link>
         </p>
       }
     >

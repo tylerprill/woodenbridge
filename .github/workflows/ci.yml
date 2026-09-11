@@ -185,3 +185,83 @@ jobs:
             echo 'Runtime role unexpectedly has TRUNCATE permission.' >&2
             exit 1
           fi
+
+  authenticated-ui-audit:
+    name: Authenticated browser UI audit
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    services:
+      postgres:
+        image: postgis/postgis:16-3.5
+        env:
+          POSTGRES_DB: field_atlas_e2e
+          POSTGRES_PASSWORD: migration-owner-password
+          POSTGRES_USER: migration_owner
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready --username=migration_owner --dbname=field_atlas_e2e"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+    env:
+      APP_URL: http://127.0.0.1:3100
+      AUTH_URL: http://127.0.0.1:3100
+      DATABASE_URL: postgresql://field_atlas_runtime:runtime-only-e2e-password-2026-safe@127.0.0.1:5432/field_atlas_e2e
+      E2E_CHAPTER_ID: 6a67afcf-768f-4fe4-8c62-41b58a19840d
+      E2E_DATABASE_ADAPTER: pg
+      E2E_ENTRY_ID: 0a934c64-997f-43c2-88a3-8b102d517781
+      E2E_TEST_EMAIL: field-atlas-e2e@example.test
+      E2E_TEST_PASSWORD: field-atlas-e2e-password-2026
+      NEXT_PUBLIC_ATLAS_STYLE_URL: http://127.0.0.1:3100/e2e-map-style.json
+      PASSKEY_ORIGIN: http://127.0.0.1:3100
+      PASSKEY_RP_ID: 127.0.0.1
+      POSTGRES_URL: postgresql://field_atlas_runtime:runtime-only-e2e-password-2026-safe@127.0.0.1:5432/field_atlas_e2e
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+      - name: Set up Node.js
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+      - run: npm ci
+      - name: Create the pre-migration application schema
+        run: psql "$MIGRATION_DATABASE_URL" --set=ON_ERROR_STOP=1 --file=test/integration/bootstrap.sql
+        env:
+          MIGRATION_DATABASE_URL: postgresql://migration_owner:migration-owner-password@127.0.0.1:5432/field_atlas_e2e
+      - name: Apply migrations with the production runner
+        run: npm run migrate
+        env:
+          MIGRATION_DATABASE_URL: postgresql://migration_owner:migration-owner-password@127.0.0.1:5432/field_atlas_e2e
+      - name: Provision a least-privilege runtime role
+        run: >-
+          psql "$MIGRATION_DATABASE_URL"
+          --set=ON_ERROR_STOP=1
+          --set=runtime_role=field_atlas_runtime
+          --file=scripts/provision-runtime-database-role.sql
+        env:
+          FIELD_ATLAS_RUNTIME_DATABASE_PASSWORD: runtime-only-e2e-password-2026-safe
+          MIGRATION_DATABASE_URL: postgresql://migration_owner:migration-owner-password@127.0.0.1:5432/field_atlas_e2e
+      - name: Seed the isolated browser-test account and atlas
+        run: npm run seed:e2e
+        env:
+          E2E_DATABASE_SEED: '1'
+          E2E_DATABASE_URL: postgresql://migration_owner:migration-owner-password@127.0.0.1:5432/field_atlas_e2e
+      - name: Install Chromium and operating-system dependencies
+        run: npx playwright install --with-deps chromium
+      - name: Audit authenticated desktop and mobile flows
+        run: >-
+          npm run test:e2e:authenticated --
+          --project=chromium
+          --project=mobile-chromium
+          --project=mobile-chromium-landscape
+      - name: Upload browser audit artifacts
+        if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: authenticated-ui-audit-${{ github.run_id }}-${{ github.run_attempt }}
+          path: output/ui-audit/
+          if-no-files-found: warn
+          retention-days: 14
+          compression-level: 0

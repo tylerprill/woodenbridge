@@ -4,6 +4,7 @@
 
 import { act, render, screen } from '@testing-library/react';
 
+import { sanitizeOpenFreeMapStyle } from '@/app/lib/maps/openfreemap-style';
 import {
   ChapterMap,
   keepMarkersInsideFrame,
@@ -11,6 +12,21 @@ import {
 
 const mockMapConstructor = jest.fn();
 const mockEventHandlers = new Map<string, (event?: unknown) => void>();
+
+function createMapMock() {
+  return {
+    addControl: jest.fn(),
+    isStyleLoaded: jest.fn(() => false),
+    off: jest.fn(),
+    on: jest.fn((event: string, handler: (event?: unknown) => void) => {
+      mockEventHandlers.set(event, handler);
+    }),
+    once: jest.fn(),
+    remove: jest.fn(),
+    resize: jest.fn(),
+    setStyle: jest.fn(),
+  };
+}
 
 jest.mock(
   'maplibre-gl',
@@ -80,17 +96,7 @@ describe('chapter map failure recovery', () => {
 
   it('offers recovery when the style or worker stalls asynchronously', () => {
     jest.useFakeTimers();
-    const stalledMap = {
-      addControl: jest.fn(),
-      isStyleLoaded: jest.fn(() => false),
-      off: jest.fn(),
-      on: jest.fn((event: string, handler: (event?: unknown) => void) => {
-        mockEventHandlers.set(event, handler);
-      }),
-      once: jest.fn(),
-      remove: jest.fn(),
-      resize: jest.fn(),
-    };
+    const stalledMap = createMapMock();
     mockMapConstructor.mockReturnValue(stalledMap);
     const { unmount } = render(
       <ChapterMap
@@ -121,6 +127,77 @@ describe('chapter map failure recovery', () => {
     expect(stalledMap.remove).not.toHaveBeenCalled();
     unmount();
     expect(stalledMap.remove).toHaveBeenCalledTimes(1);
+  });
+
+  it('attaches error handling before applying the sanitized remote style', () => {
+    const map = createMapMock();
+    mockMapConstructor.mockReturnValue(map);
+
+    render(
+      <ChapterMap
+        entries={[
+          {
+            id: 'memory-1',
+            title: 'Detroit river walk',
+            placeLabel: 'Detroit, Michigan',
+            placeName: 'Detroit',
+            latitude: 42.3314,
+            longitude: -83.0458,
+          },
+        ]}
+      />,
+    );
+
+    const constructorOptions = mockMapConstructor.mock.calls[0][0] as Record<
+      string,
+      unknown
+    >;
+    expect(constructorOptions).not.toHaveProperty('style');
+    expect(map.setStyle).toHaveBeenCalledWith(expect.any(String), {
+      transformStyle: sanitizeOpenFreeMapStyle,
+    });
+    const errorHandlerIndex = map.on.mock.calls.findIndex(
+      ([event]) => event === 'error',
+    );
+    expect(errorHandlerIndex).toBeGreaterThanOrEqual(0);
+    expect(map.on.mock.invocationCallOrder[errorHandlerIndex]).toBeLessThan(
+      map.setStyle.mock.invocationCallOrder[0],
+    );
+  });
+
+  it('removes a partially initialized map when setting its style throws', async () => {
+    const map = createMapMock();
+    map.setStyle.mockImplementation(() => {
+      throw new Error('Style setup failed');
+    });
+    mockMapConstructor.mockReturnValue(map);
+    const consoleError = jest
+      .spyOn(console, 'error')
+      .mockImplementation(() => undefined);
+
+    render(
+      <ChapterMap
+        entries={[
+          {
+            id: 'memory-1',
+            title: 'Detroit river walk',
+            placeLabel: 'Detroit, Michigan',
+            placeName: 'Detroit',
+            latitude: 42.3314,
+            longitude: -83.0458,
+          },
+        ]}
+      />,
+    );
+
+    expect(await screen.findByRole('alert')).toHaveTextContent(
+      'Route map unavailable',
+    );
+    expect(map.remove).toHaveBeenCalledTimes(1);
+    expect(consoleError).toHaveBeenCalledWith(
+      'Chapter map initialization failed:',
+      expect.any(Error),
+    );
   });
 
   it('resets a stale edge correction before constraining a resized map', () => {

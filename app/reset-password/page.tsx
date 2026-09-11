@@ -41,10 +41,19 @@ export default async function ResetPasswordPage({
         <p className="auth-signup-prompt">
           {isValid ? (
             <>
-              Remembered it? <Link href="/login">Return to sign in</Link>
+              Remembered it?{' '}
+              <Link href="/login" prefetch={false}>
+                Return to sign in
+              </Link>
             </>
           ) : (
-            <Link href="/forgot-password">Request a new reset link</Link>
+            <Link
+              className="auth-reset-link"
+              href="/forgot-password"
+              prefetch={false}
+            >
+              Request a new reset link
+            </Link>
           )}
         </p>
       }

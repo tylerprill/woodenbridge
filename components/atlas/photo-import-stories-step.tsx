@@ -48,7 +48,7 @@ export function PhotoImportStoriesStep({
   onSkipRemaining: () => void;
 }) {
   return (
-    <main className={styles.storyLayout}>
+    <div className={styles.storyLayout}>
       <section
         className={styles.storyPhoto}
         aria-label={`Photograph for memory ${storyIndex + 1}`}
@@ -300,6 +300,6 @@ export function PhotoImportStoriesStep({
           </button>
         </div>
       </footer>
-    </main>
+    </div>
   );
 }

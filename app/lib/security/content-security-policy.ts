@@ -5,9 +5,11 @@ export const CSP_NONCE_HEADER = 'x-nonce';
 export function createContentSecurityPolicy({
   isDevelopment,
   nonce,
+  upgradeInsecureRequests = !isDevelopment,
 }: {
   isDevelopment: boolean;
   nonce: string;
+  upgradeInsecureRequests?: boolean;
 }) {
   if (!NONCE_PATTERN.test(nonce)) {
     throw new Error('A valid per-request CSP nonce is required.');
@@ -31,6 +33,6 @@ export function createContentSecurityPolicy({
     "form-action 'self'",
     "frame-ancestors 'none'",
     "manifest-src 'self'",
-    ...(isDevelopment ? [] : ['upgrade-insecure-requests']),
+    ...(upgradeInsecureRequests ? ['upgrade-insecure-requests'] : []),
   ].join('; ');
 }

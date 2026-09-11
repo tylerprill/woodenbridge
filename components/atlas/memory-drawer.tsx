@@ -81,6 +81,7 @@ export function MemoryDrawer({
   const [archiveArmed, setArchiveArmed] = useState(false);
   const [discardArmed, setDiscardArmed] = useState(false);
   const [placeTouched, setPlaceTouched] = useState(false);
+  const drawerRef = useRef<HTMLElement>(null);
   const titleRef = useRef<HTMLTextAreaElement>(null);
   const headingRef = useRef<HTMLHeadingElement>(null);
   const versionRef = useRef(entry.version);
@@ -94,6 +95,28 @@ export function MemoryDrawer({
         ? titleRef.current?.focus()
         : headingRef.current?.focus(),
     );
+  }, [entry.recordState]);
+
+  useEffect(() => {
+    const drawer = drawerRef.current;
+    if (!drawer) return;
+
+    const sidebar = document.querySelector<HTMLElement>('.dashboard-sidebar');
+    const sidebarWasInert = sidebar?.inert ?? false;
+    if (sidebar) sidebar.inert = true;
+
+    const keepFocusInside = (event: FocusEvent) => {
+      if (event.target instanceof Node && drawer.contains(event.target)) return;
+      const target =
+        entry.recordState === 'draft' ? titleRef.current : headingRef.current;
+      target?.focus();
+    };
+
+    document.addEventListener('focusin', keepFocusInside);
+    return () => {
+      document.removeEventListener('focusin', keepFocusInside);
+      if (sidebar) sidebar.inert = sidebarWasInert;
+    };
   }, [entry.recordState]);
 
   useLayoutEffect(() => {
@@ -228,10 +251,57 @@ export function MemoryDrawer({
 
   return (
     <aside
+      ref={drawerRef}
       className={styles.memoryDrawer}
       role="dialog"
+      aria-modal="true"
       aria-labelledby="memory-drawer-heading"
       aria-describedby="memory-drawer-context"
+      onKeyDown={(event) => {
+        if (event.key === 'Escape') {
+          event.preventDefault();
+          event.stopPropagation();
+          requestClose();
+          return;
+        }
+
+        if (event.key !== 'Tab') return;
+        const drawer = drawerRef.current;
+        if (!drawer) return;
+        const focusable = Array.from(
+          drawer.querySelectorAll<HTMLElement>(
+            'a[href], button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])',
+          ),
+        ).filter((element) => {
+          const style = getComputedStyle(element);
+          return (
+            style.display !== 'none' &&
+            style.visibility !== 'hidden' &&
+            element.getAttribute('aria-hidden') !== 'true'
+          );
+        });
+        const first = focusable[0];
+        const last = focusable[focusable.length - 1];
+        if (!first || !last) {
+          event.preventDefault();
+          headingRef.current?.focus();
+          return;
+        }
+
+        if (!focusable.includes(document.activeElement as HTMLElement)) {
+          event.preventDefault();
+          (event.shiftKey ? last : first).focus();
+          return;
+        }
+
+        if (event.shiftKey && document.activeElement === first) {
+          event.preventDefault();
+          last.focus();
+        } else if (!event.shiftKey && document.activeElement === last) {
+          event.preventDefault();
+          first.focus();
+        }
+      }}
     >
       <header className={styles.drawerHeader}>
         <div>

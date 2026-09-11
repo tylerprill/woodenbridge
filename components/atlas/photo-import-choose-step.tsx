@@ -63,7 +63,7 @@ export function PhotoImportChooseStep({
   };
 
   return (
-    <main className={styles.chooseLayout}>
+    <div className={styles.chooseLayout}>
       <section
         className={styles.dropCard}
         aria-labelledby="photo-picker-title"
@@ -222,6 +222,6 @@ export function PhotoImportChooseStep({
           <ArrowRightIcon aria-hidden="true" />
         </button>
       </section>
-    </main>
+    </div>
   );
 }

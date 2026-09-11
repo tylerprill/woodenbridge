@@ -48,7 +48,7 @@ export default async function VerifyEmailPage({
       footer={
         <p className="auth-signup-prompt">
           Already verified?{' '}
-          <Link href={withPostAuthIntent('/login', intent)}>
+          <Link href={withPostAuthIntent('/login', intent)} prefetch={false}>
             Return to sign in
           </Link>
         </p>

@@ -125,7 +125,9 @@ export default function LoginForm({
       <div className="auth-field">
         <div className="auth-label-row">
           <label htmlFor="password">Password</label>
-          <Link href="/forgot-password">Forgot password?</Link>
+          <Link href="/forgot-password" prefetch={false}>
+            Forgot password?
+          </Link>
         </div>
         <div className="auth-input-wrap">
           <LockClosedIcon aria-hidden="true" />
@@ -172,7 +174,10 @@ export default function LoginForm({
 
       <p className="auth-inline-help">
         Waiting for a verification code?{' '}
-        <Link href={withPostAuthIntent('/verify-email', intent)}>
+        <Link
+          href={withPostAuthIntent('/verify-email', intent)}
+          prefetch={false}
+        >
           Verify your email
         </Link>
       </p>
