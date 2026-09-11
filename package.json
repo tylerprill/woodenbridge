@@ -78,7 +78,7 @@
     "jest-environment-jsdom": "30.4.1",
     "prettier": "3.9.6",
     "prettier-plugin-tailwindcss": "0.8.1",
-    "typescript": "5.9.3"
+    "typescript": "7.0.2"
   },
   "engines": {
     "node": "22.x"
