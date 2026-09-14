@@ -6,7 +6,6 @@ import {
   CheckCircleIcon,
   TrashIcon,
 } from '@heroicons/react/24/outline';
-import { upload } from '@vercel/blob/client';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
@@ -32,6 +31,7 @@ import {
   createAtlasImportThumbnailPath,
   isAllowedAtlasMediaType,
 } from '@/app/lib/atlas/media-policy';
+import { uploadAtlasMedia } from '@/app/lib/atlas/media-upload-client';
 import {
   analyzeAtlasImportPhoto,
   prepareAtlasImportPhoto,
@@ -1023,9 +1023,7 @@ export function PhotoImportWorkspace({
   ) => {
     const existing = uploadedVariantsRef.current.get(item.clientItemId)?.[kind];
     if (existing) return existing;
-    const result = await upload(uploadPathname, blob, {
-      access: 'private',
-      handleUploadUrl: '/api/atlas/media/upload',
+    const result = await uploadAtlasMedia(uploadPathname, blob, {
       clientPayload: JSON.stringify({
         entryId: mapping.entryId,
         mediaId: mapping.mediaId,

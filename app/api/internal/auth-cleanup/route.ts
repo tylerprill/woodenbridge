@@ -51,7 +51,7 @@ export async function GET(request: Request) {
   }
 
   try {
-    const [, notificationDelivery] = await Promise.all([
+    const [maintenanceResults, notificationDelivery] = await Promise.all([
       Promise.all([
         deleteExpiredAuthRateLimitData(),
         deleteExpiredEmailVerificationData(),
@@ -65,6 +65,10 @@ export async function GET(request: Request) {
       ]),
       drainSecurityNotificationOutbox({ batchSize: 20, maxBatches: 4 }),
     ]);
+    const atlasCleanup = {
+      uploadIntents: maintenanceResults[7],
+      imports: maintenanceResults[8],
+    };
     // Session deletion cascades into passkey/recovery tables. Run it after
     // child-table retention to keep a single lock order across the cron job.
     await deleteExpiredAuthenticatedSessions();
@@ -90,6 +94,7 @@ export async function GET(request: Request) {
       {
         ok: true,
         completedAt: new Date().toISOString(),
+        atlasCleanup,
         notificationDelivery,
         notificationOutbox,
       },

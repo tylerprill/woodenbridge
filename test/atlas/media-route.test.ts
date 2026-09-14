@@ -1,14 +1,16 @@
-import { get } from '@vercel/blob';
 import { sql } from '@vercel/postgres';
 
 import { GET } from '@/app/api/atlas/media/[mediaId]/route';
 import { getVerifiedSession } from '@/app/lib/auth/session';
 import { createAtlasMediaGrant } from '@/app/lib/atlas/media-grant';
+import { readAtlasMediaObject } from '@/app/lib/atlas/media-storage';
 
-jest.mock('@vercel/blob', () => ({ get: jest.fn() }));
 jest.mock('@vercel/postgres', () => ({ sql: jest.fn() }));
 jest.mock('@/app/lib/auth/session', () => ({
   getVerifiedSession: jest.fn(),
+}));
+jest.mock('@/app/lib/atlas/media-storage', () => ({
+  readAtlasMediaObject: jest.fn(),
 }));
 
 const mediaId = 'bf69b9f1-4868-4206-abbf-df01e6a8d033';
@@ -26,11 +28,10 @@ const source = {
 describe('authenticated Atlas media delivery', () => {
   beforeEach(() => {
     process.env.AUTH_SECRET = 'test-auth-secret-with-enough-entropy';
-    process.env.ATLAS_BLOB_READ_WRITE_TOKEN = 'test-blob-token';
     jest.mocked(getVerifiedSession).mockResolvedValue({
       user: { id: userId },
     } as never);
-    jest.mocked(get).mockResolvedValue({
+    jest.mocked(readAtlasMediaObject).mockResolvedValue({
       statusCode: 200,
       blob: { etag: 'private-etag', size: 5 },
       stream: new ReadableStream({
@@ -54,10 +55,9 @@ describe('authenticated Atlas media delivery', () => {
     expect(response.status).toBe(200);
     expect(getVerifiedSession).toHaveBeenCalledTimes(1);
     expect(sql).not.toHaveBeenCalled();
-    expect(get).toHaveBeenCalledWith(
-      source.thumbnailPath,
-      expect.objectContaining({ access: 'private', token: 'test-blob-token' }),
-    );
+    expect(readAtlasMediaObject).toHaveBeenCalledWith(source.thumbnailPath, {
+      ifNoneMatch: undefined,
+    });
   });
 
   it('rejects a tampered grant without falling back to a database lookup', async () => {
@@ -71,7 +71,7 @@ describe('authenticated Atlas media delivery', () => {
 
     expect(response.status).toBe(404);
     expect(sql).not.toHaveBeenCalled();
-    expect(get).not.toHaveBeenCalled();
+    expect(readAtlasMediaObject).not.toHaveBeenCalled();
   });
 
   it('keeps a database-backed compatibility path for older private URLs', async () => {
@@ -93,7 +93,9 @@ describe('authenticated Atlas media delivery', () => {
     expect(response.status).toBe(200);
     expect(getVerifiedSession).toHaveBeenCalledTimes(1);
     expect(sql).toHaveBeenCalledTimes(1);
-    expect(get).toHaveBeenCalledWith(source.storagePath, expect.any(Object));
+    expect(readAtlasMediaObject).toHaveBeenCalledWith(source.storagePath, {
+      ifNoneMatch: undefined,
+    });
   });
 
   it('retains the revocation-aware database check for unlisted shares', async () => {
@@ -118,10 +120,9 @@ describe('authenticated Atlas media delivery', () => {
     expect(response.status).toBe(200);
     expect(getVerifiedSession).not.toHaveBeenCalled();
     expect(sql).toHaveBeenCalledTimes(1);
-    expect(get).toHaveBeenCalledWith(
-      source.thumbnailPath,
-      expect.objectContaining({ access: 'private' }),
-    );
+    expect(readAtlasMediaObject).toHaveBeenCalledWith(source.thumbnailPath, {
+      ifNoneMatch: undefined,
+    });
   });
 
   it('serves imported JPEG thumbnails with the correct nosniff content type', async () => {
@@ -141,9 +142,9 @@ describe('authenticated Atlas media delivery', () => {
     expect(response.status).toBe(200);
     expect(response.headers.get('content-type')).toBe('image/jpeg');
     expect(response.headers.get('x-content-type-options')).toBe('nosniff');
-    expect(get).toHaveBeenCalledWith(
+    expect(readAtlasMediaObject).toHaveBeenCalledWith(
       jpegSource.thumbnailPath,
-      expect.objectContaining({ access: 'private' }),
+      { ifNoneMatch: undefined },
     );
   });
 
@@ -159,6 +160,6 @@ describe('authenticated Atlas media delivery', () => {
     expect(response.status).toBe(404);
     expect(getVerifiedSession).not.toHaveBeenCalled();
     expect(sql).not.toHaveBeenCalled();
-    expect(get).not.toHaveBeenCalled();
+    expect(readAtlasMediaObject).not.toHaveBeenCalled();
   });
 });

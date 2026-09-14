@@ -16,7 +16,8 @@ jest.mock('@/app/lib/auth/session', () => ({
   requireVerifiedSession: jest.fn(),
 }));
 jest.mock('@/app/lib/atlas/media-storage', () => ({
-  getAtlasBlobToken: () => 'blob-test-token',
+  headAtlasMediaObject: jest.fn(),
+  readAtlasMediaObject: jest.fn(),
 }));
 jest.mock('@/app/lib/atlas/rows', () => ({
   toAtlasMedia: jest.fn((row: { id: string; entry_id: string }) => ({
@@ -31,9 +32,6 @@ jest.mock('@/app/lib/atlas/upload-intents', () => ({
 }));
 jest.mock('@vercel/blob', () => ({
   BlobNotFoundError: class BlobNotFoundError extends Error {},
-  del: jest.fn(),
-  head: jest.fn(),
-  get: jest.fn(),
 }));
 jest.mock('sharp', () => ({
   __esModule: true,
@@ -46,7 +44,7 @@ jest.mock('sharp', () => ({
   })),
 }));
 
-import { BlobNotFoundError, get, head } from '@vercel/blob';
+import { BlobNotFoundError } from '@vercel/blob';
 import sharp from 'sharp';
 import { requireVerifiedSession } from '@/app/lib/auth/session';
 import {
@@ -57,6 +55,10 @@ import {
   consumeAtlasMediaUploadIntent,
   lockAtlasMediaUploadIntentForRegistration,
 } from '@/app/lib/atlas/upload-intents';
+import {
+  headAtlasMediaObject,
+  readAtlasMediaObject,
+} from '@/app/lib/atlas/media-storage';
 
 const { __testMocks } = jest.requireMock('@vercel/postgres') as {
   __testMocks: {
@@ -100,7 +102,7 @@ describe('Atlas import media registration', () => {
       .mocked(lockAtlasMediaUploadIntentForRegistration)
       .mockResolvedValue(true);
     jest.mocked(consumeAtlasMediaUploadIntent).mockResolvedValue(true);
-    jest.mocked(head).mockImplementation(
+    jest.mocked(headAtlasMediaObject).mockImplementation(
       async (requestedPath) =>
         (requestedPath === pathname
           ? {
@@ -115,7 +117,7 @@ describe('Atlas import media registration', () => {
             }) as never,
     );
     jest
-      .mocked(get)
+      .mocked(readAtlasMediaObject)
       .mockResolvedValueOnce(privateBlob('main') as never)
       .mockResolvedValueOnce(privateBlob('thumb') as never);
     jest.mocked(sharp).mockImplementation(((bytes: Buffer) => ({
@@ -267,16 +269,18 @@ describe('Atlas import media registration', () => {
       ],
       rowCount: 1,
     });
-    jest.mocked(head).mockImplementation(async (requestedPath) => {
-      if (requestedPath === pathname) {
-        return {
-          pathname,
-          contentType: 'image/jpeg',
-          size: 4,
-        } as never;
-      }
-      throw new BlobNotFoundError();
-    });
+    jest
+      .mocked(headAtlasMediaObject)
+      .mockImplementation(async (requestedPath) => {
+        if (requestedPath === pathname) {
+          return {
+            pathname,
+            contentType: 'image/jpeg',
+            size: 4,
+          } as never;
+        }
+        throw new BlobNotFoundError();
+      });
 
     await expect(
       getAtlasImportMediaPairStatusAction({
@@ -296,7 +300,7 @@ describe('Atlas import media registration', () => {
         registered: false,
       },
     });
-    expect(head).toHaveBeenCalledTimes(2);
+    expect(headAtlasMediaObject).toHaveBeenCalledTimes(2);
   });
 
   it('does not probe Blob storage for a foreign or cancelled import item', async () => {
@@ -313,7 +317,7 @@ describe('Atlas import media registration', () => {
         altText: '',
       }),
     ).resolves.toMatchObject({ ok: false, error: 'not-found' });
-    expect(head).not.toHaveBeenCalled();
+    expect(headAtlasMediaObject).not.toHaveBeenCalled();
   });
 
   it('rejects a metadata-free thumbnail that does not match the master dimensions', async () => {

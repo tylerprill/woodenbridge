@@ -1,6 +1,5 @@
 import 'server-only';
 
-import { del } from '@vercel/blob';
 import { db, sql, type VercelPoolClient } from '@/app/lib/db';
 import { z } from 'zod';
 
@@ -9,7 +8,7 @@ import {
   ATLAS_MEDIA_PAIR_RESERVED_BYTES,
   ATLAS_MEDIA_USER_STORAGE_MAX_BYTES,
 } from '@/app/lib/atlas/media-policy';
-import { getAtlasBlobToken } from '@/app/lib/atlas/media-storage';
+import { deleteAtlasMediaObjects } from '@/app/lib/atlas/media-storage';
 
 const UPLOAD_INTENT_TTL_MS = 30 * 60 * 1000;
 const UPLOAD_TOKEN_TTL_MS = 10 * 60 * 1000;
@@ -49,7 +48,7 @@ type UploadIntentRow = {
 type CleanupIntentRow = Pick<
   UploadIntentRow,
   'media_id' | 'original_path' | 'thumbnail_path'
-> & { cleanup_started_at: Date };
+> & { cleanup_started_at: Date; cleanup_attempts: number };
 
 export class AtlasUploadIntentError extends Error {
   constructor(
@@ -370,6 +369,8 @@ export async function markAtlasMediaUploadCompleted({
               AND entry_id = $3
               AND original_path = $4
               AND thumbnail_path = $5
+              AND expires_at > clock_timestamp()
+              AND consumed_at IS NULL
               AND cleanup_started_at IS NULL
             RETURNING media_id
           `,
@@ -385,6 +386,8 @@ export async function markAtlasMediaUploadCompleted({
               AND entry_id = $3
               AND original_path = $4
               AND thumbnail_path = $5
+              AND expires_at > clock_timestamp()
+              AND consumed_at IS NULL
               AND cleanup_started_at IS NULL
             RETURNING media_id
           `,
@@ -413,6 +416,7 @@ export async function lockAtlasMediaUploadIntentForRegistration(
         cleanup_started_at
       FROM atlas_media_upload_intents
       WHERE media_id = $1
+        AND expires_at > clock_timestamp()
       LIMIT 1
       FOR UPDATE
     `,
@@ -423,6 +427,7 @@ export async function lockAtlasMediaUploadIntentForRegistration(
   return Boolean(
     row &&
     pathsMatch(row, intent) &&
+    row.expires_at > new Date() &&
     !row.consumed_at &&
     !row.cleanup_started_at,
   );
@@ -441,6 +446,7 @@ export async function consumeAtlasMediaUploadIntent(
         AND entry_id = $3
         AND original_path = $4
         AND thumbnail_path = $5
+        AND expires_at > clock_timestamp()
         AND consumed_at IS NULL
         AND cleanup_started_at IS NULL
       RETURNING media_id
@@ -461,7 +467,7 @@ async function releaseCleanupLease(row: CleanupIntentRow) {
     UPDATE atlas_media_upload_intents
     SET cleanup_started_at = NULL, updated_at = NOW()
     WHERE media_id = ${row.media_id}
-      AND cleanup_started_at = ${row.cleanup_started_at.toISOString()}
+      AND cleanup_attempts = ${row.cleanup_attempts}
       AND consumed_at IS NULL
   `;
 }
@@ -483,18 +489,17 @@ async function deleteClaimedIntentBlobs(row: CleanupIntentRow) {
           cleanup_started_at = NULL,
           updated_at = NOW()
       WHERE media_id = ${row.media_id}
+        AND cleanup_attempts = ${row.cleanup_attempts}
     `;
     return;
   }
 
   try {
-    await del([row.original_path, row.thumbnail_path], {
-      token: getAtlasBlobToken(),
-    });
+    await deleteAtlasMediaObjects([row.original_path, row.thumbnail_path]);
     await sql`
       DELETE FROM atlas_media_upload_intents
       WHERE media_id = ${row.media_id}
-        AND cleanup_started_at = ${row.cleanup_started_at.toISOString()}
+        AND cleanup_attempts = ${row.cleanup_attempts}
         AND consumed_at IS NULL
     `;
   } catch (error) {
@@ -520,7 +525,7 @@ export async function cleanupExpiredAtlasMediaUploadIntents() {
         FOR UPDATE SKIP LOCKED
       )
       UPDATE atlas_media_upload_intents AS intent
-      SET cleanup_started_at = NOW(),
+      SET cleanup_started_at = date_trunc('milliseconds', clock_timestamp()),
           cleanup_attempts = cleanup_attempts + 1,
           updated_at = NOW()
       FROM candidates
@@ -529,7 +534,8 @@ export async function cleanupExpiredAtlasMediaUploadIntents() {
         intent.media_id,
         intent.original_path,
         intent.thumbnail_path,
-        intent.cleanup_started_at
+        intent.cleanup_started_at,
+        intent.cleanup_attempts
     `,
     [CLEANUP_LEASE_MINUTES, CLEANUP_BATCH_SIZE],
   );
@@ -558,7 +564,7 @@ export async function discardAtlasMediaUploadIntent(
 ) {
   const claimed = await sql<CleanupIntentRow>`
     UPDATE atlas_media_upload_intents
-    SET cleanup_started_at = NOW(),
+    SET cleanup_started_at = date_trunc('milliseconds', clock_timestamp()),
         cleanup_attempts = cleanup_attempts + 1,
         updated_at = NOW()
     WHERE media_id = ${intent.mediaId}
@@ -568,7 +574,12 @@ export async function discardAtlasMediaUploadIntent(
       AND thumbnail_path = ${intent.thumbnailPathname}
       AND consumed_at IS NULL
       AND cleanup_started_at IS NULL
-    RETURNING media_id, original_path, thumbnail_path, cleanup_started_at
+    RETURNING
+      media_id,
+      original_path,
+      thumbnail_path,
+      cleanup_started_at,
+      cleanup_attempts
   `;
   const row = claimed.rows[0];
   if (!row) return false;

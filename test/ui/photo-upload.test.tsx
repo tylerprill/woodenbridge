@@ -5,16 +5,17 @@
 import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 
-import { upload } from '@vercel/blob/client';
-
 import { registerAtlasMediaAction } from '@/app/lib/actions/atlas-media';
+import { uploadAtlasMedia } from '@/app/lib/atlas/media-upload-client';
 import {
   analyzeAtlasImportPhoto,
   prepareAtlasImportPhoto,
 } from '@/app/lib/atlas/photo-import-client';
 import { MemoryPhotos } from '@/components/atlas/memory-photos';
 
-jest.mock('@vercel/blob/client', () => ({ upload: jest.fn() }));
+jest.mock('@/app/lib/atlas/media-upload-client', () => ({
+  uploadAtlasMedia: jest.fn(),
+}));
 jest.mock('@/app/lib/actions/atlas-media', () => ({
   deleteAtlasMediaAction: jest.fn(),
   discardAtlasMediaUploadAction: jest.fn(),
@@ -76,7 +77,7 @@ describe('photo upload UI', () => {
       resolveThumbnail = resolve;
     });
     jest
-      .mocked(upload)
+      .mocked(uploadAtlasMedia)
       .mockImplementationOnce(() => originalUpload as never)
       .mockImplementationOnce(() => thumbnailUpload as never);
     const media = {
@@ -112,10 +113,10 @@ describe('photo upload UI', () => {
     const uploadInteraction = user.upload(input, source);
 
     // The thumbnail request starts before the unresolved original finishes.
-    await waitFor(() => expect(upload).toHaveBeenCalledTimes(2));
+    await waitFor(() => expect(uploadAtlasMedia).toHaveBeenCalledTimes(2));
     expect(registerAtlasMediaAction).not.toHaveBeenCalled();
-    const originalOptions = jest.mocked(upload).mock.calls[0][2];
-    const thumbnailOptions = jest.mocked(upload).mock.calls[1][2];
+    const originalOptions = jest.mocked(uploadAtlasMedia).mock.calls[0][2];
+    const thumbnailOptions = jest.mocked(uploadAtlasMedia).mock.calls[1][2];
     const originalPayload = JSON.parse(originalOptions.clientPayload ?? '{}');
     expect(originalPayload).toMatchObject({
       entryId: 'memory-1',
@@ -124,8 +125,8 @@ describe('photo upload UI', () => {
     expect(originalPayload).toEqual(
       JSON.parse(thumbnailOptions.clientPayload ?? '{}'),
     );
-    expect(jest.mocked(upload).mock.calls[0][1]).toBe(master);
-    expect(jest.mocked(upload).mock.calls[1][1]).toBe(thumbnail);
+    expect(jest.mocked(uploadAtlasMedia).mock.calls[0][1]).toBe(master);
+    expect(jest.mocked(uploadAtlasMedia).mock.calls[1][1]).toBe(thumbnail);
     resolveOriginal({ pathname: 'atlas/memory-1/photo.png' });
     resolveThumbnail({ pathname: 'atlas/memory-1/photo.thumb.webp' });
     await uploadInteraction;
@@ -164,6 +165,6 @@ describe('photo upload UI', () => {
     expect(screen.getByRole('alert')).toHaveTextContent(
       'Choose a JPG, PNG, WebP, HEIC, or HEIF photograph.',
     );
-    expect(upload).not.toHaveBeenCalled();
+    expect(uploadAtlasMedia).not.toHaveBeenCalled();
   });
 });

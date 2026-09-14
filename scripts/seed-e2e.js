@@ -1,3 +1,7 @@
+const { lstat, mkdir, rm } = require('node:fs/promises');
+const os = require('node:os');
+const path = require('node:path');
+
 const E2E_FIXTURE = Object.freeze({
   chapterId: '6a67afcf-768f-4fe4-8c62-41b58a19840d',
   clientRequestId: '98bfaf78-21bc-4df8-94e6-707433c0e9fe',
@@ -21,6 +25,65 @@ const LOOPBACK_HOSTS = new Set(['127.0.0.1', 'localhost', '[::1]']);
 const MIN_PASSWORD_CHARACTERS = 15;
 const MAX_PASSWORD_CHARACTERS = 128;
 const MAX_PASSWORD_BYTES = MAX_PASSWORD_CHARACTERS * 4;
+const E2E_MEDIA_STORAGE_ROOT_PATTERN =
+  /^field-atlas-e2e-media(?:-[A-Za-z0-9._-]+)?$/;
+
+function getE2EMediaStorageConfiguration(environment) {
+  if (environment.E2E_MEDIA_STORAGE_ADAPTER !== 'filesystem') {
+    throw new Error(
+      'E2E_MEDIA_STORAGE_ADAPTER must be filesystem before test media can be reset.',
+    );
+  }
+  if (environment.VERCEL === '1' || environment.VERCEL_ENV) {
+    throw new Error(
+      'The E2E filesystem media adapter cannot run in a Vercel environment.',
+    );
+  }
+
+  const configuredRoot = environment.E2E_MEDIA_STORAGE_ROOT;
+  if (!configuredRoot || !path.isAbsolute(configuredRoot)) {
+    throw new Error('E2E_MEDIA_STORAGE_ROOT must be an absolute path.');
+  }
+
+  const boundary = path.resolve(environment.RUNNER_TEMP || os.tmpdir());
+  const storageRoot = path.resolve(configuredRoot);
+  const relativeRoot = path.relative(boundary, storageRoot);
+  if (
+    !relativeRoot ||
+    relativeRoot.startsWith(`..${path.sep}`) ||
+    relativeRoot === '..' ||
+    path.isAbsolute(relativeRoot) ||
+    relativeRoot.includes(path.sep) ||
+    !E2E_MEDIA_STORAGE_ROOT_PATTERN.test(path.basename(storageRoot))
+  ) {
+    throw new Error(
+      'E2E_MEDIA_STORAGE_ROOT must be a dedicated field-atlas-e2e-media directory inside the test temp directory.',
+    );
+  }
+
+  return { boundary, storageRoot };
+}
+
+async function resetE2EMediaStorage(configuration) {
+  const boundary = await lstat(configuration.boundary);
+  if (boundary.isSymbolicLink() || !boundary.isDirectory()) {
+    throw new Error('The E2E media temp boundary must be a real directory.');
+  }
+  try {
+    const current = await lstat(configuration.storageRoot);
+    if (current.isSymbolicLink()) {
+      throw new Error('E2E_MEDIA_STORAGE_ROOT must not be a symbolic link.');
+    }
+    if (!current.isDirectory()) {
+      throw new Error('E2E_MEDIA_STORAGE_ROOT must be a directory.');
+    }
+  } catch (error) {
+    if (error?.code !== 'ENOENT') throw error;
+  }
+
+  await rm(configuration.storageRoot, { recursive: true, force: true });
+  await mkdir(configuration.storageRoot, { recursive: true, mode: 0o700 });
+}
 
 function getE2ESeedConfiguration(environment) {
   if (environment.E2E_DATABASE_SEED !== '1') {
@@ -128,6 +191,7 @@ function assertE2ESeedDatabaseState(configuration, databaseState) {
 
 async function seedE2EDatabase(environment = process.env) {
   const configuration = getE2ESeedConfiguration(environment);
+  let mediaStorageConfiguration = null;
   const [{ hash }, { Client }] = await Promise.all([
     import('@node-rs/argon2'),
     import('pg'),
@@ -157,16 +221,37 @@ async function seedE2EDatabase(environment = process.env) {
       users: usersResult.rows,
     });
 
-    // Upload reservations deliberately use RESTRICT so deleting database rows
-    // cannot orphan Blob objects. The audit stops at local review; if that ever
-    // changes, destroy the disposable database instead of resetting it here.
-    const uploadIntentResult = await client.query(
-      'SELECT COUNT(*)::integer AS count FROM atlas_media_upload_intents WHERE user_id = $1',
+    const mediaResult = await client.query(
+      `
+        SELECT
+          (SELECT COUNT(*)::integer FROM atlas_media WHERE user_id = $1) AS media_count,
+          (
+            SELECT COUNT(*)::integer
+            FROM atlas_media_upload_intents
+            WHERE user_id = $1
+          ) AS upload_intent_count
+      `,
       [E2E_FIXTURE.userId],
     );
-    if ((uploadIntentResult.rows[0]?.count ?? 0) > 0) {
+    const mediaCount = mediaResult.rows[0]?.media_count ?? 0;
+    const uploadIntentCount = mediaResult.rows[0]?.upload_intent_count ?? 0;
+    mediaStorageConfiguration =
+      environment.E2E_MEDIA_STORAGE_ADAPTER === 'filesystem'
+        ? getE2EMediaStorageConfiguration(environment)
+        : null;
+
+    if (
+      (mediaCount > 0 || uploadIntentCount > 0) &&
+      !mediaStorageConfiguration
+    ) {
       throw new Error(
-        'Refusing to reset an E2E fixture that has media upload reservations.',
+        'Refusing to reset an E2E fixture that has media or upload reservations without its isolated filesystem storage.',
+      );
+    }
+    if (mediaStorageConfiguration) {
+      await client.query(
+        'DELETE FROM atlas_media_upload_intents WHERE user_id = $1',
+        [E2E_FIXTURE.userId],
       );
     }
 
@@ -296,6 +381,9 @@ async function seedE2EDatabase(environment = process.env) {
     );
 
     await client.query('COMMIT');
+    if (mediaStorageConfiguration) {
+      await resetE2EMediaStorage(mediaStorageConfiguration);
+    }
     console.log('Seeded the deterministic Field Atlas E2E fixture.');
   } catch (error) {
     await client.query('ROLLBACK').catch(() => undefined);
@@ -308,7 +396,9 @@ async function seedE2EDatabase(environment = process.env) {
 module.exports = {
   E2E_FIXTURE,
   assertE2ESeedDatabaseState,
+  getE2EMediaStorageConfiguration,
   getE2ESeedConfiguration,
+  resetE2EMediaStorage,
   seedE2EDatabase,
 };
 

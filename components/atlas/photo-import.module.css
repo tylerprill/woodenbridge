@@ -505,8 +505,8 @@
 .primaryButton:focus-visible:not(:disabled),
 .completionActions > a:first-child:hover,
 .completionActions > a:first-child:focus-visible {
-  border-color: var(--timber);
-  background: var(--timber);
+  border-color: var(--timber-ink);
+  background: var(--timber-ink);
   box-shadow: 0 0.85rem 1.8rem rgba(16, 35, 29, 0.13);
   transform: translateY(-2px);
 }
@@ -1295,8 +1295,8 @@
 
 .dateConfirmation > button:hover:not(:disabled),
 .dateConfirmation > button:focus-visible:not(:disabled) {
-  border-color: var(--timber);
-  background: var(--timber);
+  border-color: var(--timber-ink);
+  background: var(--timber-ink);
   color: var(--paper-light);
 }
 
@@ -1786,7 +1786,7 @@
 
 .locationControls button:hover:not(:disabled),
 .locationControls button:focus-visible:not(:disabled) {
-  background: var(--timber);
+  background: var(--timber-ink);
   box-shadow: 0 0.65rem 1.4rem rgba(16, 35, 29, 0.16);
   transform: translateY(-1px);
 }
@@ -2462,6 +2462,19 @@
     bottom: max(0.75rem, env(safe-area-inset-bottom));
     left: 1rem;
     z-index: 60;
+  }
+}
+
+@media (max-height: 480px) {
+  .page[data-step='review'] {
+    padding-bottom: max(2rem, env(safe-area-inset-bottom));
+  }
+
+  .reviewLayout > .actionBar {
+    position: static;
+    right: auto;
+    bottom: auto;
+    left: auto;
   }
 }
 

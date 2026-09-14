@@ -102,8 +102,8 @@ describe('scheduled authentication cleanup', () => {
       pending: 0,
     });
     cleanupAuthenticatedSessions.mockResolvedValue(undefined);
-    cleanupUploadIntents.mockResolvedValue({ cleaned: 0 });
-    cleanupImports.mockResolvedValue({ cleaned: 0 });
+    cleanupUploadIntents.mockResolvedValue({ cleaned: 2 });
+    cleanupImports.mockResolvedValue({ cleaned: 1 });
   });
 
   afterAll(() => {
@@ -136,7 +136,13 @@ describe('scheduled authentication cleanup', () => {
     const response = await GET(cleanupRequest('Bearer ci-cron-secret'));
 
     expect(response.status).toBe(200);
-    expect(await response.json()).toMatchObject({ ok: true });
+    expect(await response.json()).toMatchObject({
+      ok: true,
+      atlasCleanup: {
+        uploadIntents: { cleaned: 2 },
+        imports: { cleaned: 1 },
+      },
+    });
     expect(cleanupRateLimits).toHaveBeenCalledTimes(1);
     expect(cleanupVerification).toHaveBeenCalledTimes(1);
     expect(cleanupPasswordReset).toHaveBeenCalledTimes(1);

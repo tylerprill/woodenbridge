@@ -1,6 +1,5 @@
 'use server';
 
-import { del } from '@vercel/blob';
 import { db, sql, type VercelPoolClient } from '@/app/lib/db';
 import { revalidatePath } from 'next/cache';
 
@@ -15,7 +14,7 @@ import type {
 import { reverseGeocodeAtlasPlace } from '@/app/lib/atlas/geocoding';
 import type { AtlasPlaceContext } from '@/app/lib/atlas/place';
 import { type AtlasEntryRow, toAtlasEntry } from '@/app/lib/atlas/rows';
-import { getAtlasBlobToken } from '@/app/lib/atlas/media-storage';
+import { deleteAtlasMediaObjects } from '@/app/lib/atlas/media-storage';
 import {
   atlasDraftSchema,
   atlasEntryIdSchema,
@@ -428,7 +427,7 @@ export async function archiveAtlasEntryAction(
     );
 
     if (storagePaths.length) {
-      await del(storagePaths, { token: getAtlasBlobToken() });
+      await deleteAtlasMediaObjects(storagePaths);
       await client.query(
         'DELETE FROM atlas_media WHERE entry_id = $1 AND user_id = $2',
         [parsed.data, session.user.id],

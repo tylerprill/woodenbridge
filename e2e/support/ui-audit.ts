@@ -51,6 +51,7 @@ function safeName(value: string) {
 export function monitorBrowserIssues(page: Page): BrowserIssueMonitor {
   let issues: BrowserIssue[] = [];
   const origin = new URL(process.env.E2E_BASE_URL ?? 'http://127.0.0.1:3100');
+  const successfulResponses = new WeakSet<Request>();
 
   const onConsole = (message: ConsoleMessage) => {
     const messageText = message.text();
@@ -93,11 +94,27 @@ export function monitorBrowserIssues(page: Page): BrowserIssueMonitor {
           failure.errorText,
         ),
       );
+    const currentUrl = new URL(page.url());
+    const expectedCompletedServerActionCancellation =
+      request.method() === 'POST' &&
+      request.resourceType() === 'fetch' &&
+      Boolean(request.headers()['next-action']) &&
+      successfulResponses.has(request) &&
+      requestUrl.origin === currentUrl.origin &&
+      requestUrl.pathname === currentUrl.pathname &&
+      requestUrl.search === currentUrl.search &&
+      Boolean(
+        failure &&
+        /ERR_ABORTED|NS_BINDING_ABORTED|cancel(?:led|ed)/i.test(
+          failure.errorText,
+        ),
+      );
     if (
       requestUrl.origin === origin.origin &&
       failure &&
       !expectedNavigationCancellation &&
-      !expectedNextPrefetchCancellation
+      !expectedNextPrefetchCancellation &&
+      !expectedCompletedServerActionCancellation
     ) {
       issues.push({
         kind: 'request-failed',
@@ -107,7 +124,10 @@ export function monitorBrowserIssues(page: Page): BrowserIssueMonitor {
     }
   };
   const onResponse = (response: Response) => {
-    if (response.status() < 400) return;
+    if (response.status() < 400) {
+      successfulResponses.add(response.request());
+      return;
+    }
     const responseUrl = new URL(response.url());
     if (responseUrl.origin !== origin.origin) return;
 

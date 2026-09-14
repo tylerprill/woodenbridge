@@ -1,9 +1,8 @@
-import { get } from '@vercel/blob';
 import { sql } from '@/app/lib/db';
 
 import { getVerifiedSession } from '@/app/lib/auth/session';
 import { verifyAtlasMediaGrant } from '@/app/lib/atlas/media-grant';
-import { getAtlasBlobToken } from '@/app/lib/atlas/media-storage';
+import { readAtlasMediaObject } from '@/app/lib/atlas/media-storage';
 import { getAtlasThumbnailContentType } from '@/app/lib/atlas/media-policy';
 import { atlasChapterIdSchema } from '@/app/lib/chapters/validation';
 
@@ -104,9 +103,7 @@ export async function GET(
   if (!contentType) return new Response(null, { status: 404 });
 
   try {
-    const blob = await get(storagePath, {
-      access: 'private',
-      token: getAtlasBlobToken(),
+    const blob = await readAtlasMediaObject(storagePath, {
       ifNoneMatch: request.headers.get('if-none-match') ?? undefined,
     });
 
