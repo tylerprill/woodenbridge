@@ -651,7 +651,7 @@ describe('bulk photo import workspace', () => {
     );
 
     expect(
-      screen.getByRole('textbox', { name: /^Chapter title/ }),
+      await screen.findByRole('textbox', { name: /^Chapter title/ }),
     ).toBeVisible();
   });
 
@@ -780,7 +780,7 @@ describe('bulk photo import workspace', () => {
     await user.click(screen.getByRole('button', { name: 'Shape the chapter' }));
 
     expect(
-      screen.getByRole('textbox', { name: /^Chapter title/ }),
+      await screen.findByRole('textbox', { name: /^Chapter title/ }),
     ).toBeVisible();
     expect(
       screen.getByRole('button', { name: 'Create memories only' }),
@@ -828,7 +828,7 @@ describe('bulk photo import workspace', () => {
     await titleCurrentStory(user, 'Lanterns after rain');
     await user.click(screen.getByRole('button', { name: 'Shape the chapter' }));
     await user.click(
-      screen.getByRole('button', {
+      await screen.findByRole('button', {
         name: 'Use Lanterns after rain as chapter cover',
       }),
     );
@@ -909,7 +909,7 @@ describe('bulk photo import workspace', () => {
     await user.click(screen.getByRole('button', { name: 'Next memory' }));
     await titleCurrentStory(user, 'The road home');
     await user.click(screen.getByRole('button', { name: 'Shape the chapter' }));
-    const memoriesOnly = screen.getByRole('button', {
+    const memoriesOnly = await screen.findByRole('button', {
       name: 'Create memories only',
     });
 
@@ -952,7 +952,7 @@ describe('bulk photo import workspace', () => {
     await titleCurrentStory(user, 'The road home');
     await user.click(screen.getByRole('button', { name: 'Shape the chapter' }));
     await user.type(
-      screen.getByRole('textbox', { name: /^Chapter title/ }),
+      await screen.findByRole('textbox', { name: /^Chapter title/ }),
       'Two roads north',
     );
     const createChapter = screen.getByRole('button', {
