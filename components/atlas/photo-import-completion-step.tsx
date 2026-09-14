@@ -7,6 +7,12 @@ import AtlasMap from './atlas-map-loader';
 import type { ImportCompletion } from './photo-import-types';
 import styles from './photo-import.module.css';
 
+function chapterSuggestionHref(entryIds: string[]) {
+  const params = new URLSearchParams({ source: 'import' });
+  entryIds.forEach((entryId) => params.append('memory', entryId));
+  return `/dashboard/chapters/new?${params.toString()}`;
+}
+
 export function PhotoImportCompletionStep({
   completion,
   mapEntries,
@@ -18,6 +24,11 @@ export function PhotoImportCompletionStep({
   initialView: AtlasView;
   onRestart: () => void;
 }) {
+  const chapterId = completion?.chapterId ?? null;
+  const entryIds = completion?.entryIds ?? [];
+  const firstEntryId = entryIds[0] ?? null;
+  const canShapeJourney = !chapterId && entryIds.length > 1;
+
   return (
     <div className={styles.completion}>
       <div className={styles.completionMap} aria-hidden="true" inert>
@@ -42,25 +53,46 @@ export function PhotoImportCompletionStep({
       <section>
         <p className="section-kicker">Journey preserved</p>
         <h2>
-          {completion?.chapterId
+          {chapterId
             ? 'Your chapter is ready.'
-            : 'Your atlas has a new memory.'}
+            : entryIds.length === 1
+              ? 'Your atlas has a new memory.'
+              : 'Your atlas has new memories.'}
         </h2>
         <p>
           The original photographs remain yours. Field Atlas has kept the
           places, dates, and words you approved.
         </p>
         <div className={styles.completionActions}>
-          {completion?.chapterId ? (
-            <Link href={`/dashboard/chapters/${completion.chapterId}`}>
-              Open chapter <ArrowRightIcon aria-hidden="true" />
+          {chapterId ? (
+            <Link
+              href={`/dashboard?view=journeys&journey=${encodeURIComponent(chapterId)}`}
+            >
+              View journey on Atlas <ArrowRightIcon aria-hidden="true" />
             </Link>
-          ) : completion?.entryIds[0] ? (
-            <Link href={`/dashboard/card/${completion.entryIds[0]}`}>
+          ) : canShapeJourney ? (
+            <Link href={chapterSuggestionHref(entryIds)}>
+              Turn these memories into a journey
+              <ArrowRightIcon aria-hidden="true" />
+            </Link>
+          ) : firstEntryId ? (
+            <Link href={`/dashboard/card/${encodeURIComponent(firstEntryId)}`}>
               View keepsake <ArrowRightIcon aria-hidden="true" />
             </Link>
           ) : null}
-          <Link href="/dashboard">View on the Atlas</Link>
+          {chapterId ? (
+            <Link href={`/dashboard/chapters/${encodeURIComponent(chapterId)}`}>
+              Read chapter
+            </Link>
+          ) : firstEntryId ? (
+            <Link
+              href={`/dashboard?memory=${encodeURIComponent(firstEntryId)}`}
+            >
+              View on the Atlas
+            </Link>
+          ) : (
+            <Link href="/dashboard">View on the Atlas</Link>
+          )}
           <button type="button" onClick={onRestart}>
             Upload another journey
           </button>

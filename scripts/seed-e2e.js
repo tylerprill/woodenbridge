@@ -4,10 +4,22 @@ const path = require('node:path');
 
 const E2E_FIXTURE = Object.freeze({
   chapterId: '6a67afcf-768f-4fe4-8c62-41b58a19840d',
+  chapterIds: [
+    '6a67afcf-768f-4fe4-8c62-41b58a19840d',
+    '7b78c0ed-8790-4fb7-9d73-52c72f91540e',
+  ],
   clientRequestId: '98bfaf78-21bc-4df8-94e6-707433c0e9fe',
   databaseName: 'field_atlas_e2e',
   email: 'field-atlas-e2e@example.test',
   entryId: '0a934c64-997f-43c2-88a3-8b102d517781',
+  entryIds: [
+    '0a934c64-997f-43c2-88a3-8b102d517781',
+    'b19d274a-71a9-4c75-a02e-3f66bb943102',
+    'c2ae385b-82ba-4d86-b13f-4a77cc054213',
+    'd3bf496c-93cb-4e97-8240-5b88dd165324',
+  ],
+  overlapChapterId: '7b78c0ed-8790-4fb7-9d73-52c72f91540e',
+  overlapShareId: 'b6752ec2-f201-4ee4-a044-36d25e73f436',
   shareId: 'a5641db1-e1f0-4dd1-9876-21444a0cc325',
   userId: 'f2b7d9e0-44d8-4a8d-9b44-0c2e1f47a513',
 });
@@ -290,8 +302,65 @@ async function seedE2EDatabase(environment = process.env) {
       [E2E_FIXTURE.userId],
     );
 
-    await client.query(
-      `
+    const atlasEntries = [
+      {
+        id: E2E_FIXTURE.entryIds[0],
+        clientRequestId: E2E_FIXTURE.clientRequestId,
+        title: 'Morning along the Detroit RiverWalk',
+        description:
+          'Early light on the river, with the city waking up behind the trail.',
+        placeLabel: 'Detroit RiverWalk, Detroit, Michigan',
+        visitedOn: '2025-09-14',
+        longitude: -83.0236,
+        latitude: 42.3336,
+        placeName: 'Detroit RiverWalk',
+        locality: 'Detroit',
+        region: 'Michigan',
+      },
+      {
+        id: E2E_FIXTURE.entryIds[1],
+        clientRequestId: 'a4c057ae-2ef9-4b5c-9501-4f76c6119301',
+        title: 'Bikes beneath the Belle Isle trees',
+        description: 'A slow lap through the island shade beside the river.',
+        placeLabel: 'Belle Isle, Detroit, Michigan',
+        visitedOn: '2025-09-15',
+        longitude: -82.9857,
+        latitude: 42.3403,
+        placeName: 'Belle Isle',
+        locality: 'Detroit',
+        region: 'Michigan',
+      },
+      {
+        id: E2E_FIXTURE.entryIds[2],
+        clientRequestId: 'b5d168bf-3f0a-4c6d-a612-5087d7220412',
+        title: 'Rain settling over Main Street',
+        description: 'Storefront lights reflected across the wet pavement.',
+        placeLabel: 'Main Street, Ann Arbor, Michigan',
+        visitedOn: '2025-09-17',
+        longitude: -83.7487,
+        latitude: 42.2796,
+        placeName: 'Main Street',
+        locality: 'Ann Arbor',
+        region: 'Michigan',
+      },
+      {
+        id: E2E_FIXTURE.entryIds[3],
+        clientRequestId: 'c6e279c0-401b-4d7e-b723-6198e8331523',
+        title: 'Dunes above Lake Michigan',
+        description: 'Wind drew new lines over the bluff before sunset.',
+        placeLabel: 'Sleeping Bear Dunes, Michigan',
+        visitedOn: '2025-09-20',
+        longitude: -86.065,
+        latitude: 44.8826,
+        placeName: 'Sleeping Bear Dunes',
+        locality: null,
+        region: 'Michigan',
+      },
+    ];
+
+    for (const entry of atlasEntries) {
+      await client.query(
+        `
         INSERT INTO atlas_entries (
           id,
           user_id,
@@ -316,28 +385,62 @@ async function seedE2EDatabase(environment = process.env) {
           $1,
           $2,
           $3,
-          'Morning along the Detroit RiverWalk',
-          'Early light on the river, with the city waking up behind the trail.',
-          'Detroit RiverWalk, Detroit, Michigan',
-          DATE '2025-09-14',
+          $4,
+          $5,
+          $6,
+          $7::date,
           'saved',
           'visited',
-          ST_SetSRID(ST_MakePoint(-83.0236, 42.3336), 4326)::geography,
+          ST_SetSRID(ST_MakePoint($8, $9), 4326)::geography,
           1,
-          'Detroit RiverWalk',
-          'Detroit',
-          'Michigan',
+          $10,
+          $11,
+          $12,
           'United States',
           'US',
           'e2e-fixture',
           TIMESTAMPTZ '2025-09-14 12:00:00+00'
         )
-      `,
-      [E2E_FIXTURE.entryId, E2E_FIXTURE.userId, E2E_FIXTURE.clientRequestId],
-    );
+        `,
+        [
+          entry.id,
+          E2E_FIXTURE.userId,
+          entry.clientRequestId,
+          entry.title,
+          entry.description,
+          entry.placeLabel,
+          entry.visitedOn,
+          entry.longitude,
+          entry.latitude,
+          entry.placeName,
+          entry.locality,
+          entry.region,
+        ],
+      );
+    }
 
-    await client.query(
-      `
+    const atlasChapters = [
+      {
+        id: E2E_FIXTURE.chapterId,
+        title: 'Michigan, mile by mile',
+        introduction:
+          'Four remembered stops from the Detroit River to the Lake Michigan dunes.',
+        shareId: E2E_FIXTURE.shareId,
+        entryIds: E2E_FIXTURE.entryIds,
+      },
+      {
+        id: E2E_FIXTURE.overlapChapterId,
+        title: 'City streets and river light',
+        introduction:
+          'A shorter path through three memories shared with the longer Michigan journey.',
+        shareId: E2E_FIXTURE.overlapShareId,
+        entryIds: E2E_FIXTURE.entryIds.slice(0, 3),
+      },
+    ];
+
+    for (const chapter of atlasChapters) {
+      await client.query(
+        `
         INSERT INTO atlas_chapters (
           id,
           user_id,
@@ -353,32 +456,49 @@ async function seedE2EDatabase(environment = process.env) {
         VALUES (
           $1,
           $2,
-          'A morning on the Detroit River',
-          'One remembered walk along the water, saved as a small field note.',
+          $3,
+          $4,
           NULL,
           'private',
-          $3,
+          $5,
           TRUE,
           'approximate',
           1
         )
-      `,
-      [E2E_FIXTURE.chapterId, E2E_FIXTURE.userId, E2E_FIXTURE.shareId],
-    );
+        `,
+        [
+          chapter.id,
+          E2E_FIXTURE.userId,
+          chapter.title,
+          chapter.introduction,
+          chapter.shareId,
+        ],
+      );
 
-    await client.query(
-      `
-        INSERT INTO atlas_chapter_entries (
-          chapter_id,
-          entry_id,
-          user_id,
-          position,
-          transition_note
-        )
-        VALUES ($1, $2, $3, 0, '')
-      `,
-      [E2E_FIXTURE.chapterId, E2E_FIXTURE.entryId, E2E_FIXTURE.userId],
-    );
+      for (const [position, entryId] of chapter.entryIds.entries()) {
+        await client.query(
+          `
+            INSERT INTO atlas_chapter_entries (
+              chapter_id,
+              entry_id,
+              user_id,
+              position,
+              transition_note
+            )
+            VALUES ($1, $2, $3, $4, $5)
+          `,
+          [
+            chapter.id,
+            entryId,
+            E2E_FIXTURE.userId,
+            position,
+            position === 0
+              ? ''
+              : 'The road carried the story toward the next remembered place.',
+          ],
+        );
+      }
+    }
 
     await client.query('COMMIT');
     if (mediaStorageConfiguration) {

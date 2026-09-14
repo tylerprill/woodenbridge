@@ -157,6 +157,10 @@ describe('shared Chapter reader', () => {
       'href',
       '/dashboard/chapters/chapter-1/edit',
     );
+    expect(screen.getByRole('link', { name: 'View on Atlas' })).toHaveAttribute(
+      'href',
+      '/dashboard?view=journeys&journey=chapter-1',
+    );
     expect(
       screen.getByRole('link', { name: 'Read your chapter' }),
     ).toHaveAttribute('href', '#chapter-story');
@@ -195,6 +199,14 @@ describe('shared Chapter reader', () => {
     ).toHaveAttribute('href', '#chapter-route');
     expect(
       screen.queryByRole('region', { name: 'Chapter introduction' }),
+    ).not.toBeInTheDocument();
+  });
+
+  it('does not expose the private Atlas route from the shared reader', () => {
+    render(<ChapterReader chapter={chapter} mode="shared" />);
+
+    expect(
+      screen.queryByRole('link', { name: 'View on Atlas' }),
     ).not.toBeInTheDocument();
   });
 });

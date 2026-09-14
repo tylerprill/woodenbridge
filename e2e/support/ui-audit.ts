@@ -94,6 +94,14 @@ export function monitorBrowserIssues(page: Page): BrowserIssueMonitor {
           failure.errorText,
         ),
       );
+    const expectedReplacedImageCancellation =
+      request.resourceType() === 'image' &&
+      Boolean(
+        failure &&
+        /ERR_ABORTED|NS_BINDING_ABORTED|cancel(?:led|ed)/i.test(
+          failure.errorText,
+        ),
+      );
     const currentUrl = new URL(page.url());
     const expectedCompletedServerActionCancellation =
       request.method() === 'POST' &&
@@ -114,6 +122,7 @@ export function monitorBrowserIssues(page: Page): BrowserIssueMonitor {
       failure &&
       !expectedNavigationCancellation &&
       !expectedNextPrefetchCancellation &&
+      !expectedReplacedImageCancellation &&
       !expectedCompletedServerActionCancellation
     ) {
       issues.push({
@@ -363,6 +372,11 @@ export async function auditCurrentPage(
     };
     const clippedControls = interactive
       .filter((element) => {
+        // Map markers are intentionally translated outside the viewport as the
+        // camera focuses or pans; MapLibre keeps their buttons mounted so they
+        // can return without a DOM rebuild. They are map content, not clipped
+        // page controls.
+        if (element.matches('.maplibregl-marker')) return false;
         if (insideHorizontalScroller(element)) return false;
         const rect = effectiveRect(element);
         return rect.left < -1 || rect.right > window.innerWidth + 1;

@@ -12,6 +12,7 @@ import {
   toAtlasEntry,
   toAtlasMedia,
 } from '@/app/lib/atlas/rows';
+import { atlasEntryIdSchema } from '@/app/lib/atlas/validation';
 import type {
   AtlasChapter,
   AtlasChapterEntry,
@@ -19,7 +20,7 @@ import type {
   AtlasChapterSummary,
 } from './definitions';
 import { toSharedAtlasChapter } from './shared';
-import { atlasChapterIdSchema } from './validation';
+import { CHAPTER_MAX_MEMORIES, atlasChapterIdSchema } from './validation';
 
 type ChapterRow = {
   id: string;
@@ -389,10 +390,20 @@ export const getSharedAtlasChapter = cache(async (shareId: string) => {
 
 export async function getAtlasChapterEditorData(
   chapterId?: string,
+  requestedEntryIds: string[] = [],
 ): Promise<AtlasChapterEditorData> {
   const session = await requireVerifiedSession();
   const userId = session.user.id;
   const parsedId = chapterId ? atlasChapterIdSchema.safeParse(chapterId) : null;
+  const requestedEditorEntryIds = Array.from(
+    new Set(
+      requestedEntryIds.flatMap((entryId) => {
+        const parsed = atlasEntryIdSchema.safeParse(entryId);
+        return parsed.success ? [parsed.data] : [];
+      }),
+    ),
+  ).slice(0, CHAPTER_MAX_MEMORIES);
+  const requestedEditorEntryIdsJson = JSON.stringify(requestedEditorEntryIds);
 
   if (chapterId && !parsedId?.success) {
     return { chapter: null, availableEntries: [] };
@@ -467,6 +478,12 @@ export async function getAtlasChapterEditorData(
         WHERE chapter.id = ${editorChapterId}::uuid
           AND chapter.user_id = ${userId}
           AND chapter_entry.user_id = ${userId}
+      ),
+      requested_entries AS (
+        SELECT value::uuid AS id
+        FROM JSONB_ARRAY_ELEMENTS_TEXT(
+          ${requestedEditorEntryIdsJson}::jsonb
+        ) AS requested(value)
       )
       SELECT
         entry.id,
@@ -498,6 +515,7 @@ export async function getAtlasChapterEditorData(
         AND (
           entry.id IN (SELECT id FROM recent_entries)
           OR entry.id IN (SELECT id FROM selected_entries)
+          OR entry.id IN (SELECT id FROM requested_entries)
         )
       ORDER BY entry.visited_on DESC NULLS LAST, entry.updated_at DESC
     `,

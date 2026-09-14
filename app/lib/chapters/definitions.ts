@@ -3,6 +3,7 @@ import type {
   AtlasMedia,
   JourneyState,
 } from '@/app/lib/atlas/definitions';
+import type { AtlasJourneySuggestionSource } from '@/app/lib/atlas/journeys/definitions';
 
 export const CHAPTER_VISIBILITIES = ['private', 'shared'] as const;
 export type ChapterVisibility = (typeof CHAPTER_VISIBILITIES)[number];
@@ -93,6 +94,11 @@ export type AtlasChapterMemoryInput = {
 };
 
 export type AtlasChapterInput = {
+  clientRequestId?: string;
+  journeySuggestion?: {
+    key: string;
+    source: AtlasJourneySuggestionSource;
+  };
   title: string;
   introduction: string;
   memories: AtlasChapterMemoryInput[];
@@ -102,7 +108,10 @@ export type AtlasChapterInput = {
   shareLocationPrecision: ChapterLocationPrecision;
 };
 
-export type AtlasChapterUpdateInput = AtlasChapterInput & {
+export type AtlasChapterUpdateInput = Omit<
+  AtlasChapterInput,
+  'clientRequestId' | 'journeySuggestion'
+> & {
   id: string;
   version: number;
 };

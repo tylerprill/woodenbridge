@@ -103,6 +103,48 @@ describe('chapter creation and sharing UI', () => {
     );
   });
 
+  it('keeps a deep-linked Atlas selection in order and returns to Journey Lens', async () => {
+    const user = userEvent.setup();
+    jest.mocked(createAtlasChapterAction).mockResolvedValue({
+      ok: true,
+      data: { id: 'chapter-1', version: 1, shareId: 'share-1' },
+    });
+
+    render(
+      <ChapterEditor
+        chapter={null}
+        availableEntries={memories}
+        initialMemoryIds={['memory-2', 'memory-1']}
+        source="atlas"
+      />,
+    );
+
+    expect(screen.getByRole('link', { name: 'Back to Atlas' })).toHaveAttribute(
+      'href',
+      '/dashboard?view=journeys',
+    );
+    expect(screen.getByText(/memories selected/)).toHaveTextContent(
+      /02\s*memories selected/,
+    );
+    await user.type(screen.getByLabelText('Chapter title'), 'Across the map');
+    await user.click(screen.getByRole('button', { name: /Arrange & share/i }));
+    await user.click(screen.getByRole('button', { name: 'Create chapter' }));
+
+    await waitFor(() =>
+      expect(createAtlasChapterAction).toHaveBeenCalledWith(
+        expect.objectContaining({
+          memories: [
+            { entryId: 'memory-2', transitionNote: '' },
+            { entryId: 'memory-1', transitionNote: '' },
+          ],
+        }),
+      ),
+    );
+    expect(mockPush).toHaveBeenCalledWith(
+      '/dashboard?view=journeys&journey=chapter-1',
+    );
+  });
+
   it('copies an unlisted link with accurate feedback', async () => {
     const user = userEvent.setup();
     const writeText = jest.fn().mockResolvedValue(undefined);

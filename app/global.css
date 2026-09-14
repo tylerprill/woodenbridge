@@ -2878,6 +2878,8 @@ body {
 }
 
 .dashboard-main {
+  container-name: dashboard-content;
+  container-type: inline-size;
   min-width: 0;
   padding: clamp(1.5rem, 4vw, 4.5rem);
 }
@@ -5452,6 +5454,136 @@ input[type='number']::-webkit-outer-spin-button {
   .dashboard-main:has(> .atlas-workspace-root) > .atlas-workspace-root,
   .dashboard-main:has(> .atlas-route-loading) > .atlas-route-loading {
     height: 100%;
+    min-height: 0;
+  }
+
+  .dashboard-content-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .collection-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+/* Keep enough inline space for Atlas overlays before switching from the
+   compact dashboard rail to the full sidebar. Public-page breakpoints stay
+   independent so the landing-page composition does not inherit this choice. */
+@media (min-width: 901px) and (max-width: 1240px) {
+  .dashboard-shell {
+    display: block;
+  }
+
+  .dashboard-sidebar {
+    position: sticky;
+    height: auto;
+    padding: 0.75rem;
+  }
+
+  .dashboard-sidebar-inner {
+    display: grid;
+    grid-template-columns: auto minmax(0, 1fr) auto;
+    align-items: center;
+    height: auto;
+    padding: 0.72rem 0.9rem;
+    border-radius: 1.25rem;
+    gap: 1rem;
+  }
+
+  .dashboard-nav {
+    min-width: 0;
+    margin-top: 0;
+    overflow-x: auto;
+    overscroll-behavior-inline: contain;
+    scrollbar-width: none;
+  }
+
+  .dashboard-nav::-webkit-scrollbar {
+    display: none;
+  }
+
+  .dashboard-nav-sections {
+    display: flex;
+    width: max-content;
+    min-width: 100%;
+    align-items: center;
+    justify-content: flex-start;
+    gap: 0.25rem;
+  }
+
+  .dashboard-nav-section {
+    display: flex;
+    flex: 0 0 auto;
+    align-items: center;
+  }
+
+  .dashboard-nav-section + .dashboard-nav-section {
+    margin-left: 0.15rem;
+    padding-top: 0;
+    padding-left: 0.4rem;
+    border-top: 0;
+    border-left: 1px solid rgba(245, 242, 233, 0.13);
+  }
+
+  .dashboard-nav-section-label {
+    display: none;
+  }
+
+  .dashboard-nav-links {
+    display: flex;
+    justify-content: flex-start;
+    margin-top: 0;
+  }
+
+  .dashboard-nav-link {
+    min-width: 2.75rem;
+    min-height: 2.75rem;
+    justify-content: center;
+    padding-inline: 0.62rem;
+  }
+
+  .dashboard-brand .brand-name,
+  .dashboard-nav-link span {
+    display: none;
+  }
+
+  .dashboard-nav-link:hover,
+  .dashboard-nav-link:focus-visible {
+    transform: translateY(-1px);
+  }
+
+  .dashboard-account {
+    margin-top: 0;
+    padding: 0;
+    border: 0;
+    background: transparent;
+  }
+
+  .dashboard-account button {
+    width: 2.7rem;
+    height: 2.7rem;
+  }
+
+  .dashboard-account-copy,
+  .dashboard-avatar {
+    display: none;
+  }
+
+  .dashboard-main {
+    padding: clamp(1.25rem, 4vw, 2.5rem);
+  }
+
+  .dashboard-main:has(> .atlas-workspace-root),
+  .dashboard-main:has(> .atlas-route-loading) {
+    height: calc(100vh - 5.3rem);
+    height: calc(100svh - 5.3rem);
+    padding: 0 0.75rem 0.75rem;
+  }
+
+  .dashboard-main:has(> .atlas-workspace-root) > .atlas-workspace-root,
+  .dashboard-main:has(> .atlas-route-loading) > .atlas-route-loading {
+    height: 100%;
+    min-height: 0;
   }
 
   .dashboard-content-grid {

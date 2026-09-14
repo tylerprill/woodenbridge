@@ -1,6 +1,7 @@
 import {
   getAtlasFitPadding,
   getAtlasFocusPadding,
+  getAtlasJourneyFocusPadding,
 } from '@/components/atlas/atlas-map-camera';
 
 describe('Atlas map camera padding', () => {
@@ -54,6 +55,33 @@ describe('Atlas map camera padding', () => {
       right: 360,
       bottom: 80,
       left: 80,
+    });
+  });
+
+  it('preserves room for the left Journey panel when focusing a stop', () => {
+    expect(getAtlasJourneyFocusPadding(1000, 752)).toEqual({
+      top: 90,
+      right: 64,
+      bottom: 80,
+      left: 538,
+    });
+  });
+
+  it('preserves room for the compact Journey bottom sheet', () => {
+    expect(getAtlasJourneyFocusPadding(390, 756)).toEqual({
+      top: 45,
+      right: 47,
+      bottom: 484,
+      left: 47,
+    });
+  });
+
+  it('preserves room for the Journey rail in short landscape', () => {
+    expect(getAtlasJourneyFocusPadding(611, 412)).toEqual({
+      top: 90,
+      right: 386,
+      bottom: 80,
+      left: 48,
     });
   });
 

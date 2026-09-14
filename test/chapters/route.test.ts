@@ -1,6 +1,7 @@
 import {
   createChapterMarkerOffsets,
   createGentleChapterRoute,
+  createGentleChapterRouteSegments,
   unwrapChapterCoordinates,
 } from '@/app/lib/chapters/route-geometry';
 
@@ -105,5 +106,38 @@ describe('chapter route geometry', () => {
       [179, 10],
       [181, 11],
     ]);
+  });
+
+  it('preserves route legs as addressable playback segments', () => {
+    const segments = createGentleChapterRouteSegments([
+      { longitude: -84, latitude: 43 },
+      { longitude: -83, latitude: 43 },
+      { longitude: -82.5, latitude: 42.4 },
+    ]);
+
+    expect(segments).toHaveLength(2);
+    expect(segments[0]).toMatchObject({ startIndex: 0, endIndex: 1 });
+    expect(segments[1]).toMatchObject({ startIndex: 1, endIndex: 2 });
+    expect(segments[0].coordinates[0]).toEqual([-84, 43]);
+    expect(segments[0].coordinates.at(-1)).toEqual([-83, 43]);
+    expect(segments[1].coordinates[0]).toEqual([-83, 43]);
+    expect(segments[1].coordinates.at(-1)).toEqual([-82.5, 42.4]);
+  });
+
+  it('returns no playback segments until a route has two stops', () => {
+    expect(createGentleChapterRouteSegments([])).toEqual([]);
+    expect(
+      createGentleChapterRouteSegments([{ longitude: -83.6, latitude: 43.1 }]),
+    ).toEqual([]);
+  });
+
+  it('keeps playback segments unwrapped across the date line', () => {
+    const segments = createGentleChapterRouteSegments([
+      { longitude: 179, latitude: 10 },
+      { longitude: -179, latitude: 11 },
+    ]);
+
+    expect(segments[0].coordinates[0]).toEqual([179, 10]);
+    expect(segments[0].coordinates.at(-1)).toEqual([181, 11]);
   });
 });
