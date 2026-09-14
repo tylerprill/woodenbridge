@@ -2,6 +2,7 @@ import {
   ArrowLeftIcon,
   ArrowRightIcon,
   CalendarDaysIcon,
+  GlobeAltIcon,
   MapPinIcon,
   PencilIcon,
 } from '@heroicons/react/24/outline';
@@ -80,6 +81,12 @@ export function ChapterReader({
         </Link>
         {mode === 'owner' ? (
           <div className={styles.chapterDetailActions}>
+            <Link
+              href={`/dashboard?view=journeys&journey=${encodeURIComponent(chapter.id)}`}
+            >
+              <GlobeAltIcon aria-hidden="true" />
+              View on Atlas
+            </Link>
             <ChapterShareControl
               chapterId={chapter.id}
               chapterTitle={chapter.title}

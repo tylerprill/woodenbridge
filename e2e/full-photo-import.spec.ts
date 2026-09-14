@@ -177,16 +177,16 @@ async function cleanupFullImportFixtures() {
         [userId],
       );
       await client.query(
-        'DELETE FROM atlas_chapters WHERE user_id = $1 AND id <> $2',
-        [userId, E2E_FIXTURE.chapterId],
+        'DELETE FROM atlas_chapters WHERE user_id = $1 AND NOT (id = ANY($2::uuid[]))',
+        [userId, E2E_FIXTURE.chapterIds],
       );
       await client.query(
         'DELETE FROM atlas_import_batches WHERE user_id = $1',
         [userId],
       );
       await client.query(
-        'DELETE FROM atlas_entries WHERE user_id = $1 AND id <> $2',
-        [userId, E2E_FIXTURE.entryId],
+        'DELETE FROM atlas_entries WHERE user_id = $1 AND NOT (id = ANY($2::uuid[]))',
+        [userId, E2E_FIXTURE.entryIds],
       );
       await client.query('COMMIT');
     } catch (error) {
@@ -796,7 +796,10 @@ test('imports a private photo chapter, recovers a lost response, and cancels a s
     readySelector: '[data-map-state="ready"]',
   });
 
-  const openChapter = page.getByRole('link', { name: 'Open chapter' });
+  const openChapter = page.getByRole('link', {
+    name: 'Read chapter',
+    exact: true,
+  });
   const chapterHref = await openChapter.getAttribute('href');
   expect(chapterHref).toBe(`/dashboard/chapters/${persistedChapter.id}`);
   await openChapter.click();

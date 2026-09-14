@@ -8,23 +8,43 @@ import type {
   Map as MapLibreMap,
   MapLayerMouseEvent,
   MapMouseEvent,
+  Marker,
 } from 'maplibre-gl';
 import 'maplibre-gl/dist/maplibre-gl.css';
 
 import type { AtlasEntry, AtlasView } from '@/app/lib/atlas/definitions';
+import type { AtlasJourneySummary } from '@/app/lib/atlas/journeys/definitions';
 import {
   formatAtlasDate,
   getAtlasPlaceContextLabel,
 } from '@/app/lib/atlas/place';
+import {
+  createChapterMarkerOffsets,
+  createGentleChapterRoute,
+  unwrapChapterCoordinates,
+} from '@/app/lib/chapters/route-geometry';
 import { sanitizeOpenFreeMapStyle } from '@/app/lib/maps/openfreemap-style';
+import {
+  ATLAS_JOURNEY_INTERACTIVE_LAYERS,
+  ATLAS_JOURNEY_ROUTE_HIT_LAYER,
+  addAtlasJourneyLayers,
+  journeyIdsFromRenderedFeatures,
+  setAtlasJourneyLayerVisibility,
+  updateAtlasJourneySources,
+} from './atlas-journey-layers';
 import {
   ATLAS_CLUSTER_LAYER,
   ATLAS_PIN_LAYER,
   ATLAS_SOURCE_ID,
   addAtlasLayers,
+  setAtlasLayerVisibility,
   updateAtlasSource,
 } from './atlas-layers';
-import { getAtlasFitPadding, getAtlasFocusPadding } from './atlas-map-camera';
+import {
+  getAtlasFitPadding,
+  getAtlasFocusPadding,
+  getAtlasJourneyFocusPadding,
+} from './atlas-map-camera';
 import styles from './atlas.module.css';
 
 type FocusRequest = {
@@ -46,7 +66,17 @@ type AtlasTooltip =
       x: number;
       y: number;
       position: 'above' | 'below';
+    }
+  | {
+      kind: 'journey';
+      journeyId: string;
+      overlapCount: number;
+      x: number;
+      y: number;
+      position: 'above' | 'below';
     };
+
+export type AtlasMapMode = 'places' | 'journeys';
 
 type AtlasMapProps = {
   entries: AtlasEntry[];
@@ -59,10 +89,21 @@ type AtlasMapProps = {
   onSelect: (id: string) => void;
   onPlace: (coordinates: { latitude: number; longitude: number }) => void;
   onViewChange: (view: AtlasView) => void;
+  mode?: AtlasMapMode;
+  journeys?: AtlasJourneySummary[];
+  selectedJourneyId?: string | null;
+  selectedJourneyStopId?: string | null;
+  journeyFitRequest?: number;
+  journeyPlaybackIndex?: number | null;
+  builderSelectedEntryIds?: string[];
+  onJourneySelect?: (id: string) => void;
+  onJourneyOverlapSelect?: (ids: string[]) => void;
+  onJourneyStopSelect?: (entryId: string) => void;
 };
 
 const DEFAULT_STYLE = 'https://tiles.openfreemap.org/styles/positron';
 const MAP_LOAD_TIMEOUT_MS = 15_000;
+const EMPTY_MAP_PADDING = { top: 0, right: 0, bottom: 0, left: 0 } as const;
 
 maplibregl.setWorkerUrl('/maplibre/maplibre-gl-worker.mjs');
 
@@ -80,6 +121,124 @@ function mapDataKey(entries: AtlasEntry[]) {
       entry.journeyState,
     ]),
   );
+}
+
+function journeyMapDataKey(
+  journeys: AtlasJourneySummary[],
+  selectedJourneyId: string | null,
+  hoveredJourneyId: string | null,
+  journeyPlaybackIndex: number | null,
+) {
+  return JSON.stringify([
+    selectedJourneyId,
+    hoveredJourneyId,
+    journeyPlaybackIndex,
+    journeys.map((journey) => [
+      journey.id,
+      journey.title,
+      journey.drawable,
+      journey.stops.map((stop) => [
+        stop.entryId,
+        stop.position,
+        stop.latitude,
+        stop.longitude,
+        stop.title,
+      ]),
+    ]),
+  ]);
+}
+
+function syncJourneyMarkerState(
+  markers: Marker[],
+  journey: AtlasJourneySummary,
+  selectedStopId: string | null,
+  playbackIndex: number | null,
+) {
+  const selectedStopIndex = selectedStopId
+    ? journey.stops.findIndex((stop) => stop.entryId === selectedStopId)
+    : -1;
+  const currentIndex =
+    selectedStopIndex >= 0 ? selectedStopIndex : playbackIndex;
+
+  markers.forEach((marker, index) => {
+    const element = marker.getElement();
+    element.dataset.current = currentIndex === index ? 'true' : 'false';
+    element.dataset.complete =
+      playbackIndex != null && index < playbackIndex ? 'true' : 'false';
+    if (currentIndex === index) {
+      element.setAttribute('aria-current', 'step');
+    } else {
+      element.removeAttribute('aria-current');
+    }
+  });
+}
+
+function mapAnimationDuration(duration: number) {
+  return typeof window.matchMedia === 'function' &&
+    window.matchMedia('(prefers-reduced-motion: reduce)').matches
+    ? 0
+    : duration;
+}
+
+function prepareMapForBoundsFit(map: MapLibreMap) {
+  map.stop();
+  map.resize();
+
+  const container = map.getContainer();
+  const width = container.clientWidth;
+  const height = container.clientHeight;
+  if (width <= 2 || height <= 2) return null;
+
+  // Point-focus transitions retain their padding in MapLibre's transform.
+  // Bounds fitting adds its own one-shot padding to that retained value, so
+  // clear the global inset first to avoid double-counting overlay space.
+  map.setPadding(EMPTY_MAP_PADDING);
+  return { width, height };
+}
+
+function fitJourneyStops(
+  map: MapLibreMap,
+  journeys: AtlasJourneySummary[],
+  selectedJourneyId: string | null,
+) {
+  const selectedJourney = selectedJourneyId
+    ? journeys.find((journey) => journey.id === selectedJourneyId)
+    : null;
+  const stops = selectedJourney
+    ? selectedJourney.stops
+    : journeys
+        .filter((journey) => journey.drawable)
+        .flatMap((journey) => journey.stops);
+  if (!stops.length) return;
+
+  const duration = mapAnimationDuration(950);
+  if (stops.length === 1) {
+    map.easeTo({
+      center: [stops[0].longitude, stops[0].latitude],
+      zoom: Math.max(map.getZoom(), 7),
+      duration,
+      essential: true,
+    });
+    return;
+  }
+
+  const bounds = new maplibregl.LngLatBounds();
+  const coordinates = selectedJourney
+    ? createGentleChapterRoute(selectedJourney.stops)
+    : stops.map((stop) => [stop.longitude, stop.latitude] as [number, number]);
+  coordinates.forEach((coordinate) => bounds.extend(coordinate));
+  try {
+    const canvas = prepareMapForBoundsFit(map);
+    if (!canvas) return;
+    map.fitBounds(bounds, {
+      padding: getAtlasJourneyFocusPadding(canvas.width, canvas.height),
+      maxZoom: 8.5,
+      duration,
+      essential: true,
+    });
+  } catch (error) {
+    console.error('Atlas journey camera fit failed:', error);
+  }
 }
 
 function fitEntries(map: MapLibreMap, entries: AtlasEntry[]) {
@@ -106,13 +265,11 @@ function fitEntries(map: MapLibreMap, entries: AtlasEntry[]) {
 
   const bounds = new maplibregl.LngLatBounds();
   entries.forEach((entry) => bounds.extend([entry.longitude, entry.latitude]));
-  const container = map.getContainer();
   try {
+    const canvas = prepareMapForBoundsFit(map);
+    if (!canvas) return;
     map.fitBounds(bounds, {
-      padding: getAtlasFitPadding(
-        container.clientWidth,
-        container.clientHeight,
-      ),
+      padding: getAtlasFitPadding(canvas.width, canvas.height),
       maxZoom: 8,
       duration: 1200,
       essential: true,
@@ -135,28 +292,80 @@ export default function AtlasMap({
   onSelect,
   onPlace,
   onViewChange,
+  mode = 'places',
+  journeys = [],
+  selectedJourneyId = null,
+  selectedJourneyStopId = null,
+  journeyFitRequest = 0,
+  journeyPlaybackIndex = null,
+  builderSelectedEntryIds = [],
+  onJourneySelect,
+  onJourneyOverlapSelect,
+  onJourneyStopSelect,
 }: AtlasMapProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const mapRef = useRef<MapLibreMap | null>(null);
   const initialViewRef = useRef(initialView);
   const entriesRef = useRef(entries);
+  const journeysRef = useRef(journeys);
+  const modeRef = useRef(mode);
   const placementRef = useRef(placementMode);
   const onSelectRef = useRef(onSelect);
   const onPlaceRef = useRef(onPlace);
   const onViewChangeRef = useRef(onViewChange);
+  const onJourneySelectRef = useRef(onJourneySelect);
+  const onJourneyOverlapSelectRef = useRef(onJourneyOverlapSelect);
+  const onJourneyStopSelectRef = useRef(onJourneyStopSelect);
   const selectedRef = useRef<string | null>(null);
+  const selectedJourneyRef = useRef<string | null>(selectedJourneyId);
+  const selectedJourneyStopRef = useRef<string | null>(selectedJourneyStopId);
+  const journeyPlaybackIndexRef = useRef<number | null>(journeyPlaybackIndex);
+  const builderSelectedRef = useRef(new Set<string>());
+  const journeyMarkersRef = useRef<Marker[]>([]);
   const hoveredFeatureRef = useRef<string | number | null>(null);
   const pointerFrameRef = useRef<number | null>(null);
   const [mapLoaded, setMapLoaded] = useState(false);
   const [mapError, setMapError] = useState(false);
   const [mapAttempt, setMapAttempt] = useState(0);
   const [tooltip, setTooltip] = useState<AtlasTooltip | null>(null);
+  const [hoveredJourneyId, setHoveredJourneyId] = useState<string | null>(null);
   const mapDataKeyValue = useMemo(() => mapDataKey(entries), [entries]);
+  const journeyMapDataKeyValue = useMemo(
+    () =>
+      journeyMapDataKey(
+        journeys,
+        selectedJourneyId,
+        hoveredJourneyId,
+        journeyPlaybackIndex,
+      ),
+    [hoveredJourneyId, journeyPlaybackIndex, journeys, selectedJourneyId],
+  );
   const renderedMapDataKeyRef = useRef<string | null>(null);
+  const renderedJourneyDataKeyRef = useRef<string | null>(null);
 
   useEffect(() => {
     entriesRef.current = entries;
   }, [entries]);
+
+  useEffect(() => {
+    journeysRef.current = journeys;
+  }, [journeys]);
+
+  useEffect(() => {
+    modeRef.current = mode;
+  }, [mode]);
+
+  useEffect(() => {
+    selectedJourneyRef.current = selectedJourneyId;
+  }, [selectedJourneyId]);
+
+  useEffect(() => {
+    selectedJourneyStopRef.current = selectedJourneyStopId;
+  }, [selectedJourneyStopId]);
+
+  useEffect(() => {
+    journeyPlaybackIndexRef.current = journeyPlaybackIndex;
+  }, [journeyPlaybackIndex]);
 
   useEffect(() => {
     placementRef.current = placementMode;
@@ -175,13 +384,26 @@ export default function AtlasMap({
   }, [onViewChange]);
 
   useEffect(() => {
+    onJourneySelectRef.current = onJourneySelect;
+  }, [onJourneySelect]);
+
+  useEffect(() => {
+    onJourneyOverlapSelectRef.current = onJourneyOverlapSelect;
+  }, [onJourneyOverlapSelect]);
+
+  useEffect(() => {
+    onJourneyStopSelectRef.current = onJourneyStopSelect;
+  }, [onJourneyStopSelect]);
+
+  useEffect(() => {
     if (!containerRef.current || mapRef.current) return;
 
     const container = containerRef.current;
     const startingView = initialViewRef.current;
     const compactRenderer =
-      typeof window.matchMedia === 'function' &&
-      window.matchMedia('(max-width: 760px), (pointer: coarse)').matches;
+      container.clientWidth <= 760 ||
+      (typeof window.matchMedia === 'function' &&
+        window.matchMedia('(pointer: coarse)').matches);
     let map: MapLibreMap;
     try {
       map = new maplibregl.Map({
@@ -254,7 +476,19 @@ export default function AtlasMap({
       scheduleResize();
       try {
         addAtlasLayers(map, entriesRef.current);
+        addAtlasJourneyLayers(map, journeysRef.current, {
+          selectedJourneyId: selectedJourneyRef.current,
+        });
+        const showingJourneys = modeRef.current === 'journeys';
+        setAtlasLayerVisibility(map, !showingJourneys);
+        setAtlasJourneyLayerVisibility(map, showingJourneys);
         renderedMapDataKeyRef.current = mapDataKey(entriesRef.current);
+        renderedJourneyDataKeyRef.current = journeyMapDataKey(
+          journeysRef.current,
+          selectedJourneyRef.current,
+          null,
+          null,
+        );
         setMapLoaded(true);
         setMapError(false);
       } catch (error) {
@@ -297,7 +531,7 @@ export default function AtlasMap({
     };
 
     const handleMapClick = (event: MapMouseEvent) => {
-      if (!placementRef.current) return;
+      if (modeRef.current !== 'places' || !placementRef.current) return;
       onPlaceRef.current({
         latitude: event.lngLat.lat,
         longitude: event.lngLat.lng,
@@ -305,7 +539,7 @@ export default function AtlasMap({
     };
 
     const handlePinClick = (event: MapLayerMouseEvent) => {
-      if (placementRef.current) return;
+      if (modeRef.current !== 'places' || placementRef.current) return;
       const id = event.features?.[0]?.properties?.id;
       if (typeof id === 'string') {
         setTooltip(null);
@@ -314,7 +548,7 @@ export default function AtlasMap({
     };
 
     const handleClusterClick = async (event: MapLayerMouseEvent) => {
-      if (placementRef.current) return;
+      if (modeRef.current !== 'places' || placementRef.current) return;
       const feature = event.features?.[0];
       const clusterId = feature?.properties?.cluster_id;
       const coordinates =
@@ -333,6 +567,33 @@ export default function AtlasMap({
         duration: 700,
         essential: true,
       });
+    };
+
+    const journeyIdsAtPoint = (event: MapLayerMouseEvent) => {
+      const radius = 12;
+      const features = map.queryRenderedFeatures(
+        [
+          [event.point.x - radius, event.point.y - radius],
+          [event.point.x + radius, event.point.y + radius],
+        ],
+        { layers: [...ATLAS_JOURNEY_INTERACTIVE_LAYERS] },
+      );
+      return journeyIdsFromRenderedFeatures(
+        features,
+        selectedJourneyRef.current,
+      );
+    };
+
+    const handleJourneyClick = (event: MapLayerMouseEvent) => {
+      if (modeRef.current !== 'journeys') return;
+      const ids = journeyIdsAtPoint(event);
+      if (!ids.length) return;
+      setTooltip(null);
+      if (ids.length > 1 && onJourneyOverlapSelectRef.current) {
+        onJourneyOverlapSelectRef.current(ids);
+        return;
+      }
+      onJourneySelectRef.current?.(ids[0]);
     };
 
     const setHoveredFeature = (id: string | number | null) => {
@@ -359,7 +620,7 @@ export default function AtlasMap({
     };
 
     const showPinTooltip = (event: MapLayerMouseEvent) => {
-      if (placementRef.current) return;
+      if (modeRef.current !== 'places' || placementRef.current) return;
       const feature = event.features?.[0];
       const entryId = feature?.properties?.id;
       if (typeof entryId !== 'string') return;
@@ -368,7 +629,7 @@ export default function AtlasMap({
     };
 
     const handlePinEnter = (event: MapLayerMouseEvent) => {
-      if (placementRef.current) return;
+      if (modeRef.current !== 'places' || placementRef.current) return;
       map.getCanvas().style.cursor = 'pointer';
       setHoveredFeature(event.features?.[0]?.id ?? null);
       showPinTooltip(event);
@@ -377,11 +638,12 @@ export default function AtlasMap({
     const handlePinLeave = () => {
       setHoveredFeature(null);
       setTooltip(null);
-      map.getCanvas().style.cursor = placementRef.current ? 'crosshair' : '';
+      map.getCanvas().style.cursor =
+        placementRef.current && modeRef.current === 'places' ? 'crosshair' : '';
     };
 
     const showClusterTooltip = (event: MapLayerMouseEvent) => {
-      if (placementRef.current) return;
+      if (modeRef.current !== 'places' || placementRef.current) return;
       const feature = event.features?.[0];
       const count = Number(feature?.properties?.point_count);
       if (!Number.isFinite(count)) return;
@@ -390,7 +652,7 @@ export default function AtlasMap({
     };
 
     const handleClusterEnter = (event: MapLayerMouseEvent) => {
-      if (placementRef.current) return;
+      if (modeRef.current !== 'places' || placementRef.current) return;
       map.getCanvas().style.cursor = 'pointer';
       setHoveredFeature(
         event.features?.[0]?.id ??
@@ -403,7 +665,35 @@ export default function AtlasMap({
     const handleClusterLeave = () => {
       setHoveredFeature(null);
       setTooltip(null);
-      map.getCanvas().style.cursor = placementRef.current ? 'crosshair' : '';
+      map.getCanvas().style.cursor =
+        placementRef.current && modeRef.current === 'places' ? 'crosshair' : '';
+    };
+
+    const showJourneyTooltip = (event: MapLayerMouseEvent) => {
+      if (modeRef.current !== 'journeys') return;
+      const ids = journeyIdsAtPoint(event);
+      const journeyId = ids[0];
+      if (!journeyId) return;
+      setHoveredJourneyId(journeyId);
+      setTooltip({
+        kind: 'journey',
+        journeyId,
+        overlapCount: ids.length,
+        ...tooltipPosition(event),
+      });
+    };
+
+    const handleJourneyEnter = (event: MapLayerMouseEvent) => {
+      if (modeRef.current !== 'journeys') return;
+      map.getCanvas().style.cursor = 'pointer';
+      showJourneyTooltip(event);
+    };
+
+    const handleJourneyLeave = () => {
+      setHoveredJourneyId(null);
+      setTooltip(null);
+      map.getCanvas().style.cursor =
+        placementRef.current && modeRef.current === 'places' ? 'crosshair' : '';
     };
 
     map.on('load', handleLoad);
@@ -418,6 +708,10 @@ export default function AtlasMap({
     map.on('mouseenter', ATLAS_CLUSTER_LAYER, handleClusterEnter);
     map.on('mousemove', ATLAS_CLUSTER_LAYER, showClusterTooltip);
     map.on('mouseleave', ATLAS_CLUSTER_LAYER, handleClusterLeave);
+    map.on('click', ATLAS_JOURNEY_ROUTE_HIT_LAYER, handleJourneyClick);
+    map.on('mouseenter', ATLAS_JOURNEY_ROUTE_HIT_LAYER, handleJourneyEnter);
+    map.on('mousemove', ATLAS_JOURNEY_ROUTE_HIT_LAYER, showJourneyTooltip);
+    map.on('mouseleave', ATLAS_JOURNEY_ROUTE_HIT_LAYER, handleJourneyLeave);
     map.on('movestart', () => setTooltip(null));
 
     const cleanupMap = () => {
@@ -429,6 +723,8 @@ export default function AtlasMap({
       if (resizeFrame !== null) cancelAnimationFrame(resizeFrame);
       if (pointerFrameRef.current !== null)
         cancelAnimationFrame(pointerFrameRef.current);
+      journeyMarkersRef.current.forEach((marker) => marker.remove());
+      journeyMarkersRef.current = [];
       map.remove();
       mapRef.current = null;
     };
@@ -459,6 +755,47 @@ export default function AtlasMap({
   useEffect(() => {
     const map = mapRef.current;
     if (!map || !mapLoaded) return;
+    if (renderedJourneyDataKeyRef.current === journeyMapDataKeyValue) return;
+
+    updateAtlasJourneySources(map, journeys, {
+      selectedJourneyId,
+      hoveredJourneyId,
+      playbackStopIndex: journeyPlaybackIndex,
+    });
+    renderedJourneyDataKeyRef.current = journeyMapDataKeyValue;
+  }, [
+    hoveredJourneyId,
+    journeyMapDataKeyValue,
+    journeyPlaybackIndex,
+    journeys,
+    mapLoaded,
+    selectedJourneyId,
+  ]);
+
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map || !mapLoaded) return;
+
+    const showingJourneys = mode === 'journeys';
+    setAtlasLayerVisibility(map, !showingJourneys);
+    setAtlasJourneyLayerVisibility(map, showingJourneys);
+    setTooltip(null);
+    setHoveredJourneyId(null);
+    map.getCanvas().style.cursor =
+      placementMode && !showingJourneys ? 'crosshair' : '';
+
+    if (showingJourneys && hoveredFeatureRef.current != null) {
+      map.setFeatureState(
+        { source: ATLAS_SOURCE_ID, id: hoveredFeatureRef.current },
+        { hover: false },
+      );
+      hoveredFeatureRef.current = null;
+    }
+  }, [mapLoaded, mode, placementMode]);
+
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map || !mapLoaded) return;
 
     if (selectedRef.current) {
       map.setFeatureState(
@@ -478,9 +815,32 @@ export default function AtlasMap({
 
   useEffect(() => {
     const map = mapRef.current;
+    if (!map || !mapLoaded) return;
+
+    const nextSelected = new Set(builderSelectedEntryIds);
+    builderSelectedRef.current.forEach((id) => {
+      if (!nextSelected.has(id)) {
+        map.setFeatureState(
+          { source: ATLAS_SOURCE_ID, id },
+          { builderSelected: false },
+        );
+      }
+    });
+    nextSelected.forEach((id) => {
+      map.setFeatureState(
+        { source: ATLAS_SOURCE_ID, id },
+        { builderSelected: true },
+      );
+    });
+    builderSelectedRef.current = nextSelected;
+  }, [builderSelectedEntryIds, mapDataKeyValue, mapLoaded]);
+
+  useEffect(() => {
+    const map = mapRef.current;
     if (!map) return;
-    map.getCanvas().style.cursor = placementMode ? 'crosshair' : '';
-    if (placementMode) {
+    const placing = placementMode && mode === 'places';
+    map.getCanvas().style.cursor = placing ? 'crosshair' : '';
+    if (placing) {
       if (hoveredFeatureRef.current != null) {
         map.setFeatureState(
           { source: ATLAS_SOURCE_ID, id: hoveredFeatureRef.current },
@@ -489,11 +849,13 @@ export default function AtlasMap({
         hoveredFeatureRef.current = null;
       }
     }
-  }, [placementMode]);
+  }, [mode, placementMode]);
 
   useEffect(() => {
     const map = mapRef.current;
-    if (!map || !mapLoaded || !focusRequest.id) return;
+    if (!map || !mapLoaded || mode !== 'places' || !focusRequest.id) {
+      return;
+    }
     const entry = entriesRef.current.find(
       (candidate) => candidate.id === focusRequest.id,
     );
@@ -508,19 +870,161 @@ export default function AtlasMap({
           container.clientWidth,
           container.clientHeight,
         ),
-        duration: 950,
+        duration: mapAnimationDuration(950),
         essential: true,
       });
     } catch (error) {
       console.error('Atlas map camera focus failed:', error);
     }
-  }, [focusRequest, mapLoaded]);
+  }, [focusRequest, mapLoaded, mode]);
 
   useEffect(() => {
     const map = mapRef.current;
-    if (!map || !mapLoaded || fitRequest === 0) return;
+    if (!map || !mapLoaded || mode !== 'places' || fitRequest === 0) return;
     fitEntries(map, entriesRef.current);
-  }, [fitRequest, mapLoaded]);
+  }, [fitRequest, mapLoaded, mode]);
+
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map || !mapLoaded || mode !== 'journeys') return;
+    fitJourneyStops(map, journeysRef.current, selectedJourneyId);
+  }, [journeyFitRequest, journeys, mapLoaded, mode, selectedJourneyId]);
+
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map || !mapLoaded || mode !== 'journeys' || !selectedJourneyId) {
+      return;
+    }
+
+    const journey = journeysRef.current.find(
+      (candidate) => candidate.id === selectedJourneyId,
+    );
+    if (!journey) return;
+    const selectedStopIndex = selectedJourneyStopId
+      ? journey.stops.findIndex(
+          (stop) => stop.entryId === selectedJourneyStopId,
+        )
+      : -1;
+    const targetIndex =
+      selectedStopIndex >= 0
+        ? selectedStopIndex
+        : journeyPlaybackIndex == null
+          ? -1
+          : Math.min(
+              Math.max(Math.trunc(journeyPlaybackIndex), 0),
+              journey.stops.length - 1,
+            );
+    const stopCoordinate = unwrapChapterCoordinates(journey.stops)[targetIndex];
+    if (!stopCoordinate) return;
+
+    const container = map.getContainer();
+    try {
+      map.easeTo({
+        center: stopCoordinate,
+        zoom: Math.max(map.getZoom(), 7),
+        padding: getAtlasJourneyFocusPadding(
+          container.clientWidth,
+          container.clientHeight,
+        ),
+        duration: mapAnimationDuration(720),
+        essential: true,
+      });
+    } catch (error) {
+      console.error('Atlas journey stop focus failed:', error);
+    }
+  }, [
+    journeyPlaybackIndex,
+    journeys,
+    mapLoaded,
+    mode,
+    selectedJourneyId,
+    selectedJourneyStopId,
+  ]);
+
+  useEffect(() => {
+    journeyMarkersRef.current.forEach((marker) => marker.remove());
+    journeyMarkersRef.current = [];
+
+    const map = mapRef.current;
+    if (!map || !mapLoaded || mode !== 'journeys' || !selectedJourneyId) {
+      return;
+    }
+
+    const journey = journeys.find(
+      (candidate) => candidate.id === selectedJourneyId,
+    );
+    if (!journey?.stops.length) return;
+
+    const coordinates = unwrapChapterCoordinates(journey.stops);
+    const offsets = createChapterMarkerOffsets(journey.stops);
+
+    journeyMarkersRef.current = journey.stops.map((stop, index) => {
+      const element = document.createElement('button');
+      const markerLabel = document.createElement('span');
+      element.type = 'button';
+      element.className = styles.journeyMapMarker;
+      element.dataset.current = 'false';
+      element.dataset.complete = 'false';
+      markerLabel.textContent = String(index + 1);
+      element.append(markerLabel);
+      element.setAttribute(
+        'aria-label',
+        `Stop ${index + 1} of ${journey.stops.length}: ${
+          stop.title || 'Untitled memory'
+        }, ${stop.placeLabel || stop.placeName || 'Pinned place'}`,
+      );
+      element.addEventListener('click', (event) => {
+        event.preventDefault();
+        event.stopPropagation();
+        if (onJourneyStopSelectRef.current) {
+          onJourneyStopSelectRef.current(stop.entryId);
+        } else {
+          onSelectRef.current(stop.entryId);
+        }
+      });
+
+      return new maplibregl.Marker({
+        element,
+        anchor: 'center',
+        offset: offsets[index],
+      })
+        .setLngLat(coordinates[index])
+        .addTo(map);
+    });
+    syncJourneyMarkerState(
+      journeyMarkersRef.current,
+      journey,
+      selectedJourneyStopRef.current,
+      journeyPlaybackIndexRef.current,
+    );
+
+    return () => {
+      journeyMarkersRef.current.forEach((marker) => marker.remove());
+      journeyMarkersRef.current = [];
+    };
+  }, [journeys, mapLoaded, mode, selectedJourneyId]);
+
+  useEffect(() => {
+    if (!mapLoaded || mode !== 'journeys' || !selectedJourneyId) return;
+    const journey = journeys.find(
+      (candidate) => candidate.id === selectedJourneyId,
+    );
+    if (!journey) return;
+
+    syncJourneyMarkerState(
+      journeyMarkersRef.current,
+      journey,
+      selectedJourneyStopId,
+      journeyPlaybackIndex,
+    );
+  }, [
+    journeyPlaybackIndex,
+    journeys,
+    mapLoaded,
+    mode,
+    selectedJourneyId,
+    selectedJourneyStopId,
+  ]);
 
   const handlePointerMove = (event: React.PointerEvent<HTMLDivElement>) => {
     if (event.pointerType === 'touch' || pointerFrameRef.current) return;
@@ -539,10 +1043,19 @@ export default function AtlasMap({
     });
   };
 
-  const visibleTooltip = placementMode ? null : tooltip;
+  const visibleTooltip =
+    (placementMode && mode === 'places') ||
+    (mode === 'places' && tooltip?.kind === 'journey') ||
+    (mode === 'journeys' && tooltip?.kind !== 'journey')
+      ? null
+      : tooltip;
   const tooltipEntry =
     visibleTooltip?.kind === 'entry'
       ? entries.find((entry) => entry.id === visibleTooltip.entryId)
+      : null;
+  const tooltipJourney =
+    visibleTooltip?.kind === 'journey'
+      ? journeys.find((journey) => journey.id === visibleTooltip.journeyId)
       : null;
 
   const retryMap = () => {
@@ -550,6 +1063,7 @@ export default function AtlasMap({
     setMapError(false);
     setTooltip(null);
     renderedMapDataKeyRef.current = null;
+    renderedJourneyDataKeyRef.current = null;
     setMapAttempt((attempt) => attempt + 1);
   };
 
@@ -557,7 +1071,8 @@ export default function AtlasMap({
     <div
       className={styles.mapFrame}
       data-map-state={mapError ? 'error' : mapLoaded ? 'ready' : 'loading'}
-      data-placement={placementMode ? 'true' : 'false'}
+      data-atlas-mode={mode}
+      data-placement={placementMode && mode === 'places' ? 'true' : 'false'}
       inert={interactionLocked ? true : undefined}
       onPointerMove={handlePointerMove}
       onPointerLeave={(event) => {
@@ -570,12 +1085,13 @@ export default function AtlasMap({
       <div ref={containerRef} className={styles.mapCanvas} />
       <div className={styles.pointerLight} aria-hidden="true" />
       <div className={styles.mapGrain} aria-hidden="true" />
-      {placementMode ? (
+      {placementMode && mode === 'places' ? (
         <span className={styles.placementCenter} aria-hidden="true">
           <i />
         </span>
       ) : null}
-      {visibleTooltip && (visibleTooltip.kind === 'cluster' || tooltipEntry) ? (
+      {visibleTooltip &&
+      (visibleTooltip.kind === 'cluster' || tooltipEntry || tooltipJourney) ? (
         <div
           className={styles.mapTooltip}
           data-position={visibleTooltip.position}
@@ -606,6 +1122,24 @@ export default function AtlasMap({
                 {tooltipEntry.recordState === 'draft'
                   ? 'Open and finish memory'
                   : `${formatAtlasDate(tooltipEntry)} · Open memory`}
+              </small>
+            </>
+          ) : visibleTooltip.kind === 'journey' && tooltipJourney ? (
+            <>
+              <span className={styles.mapTooltipKicker}>
+                {visibleTooltip.overlapCount > 1
+                  ? `${visibleTooltip.overlapCount} remembered paths meet here`
+                  : 'Remembered path'}
+              </span>
+              <strong>{tooltipJourney.title}</strong>
+              <p>
+                {tooltipJourney.memoryCount}{' '}
+                {tooltipJourney.memoryCount === 1 ? 'memory' : 'memories'}
+              </p>
+              <small>
+                {visibleTooltip.overlapCount > 1
+                  ? 'Click to choose a journey'
+                  : 'Open journey'}
               </small>
             </>
           ) : null}

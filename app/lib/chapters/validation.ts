@@ -4,6 +4,7 @@ import {
   CHAPTER_LOCATION_PRECISIONS,
   CHAPTER_VISIBILITIES,
 } from './definitions';
+import { ATLAS_JOURNEY_SUGGESTION_SOURCES } from '@/app/lib/atlas/journeys/definitions';
 
 export const CHAPTER_TITLE_MAX_LENGTH = 100;
 export const CHAPTER_INTRODUCTION_MAX_LENGTH = 1200;
@@ -82,7 +83,16 @@ function enforceEffectiveSharePrecision<
 }
 
 export const atlasChapterInputSchema = z
-  .object(atlasChapterInputFields)
+  .object({
+    clientRequestId: z.string().uuid().optional(),
+    journeySuggestion: z
+      .object({
+        key: z.string().regex(/^[0-9a-f]{64}$/),
+        source: z.enum(ATLAS_JOURNEY_SUGGESTION_SOURCES),
+      })
+      .optional(),
+    ...atlasChapterInputFields,
+  })
   .transform(enforceEffectiveSharePrecision);
 
 export const atlasChapterUpdateSchema = z

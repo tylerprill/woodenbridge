@@ -14,6 +14,14 @@ export const ATLAS_PIN_HALO_LAYER = 'field-atlas-pin-halo';
 export const ATLAS_PIN_LAYER = 'field-atlas-pins';
 export const ATLAS_INTERACTIVE_LAYERS = [ATLAS_CLUSTER_LAYER, ATLAS_PIN_LAYER];
 
+const ATLAS_LAYERS = [
+  `${ATLAS_CLUSTER_LAYER}-shadow`,
+  ATLAS_CLUSTER_LAYER,
+  ATLAS_CLUSTER_COUNT_LAYER,
+  ATLAS_PIN_HALO_LAYER,
+  ATLAS_PIN_LAYER,
+] as const;
+
 export function entriesToGeoJson(
   entries: AtlasEntry[],
 ): GeoJSON.FeatureCollection {
@@ -123,12 +131,16 @@ export function addAtlasLayers(map: Map, entries: AtlasEntry[]) {
         'case',
         ['boolean', ['feature-state', 'selected'], false],
         23,
+        ['boolean', ['feature-state', 'builderSelected'], false],
+        20,
         ['boolean', ['feature-state', 'hover'], false],
         19,
         13,
       ],
       'circle-color': [
         'case',
+        ['boolean', ['feature-state', 'builderSelected'], false],
+        '#b8c8a4',
         ['==', ['get', 'journeyState'], 'want_to_visit'],
         '#b8c8a4',
         '#e7b081',
@@ -137,6 +149,8 @@ export function addAtlasLayers(map: Map, entries: AtlasEntry[]) {
         'case',
         ['boolean', ['feature-state', 'selected'], false],
         0.28,
+        ['boolean', ['feature-state', 'builderSelected'], false],
+        0.3,
         ['boolean', ['feature-state', 'hover'], false],
         0.2,
         0.1,
@@ -146,6 +160,8 @@ export function addAtlasLayers(map: Map, entries: AtlasEntry[]) {
         'case',
         ['boolean', ['feature-state', 'selected'], false],
         1.5,
+        ['boolean', ['feature-state', 'builderSelected'], false],
+        1.25,
         ['boolean', ['feature-state', 'hover'], false],
         1,
         0,
@@ -166,12 +182,16 @@ export function addAtlasLayers(map: Map, entries: AtlasEntry[]) {
         'case',
         ['boolean', ['feature-state', 'selected'], false],
         9.5,
+        ['boolean', ['feature-state', 'builderSelected'], false],
+        9,
         ['boolean', ['feature-state', 'hover'], false],
         8.5,
         6.5,
       ],
       'circle-color': [
         'case',
+        ['boolean', ['feature-state', 'builderSelected'], false],
+        '#10231d',
         ['==', ['get', 'recordState'], 'draft'],
         '#e7b081',
         ['==', ['get', 'journeyState'], 'want_to_visit'],
@@ -182,9 +202,16 @@ export function addAtlasLayers(map: Map, entries: AtlasEntry[]) {
         'case',
         ['boolean', ['feature-state', 'selected'], false],
         3,
+        ['boolean', ['feature-state', 'builderSelected'], false],
+        3,
         2,
       ],
-      'circle-stroke-color': '#fbfaf5',
+      'circle-stroke-color': [
+        'case',
+        ['boolean', ['feature-state', 'builderSelected'], false],
+        '#e7b081',
+        '#fbfaf5',
+      ],
       'circle-opacity': 1,
       'circle-radius-transition': { duration: 160, delay: 0 },
       'circle-stroke-width-transition': { duration: 160, delay: 0 },
@@ -199,4 +226,13 @@ export function addAtlasLayers(map: Map, entries: AtlasEntry[]) {
 export function updateAtlasSource(map: Map, entries: AtlasEntry[]) {
   const source = map.getSource(ATLAS_SOURCE_ID) as GeoJSONSource | undefined;
   if (source) source.setData(entriesToGeoJson(entries));
+}
+
+export function setAtlasLayerVisibility(map: Map, visible: boolean) {
+  const visibility = visible ? 'visible' : 'none';
+  ATLAS_LAYERS.forEach((layerId) => {
+    if (map.getLayer(layerId)) {
+      map.setLayoutProperty(layerId, 'visibility', visibility);
+    }
+  });
 }

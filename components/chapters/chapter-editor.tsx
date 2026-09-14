@@ -27,6 +27,7 @@ import {
   useDeferredValue,
   useEffect,
   useMemo,
+  useRef,
   useState,
   useTransition,
 } from 'react';
@@ -41,6 +42,10 @@ import type {
   AtlasChapterMemoryOption,
   ChapterActionError,
 } from '@/app/lib/chapters/definitions';
+import type {
+  ChapterEditorSource,
+  ChapterSuggestionPrefill,
+} from '@/app/lib/chapters/prefill';
 import {
   CHAPTER_INTRODUCTION_MAX_LENGTH,
   CHAPTER_MAX_MEMORIES,
@@ -111,19 +116,32 @@ export function ChapterEditor({
   chapter,
   availableEntries,
   initialStep = 'details',
+  initialMemoryIds = [],
+  initialTitle = '',
+  journeySuggestion = null,
+  source = null,
 }: {
   chapter: AtlasChapterEditorChapter | null;
   availableEntries: AtlasChapterMemoryOption[];
   initialStep?: ChapterEditorStep;
+  initialMemoryIds?: string[];
+  initialTitle?: string;
+  journeySuggestion?: ChapterSuggestionPrefill | null;
+  source?: ChapterEditorSource | null;
 }) {
   const router = useRouter();
+  const createRequestIdRef = useRef<string | null>(null);
   const [editorStep, setEditorStep] = useState<ChapterEditorStep>(initialStep);
   const initialMemories = useMemo(() => chapter?.memories ?? [], [chapter]);
-  const [title, setTitle] = useState(chapter?.title ?? '');
+  const [title, setTitle] = useState(chapter?.title ?? initialTitle);
   const [introduction, setIntroduction] = useState(chapter?.introduction ?? '');
-  const [selectedIds, setSelectedIds] = useState(
-    initialMemories.map((memory) => memory.entryId),
-  );
+  const [selectedIds, setSelectedIds] = useState(() => {
+    if (chapter) return initialMemories.map((memory) => memory.entryId);
+    const availableIds = new Set(availableEntries.map((entry) => entry.id));
+    return Array.from(new Set(initialMemoryIds)).filter((entryId) =>
+      availableIds.has(entryId),
+    );
+  });
   const [transitionNotes, setTransitionNotes] = useState<
     Record<string, string>
   >(
@@ -201,6 +219,10 @@ export function ChapterEditor({
   const visibleEntries = filteredEntries.slice(0, visibleMemoryCount);
   const canArrange =
     title.trim().length > 0 && selectedIds.length >= CHAPTER_MIN_MEMORIES;
+  const returnsToAtlas = source === 'atlas' || source === 'import';
+  const atlasReturnHref = chapter
+    ? `/dashboard?view=journeys&journey=${encodeURIComponent(chapter.id)}`
+    : '/dashboard?view=journeys';
 
   useEffect(() => {
     if (!isDirty || isPending) return;
@@ -326,6 +348,11 @@ export function ChapterEditor({
     });
   }
 
+  function createRequestId() {
+    createRequestIdRef.current ??= crypto.randomUUID();
+    return createRequestIdRef.current;
+  }
+
   function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     setError('');
@@ -359,7 +386,11 @@ export function ChapterEditor({
               id: chapter.id,
               version: chapter.version,
             })
-          : await createAtlasChapterAction(input);
+          : await createAtlasChapterAction({
+              ...input,
+              clientRequestId: createRequestId(),
+              journeySuggestion: journeySuggestion ?? undefined,
+            });
 
         if (!result.ok) {
           setError(result.message);
@@ -368,7 +399,9 @@ export function ChapterEditor({
         }
 
         router.push(
-          `/dashboard/chapters/${result.data.id}?saved=${chapter ? 'updated' : 'created'}`,
+          returnsToAtlas
+            ? `/dashboard?view=journeys&journey=${encodeURIComponent(result.data.id)}`
+            : `/dashboard/chapters/${result.data.id}?saved=${chapter ? 'updated' : 'created'}`,
         );
       } catch {
         setError(
@@ -397,7 +430,9 @@ export function ChapterEditor({
           setConfirmingDelete(false);
           return;
         }
-        router.push('/dashboard/chapters');
+        router.push(
+          returnsToAtlas ? '/dashboard?view=journeys' : '/dashboard/chapters',
+        );
       } catch {
         setError(
           'We could not reach Field Atlas. Your chapter has not been deleted.',
@@ -423,13 +458,19 @@ export function ChapterEditor({
         <div>
           <Link
             href={
-              chapter
-                ? `/dashboard/chapters/${chapter.id}`
-                : '/dashboard/chapters'
+              returnsToAtlas
+                ? atlasReturnHref
+                : chapter
+                  ? `/dashboard/chapters/${chapter.id}`
+                  : '/dashboard/chapters'
             }
           >
             <ArrowLeftIcon aria-hidden="true" />
-            {chapter ? 'Back to chapter' : 'My Chapters'}
+            {returnsToAtlas
+              ? 'Back to Atlas'
+              : chapter
+                ? 'Back to chapter'
+                : 'My Chapters'}
           </Link>
           <p className="section-kicker">Chapter workshop</p>
           <h1>{chapter ? 'Shape your chapter.' : 'Begin a new chapter.'}</h1>
@@ -803,8 +844,16 @@ export function ChapterEditor({
                       Review latest in a new tab
                     </Link>
                   ) : errorType === 'not-found' ? (
-                    <Link href="/dashboard/chapters">
-                      Return to My Chapters
+                    <Link
+                      href={
+                        returnsToAtlas
+                          ? '/dashboard?view=journeys'
+                          : '/dashboard/chapters'
+                      }
+                    >
+                      {returnsToAtlas
+                        ? 'Return to Atlas'
+                        : 'Return to My Chapters'}
                     </Link>
                   ) : null}
                 </div>

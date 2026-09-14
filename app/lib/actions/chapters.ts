@@ -1,5 +1,6 @@
 'use server';
 
+import { createHash } from 'node:crypto';
 import { db, type VercelPoolClient } from '@/app/lib/db';
 import { revalidatePath } from 'next/cache';
 
@@ -15,8 +16,19 @@ import {
   atlasChapterInputSchema,
   atlasChapterUpdateSchema,
 } from '@/app/lib/chapters/validation';
+import { loadAtlasJourneySuggestions } from '@/app/lib/atlas/journeys/data';
+import type { AtlasJourneySuggestion } from '@/app/lib/atlas/journeys/definitions';
 
 type ChapterMutationData = { id: string; version: number; shareId: string };
+
+type IdempotentChapterRow = ChapterMutationData & {
+  clientRequestFingerprint: string;
+};
+
+type ValidatedJourneySuggestion = Pick<
+  AtlasJourneySuggestion,
+  'algorithmVersion' | 'key' | 'source'
+>;
 
 function failed(message = 'We could not save that chapter. Please try again.') {
   return { ok: false, error: 'failed', message } as const;
@@ -104,6 +116,7 @@ function revalidateChapter(
   chapterId: string,
   ...shareIds: Array<string | null | undefined>
 ) {
+  revalidatePath('/dashboard');
   revalidatePath('/dashboard/chapters');
   revalidatePath(`/dashboard/chapters/${chapterId}`);
   revalidatePath(`/dashboard/chapters/${chapterId}/edit`);
@@ -112,6 +125,122 @@ function revalidateChapter(
   )) {
     revalidatePath(`/shared/chapters/${shareId}`);
   }
+}
+
+function chapterCreateFingerprint(input: AtlasChapterInput) {
+  return createHash('sha256')
+    .update(
+      JSON.stringify({
+        title: input.title,
+        introduction: input.introduction,
+        memories: input.memories,
+        coverMediaId: input.coverMediaId,
+        visibility: input.visibility,
+        shareMap: input.shareMap,
+        shareLocationPrecision: input.shareLocationPrecision,
+        ...(input.journeySuggestion
+          ? { journeySuggestion: input.journeySuggestion }
+          : {}),
+      }),
+    )
+    .digest('hex');
+}
+
+async function recordAcceptedJourneySuggestion(
+  client: VercelPoolClient,
+  userId: string,
+  chapterId: string,
+  suggestion: ValidatedJourneySuggestion,
+) {
+  await client.query(
+    `
+      INSERT INTO atlas_journey_suggestion_feedback (
+        user_id,
+        suggestion_key,
+        algorithm_version,
+        source,
+        decision,
+        chapter_id,
+        decided_at
+      )
+      VALUES ($1, $2, $3, $4, 'accepted', $5, NOW())
+      ON CONFLICT (user_id, suggestion_key) DO UPDATE
+      SET
+        algorithm_version = EXCLUDED.algorithm_version,
+        source = EXCLUDED.source,
+        decision = 'accepted',
+        chapter_id = EXCLUDED.chapter_id,
+        decided_at = NOW()
+    `,
+    [
+      userId,
+      suggestion.key,
+      suggestion.algorithmVersion,
+      suggestion.source,
+      chapterId,
+    ],
+  );
+}
+
+function hasExactJourneyMembership(
+  suggestedEntryIds: string[],
+  chapterEntryIds: string[],
+) {
+  if (suggestedEntryIds.length !== chapterEntryIds.length) return false;
+  const suggestedEntries = new Set(suggestedEntryIds);
+  return (
+    suggestedEntries.size === suggestedEntryIds.length &&
+    chapterEntryIds.every((entryId) => suggestedEntries.has(entryId))
+  );
+}
+
+async function validateJourneySuggestionAcceptance(
+  userId: string,
+  suggestion: NonNullable<AtlasChapterInput['journeySuggestion']>,
+  chapterEntryIds: string[],
+): Promise<ValidatedJourneySuggestion | null> {
+  try {
+    const currentSuggestions = await loadAtlasJourneySuggestions(userId, {
+      applyFeedback: false,
+    });
+    const currentSuggestion = currentSuggestions.find(
+      (candidate) =>
+        candidate.key === suggestion.key &&
+        candidate.source === suggestion.source &&
+        hasExactJourneyMembership(candidate.entryIds, chapterEntryIds),
+    );
+    return currentSuggestion
+      ? {
+          algorithmVersion: currentSuggestion.algorithmVersion,
+          key: currentSuggestion.key,
+          source: currentSuggestion.source,
+        }
+      : null;
+  } catch (error) {
+    console.error('Atlas journey suggestion validation failed:', error);
+    return null;
+  }
+}
+
+async function findIdempotentChapter(
+  client: VercelPoolClient,
+  userId: string,
+  clientRequestId: string,
+) {
+  const existing = await client.query<IdempotentChapterRow>(
+    `
+      SELECT
+        id,
+        version,
+        share_id AS "shareId",
+        client_request_fingerprint AS "clientRequestFingerprint"
+      FROM atlas_chapters
+      WHERE user_id = $1 AND client_request_id = $2
+      FOR UPDATE
+    `,
+    [userId, clientRequestId],
+  );
+  return existing.rows[0] ?? null;
 }
 
 export async function createAtlasChapterAction(
@@ -129,10 +258,51 @@ export async function createAtlasChapterAction(
     };
   }
 
+  const entryIds = parsed.data.memories.map((memory) => memory.entryId);
+  const validatedJourneySuggestion = parsed.data.journeySuggestion
+    ? await validateJourneySuggestionAcceptance(
+        session.user.id,
+        parsed.data.journeySuggestion,
+        entryIds,
+      )
+    : null;
+
   const client = await db.connect();
   try {
     await client.query('BEGIN');
-    const entryIds = parsed.data.memories.map((memory) => memory.entryId);
+    const clientRequestFingerprint = parsed.data.clientRequestId
+      ? chapterCreateFingerprint(parsed.data)
+      : null;
+    if (parsed.data.clientRequestId && clientRequestFingerprint) {
+      const existing = await findIdempotentChapter(
+        client,
+        session.user.id,
+        parsed.data.clientRequestId,
+      );
+      if (existing) {
+        if (
+          existing.clientRequestFingerprint.trim() !== clientRequestFingerprint
+        ) {
+          await client.query('ROLLBACK');
+          return {
+            ok: false,
+            error: 'conflict',
+            message:
+              'That save request was already used for a different chapter. Refresh and try again.',
+          };
+        }
+        await client.query('COMMIT');
+        return {
+          ok: true,
+          data: {
+            id: existing.id,
+            version: existing.version,
+            shareId: existing.shareId,
+          },
+        };
+      }
+    }
+
     if (!(await ownsEveryEntry(client, session.user.id, entryIds))) {
       await client.query('ROLLBACK');
       return {
@@ -166,9 +336,14 @@ export async function createAtlasChapterAction(
           cover_media_id,
           visibility,
           share_map,
-          share_location_precision
+          share_location_precision,
+          client_request_id,
+          client_request_fingerprint
         )
-        VALUES ($1, $2, $3, $4, $5, $6, $7)
+        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+        ON CONFLICT (user_id, client_request_id)
+          WHERE client_request_id IS NOT NULL
+          DO NOTHING
         RETURNING id, version, share_id AS "shareId"
       `,
       [
@@ -179,15 +354,54 @@ export async function createAtlasChapterAction(
         parsed.data.visibility,
         parsed.data.shareMap,
         parsed.data.shareLocationPrecision,
+        parsed.data.clientRequestId ?? null,
+        clientRequestFingerprint,
       ],
     );
     const chapter = inserted.rows[0];
+    if (!chapter && parsed.data.clientRequestId && clientRequestFingerprint) {
+      const existing = await findIdempotentChapter(
+        client,
+        session.user.id,
+        parsed.data.clientRequestId,
+      );
+      if (
+        !existing ||
+        existing.clientRequestFingerprint.trim() !== clientRequestFingerprint
+      ) {
+        await client.query('ROLLBACK');
+        return {
+          ok: false,
+          error: 'conflict',
+          message:
+            'That save request was already used for a different chapter. Refresh and try again.',
+        };
+      }
+      await client.query('COMMIT');
+      return {
+        ok: true,
+        data: {
+          id: existing.id,
+          version: existing.version,
+          shareId: existing.shareId,
+        },
+      };
+    }
+    if (!chapter) throw new Error('Chapter insert returned no row.');
     await replaceChapterEntries(
       client,
       chapter.id,
       session.user.id,
       parsed.data.memories,
     );
+    if (validatedJourneySuggestion) {
+      await recordAcceptedJourneySuggestion(
+        client,
+        session.user.id,
+        chapter.id,
+        validatedJourneySuggestion,
+      );
+    }
     await client.query('COMMIT');
 
     revalidateChapter(chapter.id, chapter.shareId);

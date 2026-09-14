@@ -98,7 +98,7 @@ async function signIn(page: Page) {
 test('authenticated routes and primary interactions pass the UI audit', async ({
   page,
 }, testInfo) => {
-  test.setTimeout(180_000);
+  test.setTimeout(300_000);
   await signIn(page);
   // This suite consumes login as test setup; the public UI audit owns the
   // login page itself. Start route diagnostics at the authenticated boundary

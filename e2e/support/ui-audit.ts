@@ -94,7 +94,17 @@ export function monitorBrowserIssues(page: Page): BrowserIssueMonitor {
           failure.errorText,
         ),
       );
+    const expectedReplacedImageCancellation =
+      request.resourceType() === 'image' &&
+      Boolean(
+        failure &&
+        /ERR_ABORTED|NS_BINDING_ABORTED|cancel(?:led|ed)/i.test(
+          failure.errorText,
+        ),
+      );
     const currentUrl = new URL(page.url());
+    // A completed action can be canceled after client-side URL state advances
+    // to another query on the same route (for example, the next Journey stop).
     const expectedCompletedServerActionCancellation =
       request.method() === 'POST' &&
       request.resourceType() === 'fetch' &&
@@ -102,7 +112,6 @@ export function monitorBrowserIssues(page: Page): BrowserIssueMonitor {
       successfulResponses.has(request) &&
       requestUrl.origin === currentUrl.origin &&
       requestUrl.pathname === currentUrl.pathname &&
-      requestUrl.search === currentUrl.search &&
       Boolean(
         failure &&
         /ERR_ABORTED|NS_BINDING_ABORTED|cancel(?:led|ed)/i.test(
@@ -114,6 +123,7 @@ export function monitorBrowserIssues(page: Page): BrowserIssueMonitor {
       failure &&
       !expectedNavigationCancellation &&
       !expectedNextPrefetchCancellation &&
+      !expectedReplacedImageCancellation &&
       !expectedCompletedServerActionCancellation
     ) {
       issues.push({
@@ -363,6 +373,11 @@ export async function auditCurrentPage(
     };
     const clippedControls = interactive
       .filter((element) => {
+        // Map markers are intentionally translated outside the viewport as the
+        // camera focuses or pans; MapLibre keeps their buttons mounted so they
+        // can return without a DOM rebuild. They are map content, not clipped
+        // page controls.
+        if (element.matches('.maplibregl-marker')) return false;
         if (insideHorizontalScroller(element)) return false;
         const rect = effectiveRect(element);
         return rect.left < -1 || rect.right > window.innerWidth + 1;

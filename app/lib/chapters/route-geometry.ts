@@ -15,6 +15,12 @@ const WORLD_MARKER_SEPARATION = 18;
 
 export type ChapterMarkerOffset = [x: number, y: number];
 
+export type ChapterRouteSegment = {
+  startIndex: number;
+  endIndex: number;
+  coordinates: ChapterCoordinate[];
+};
+
 export function unwrapChapterCoordinates(
   points: RoutePoint[],
 ): ChapterCoordinate[] {
@@ -156,11 +162,35 @@ export function createGentleChapterRoute(
   const stops = unwrapChapterCoordinates(points);
   if (stops.length < 2) return stops;
 
-  return stops.flatMap((stop, index) => {
+  return createGentleChapterRouteSegmentsFromCoordinates(stops).flatMap(
+    (segment, index) =>
+      index === 0 ? segment.coordinates : segment.coordinates.slice(1),
+  );
+}
+
+export function createGentleChapterRouteSegments(
+  points: RoutePoint[],
+): ChapterRouteSegment[] {
+  return createGentleChapterRouteSegmentsFromCoordinates(
+    unwrapChapterCoordinates(points),
+  );
+}
+
+function createGentleChapterRouteSegmentsFromCoordinates(
+  stops: ChapterCoordinate[],
+) {
+  if (stops.length < 2) return [];
+
+  return stops.flatMap<ChapterRouteSegment>((stop, index) => {
     const next = stops[index + 1];
     if (!next) return [];
     const reference = index === 0 ? stops[2] : stops[index - 1];
-    const segment = curvedSegment(stop, next, reference);
-    return index === 0 ? segment : segment.slice(1);
+    return [
+      {
+        startIndex: index,
+        endIndex: index + 1,
+        coordinates: curvedSegment(stop, next, reference),
+      },
+    ];
   });
 }
