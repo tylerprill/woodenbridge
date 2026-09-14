@@ -103,6 +103,8 @@ export function monitorBrowserIssues(page: Page): BrowserIssueMonitor {
         ),
       );
     const currentUrl = new URL(page.url());
+    // A completed action can be canceled after client-side URL state advances
+    // to another query on the same route (for example, the next Journey stop).
     const expectedCompletedServerActionCancellation =
       request.method() === 'POST' &&
       request.resourceType() === 'fetch' &&
@@ -110,7 +112,6 @@ export function monitorBrowserIssues(page: Page): BrowserIssueMonitor {
       successfulResponses.has(request) &&
       requestUrl.origin === currentUrl.origin &&
       requestUrl.pathname === currentUrl.pathname &&
-      requestUrl.search === currentUrl.search &&
       Boolean(
         failure &&
         /ERR_ABORTED|NS_BINDING_ABORTED|cancel(?:led|ed)/i.test(

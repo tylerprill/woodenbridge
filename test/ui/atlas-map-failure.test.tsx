@@ -60,22 +60,35 @@ const initialView: AtlasView = {
 
 function createMapMock() {
   const canvas = document.createElement('canvas');
+  const container = document.createElement('div');
+  Object.defineProperties(container, {
+    clientHeight: { configurable: true, value: 752 },
+    clientWidth: { configurable: true, value: 1000 },
+  });
+  let padding = { top: 0, right: 0, bottom: 0, left: 0 };
+  const easeTo = jest.fn((options: { padding?: typeof padding } = {}) => {
+    if (options.padding) padding = options.padding;
+  });
+  const setPadding = jest.fn((nextPadding: typeof padding) => {
+    padding = nextPadding;
+  });
   return {
     keyboard: { disableRotation: jest.fn() },
     touchZoomRotate: { disableRotation: jest.fn() },
     addControl: jest.fn(),
     addLayer: jest.fn(),
     addSource: jest.fn(),
-    easeTo: jest.fn(),
+    easeTo,
     fitBounds: jest.fn(),
     getBearing: jest.fn(() => 0),
     setStyle: jest.fn(),
     getCanvas: jest.fn(() => canvas),
-    getContainer: jest.fn(() => document.createElement('div')),
+    getContainer: jest.fn(() => container),
     getLayer: jest.fn(() => undefined),
     getPitch: jest.fn(() => 0),
     getSource: jest.fn(() => undefined),
     getZoom: jest.fn(() => 4),
+    getPadding: jest.fn(() => padding),
     on: jest.fn((event: string, ...args: unknown[]) => {
       if (args.length === 1 && typeof args[0] === 'function') {
         mockEventHandlers.set(event, args[0] as (event?: unknown) => void);
@@ -83,9 +96,11 @@ function createMapMock() {
     }),
     remove: jest.fn(),
     resize: jest.fn(),
+    setPadding,
     setLayoutProperty: jest.fn(),
     setProjection: jest.fn(),
     setSky: jest.fn(),
+    stop: jest.fn(),
   };
 }
 
@@ -285,6 +300,63 @@ describe('Atlas map failure recovery', () => {
     expect(mockMarkerElements[0]).not.toHaveAttribute('aria-current');
     expect(mockMarkerElements[1]).toHaveAttribute('data-current', 'true');
     expect(mockMarkerElements[1]).toHaveAttribute('aria-current', 'step');
+  });
+
+  it('clears retained stop padding before refitting every journey', async () => {
+    const map = createMapMock();
+    mockMapConstructor.mockReturnValue(map);
+    const baseProps = {
+      entries: [],
+      initialView,
+      interactionLocked: false,
+      selectedId: null,
+      placementMode: false,
+      focusRequest: { id: null, nonce: 0 },
+      fitRequest: 0,
+      onSelect: jest.fn(),
+      onPlace: jest.fn(),
+      onViewChange: jest.fn(),
+      mode: 'journeys' as const,
+      journeys: [delayedJourney],
+      selectedJourneyStopId: delayedJourney.stops[1].entryId,
+    };
+    const { rerender } = render(
+      <AtlasMap {...baseProps} selectedJourneyId={delayedJourney.id} />,
+    );
+
+    act(() => {
+      mockEventHandlers.get('load')?.();
+    });
+    await waitFor(() => expect(map.fitBounds).toHaveBeenCalled());
+    expect(map.getPadding()).toEqual({
+      top: 90,
+      right: 64,
+      bottom: 80,
+      left: 538,
+    });
+
+    map.fitBounds.mockClear();
+    map.setPadding.mockClear();
+    rerender(<AtlasMap {...baseProps} selectedJourneyId={null} />);
+
+    await waitFor(() => expect(map.fitBounds).toHaveBeenCalledTimes(1));
+    expect(map.stop).toHaveBeenCalled();
+    expect(map.resize).toHaveBeenCalled();
+    expect(map.setPadding).toHaveBeenCalledWith({
+      top: 0,
+      right: 0,
+      bottom: 0,
+      left: 0,
+    });
+    expect(map.setPadding.mock.invocationCallOrder[0]).toBeLessThan(
+      map.fitBounds.mock.invocationCallOrder[0],
+    );
+    expect(map.fitBounds).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({
+        padding: { top: 90, right: 64, bottom: 80, left: 538 },
+      }),
+    );
   });
 
   it('times out a stalled load and recreates the map on retry', () => {

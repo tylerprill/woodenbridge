@@ -612,8 +612,8 @@
 .toolDock .addButton:hover,
 .toolDock .addButton:focus-visible,
 .toolDock .addButton[data-active='true'] {
-  background: var(--timber);
-  color: white;
+  background: var(--timber-ink);
+  color: var(--paper-light);
 }
 
 .toolDivider {

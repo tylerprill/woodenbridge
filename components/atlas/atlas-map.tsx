@@ -103,6 +103,7 @@ type AtlasMapProps = {
 
 const DEFAULT_STYLE = 'https://tiles.openfreemap.org/styles/positron';
 const MAP_LOAD_TIMEOUT_MS = 15_000;
+const EMPTY_MAP_PADDING = { top: 0, right: 0, bottom: 0, left: 0 } as const;
 
 maplibregl.setWorkerUrl('/maplibre/maplibre-gl-worker.mjs');
 
@@ -179,6 +180,22 @@ function mapAnimationDuration(duration: number) {
     : duration;
 }
 
+function prepareMapForBoundsFit(map: MapLibreMap) {
+  map.stop();
+  map.resize();
+
+  const container = map.getContainer();
+  const width = container.clientWidth;
+  const height = container.clientHeight;
+  if (width <= 2 || height <= 2) return null;
+
+  // Point-focus transitions retain their padding in MapLibre's transform.
+  // Bounds fitting adds its own one-shot padding to that retained value, so
+  // clear the global inset first to avoid double-counting overlay space.
+  map.setPadding(EMPTY_MAP_PADDING);
+  return { width, height };
+}
+
 function fitJourneyStops(
   map: MapLibreMap,
   journeys: AtlasJourneySummary[],
@@ -210,13 +227,11 @@ function fitJourneyStops(
     ? createGentleChapterRoute(selectedJourney.stops)
     : stops.map((stop) => [stop.longitude, stop.latitude] as [number, number]);
   coordinates.forEach((coordinate) => bounds.extend(coordinate));
-  const container = map.getContainer();
   try {
+    const canvas = prepareMapForBoundsFit(map);
+    if (!canvas) return;
     map.fitBounds(bounds, {
-      padding: getAtlasJourneyFocusPadding(
-        container.clientWidth,
-        container.clientHeight,
-      ),
+      padding: getAtlasJourneyFocusPadding(canvas.width, canvas.height),
       maxZoom: 8.5,
       duration,
       essential: true,
@@ -250,13 +265,11 @@ function fitEntries(map: MapLibreMap, entries: AtlasEntry[]) {
 
   const bounds = new maplibregl.LngLatBounds();
   entries.forEach((entry) => bounds.extend([entry.longitude, entry.latitude]));
-  const container = map.getContainer();
   try {
+    const canvas = prepareMapForBoundsFit(map);
+    if (!canvas) return;
     map.fitBounds(bounds, {
-      padding: getAtlasFitPadding(
-        container.clientWidth,
-        container.clientHeight,
-      ),
+      padding: getAtlasFitPadding(canvas.width, canvas.height),
       maxZoom: 8,
       duration: 1200,
       essential: true,

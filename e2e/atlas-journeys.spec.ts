@@ -199,9 +199,14 @@ test('Journey Lens connects the Atlas, playback, and Chapter workshop', async ({
   await expect(
     page.getByRole('heading', { level: 2, name: 'Your journeys' }),
   ).toBeVisible();
+  await auditJourneyState(page, testInfo, 'overview-return', monitor);
 
-  const journeyTools = page.getByRole('toolbar', { name: 'Journey tools' });
-  await journeyTools.getByRole('button', { name: 'Create journey' }).click();
+  const journeyTray = page.locator(
+    'section[aria-labelledby="journey-tray-title"]',
+  );
+  await journeyTray
+    .getByRole('button', { name: 'Create journey', exact: true })
+    .click();
   await expect(
     page.getByRole('heading', { level: 2, name: 'Choose the memories' }),
   ).toBeVisible();
