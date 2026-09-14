@@ -796,7 +796,10 @@ test('imports a private photo chapter, recovers a lost response, and cancels a s
     readySelector: '[data-map-state="ready"]',
   });
 
-  const openChapter = page.getByRole('link', { name: 'Open chapter' });
+  const openChapter = page.getByRole('link', {
+    name: 'Read chapter',
+    exact: true,
+  });
   const chapterHref = await openChapter.getAttribute('href');
   expect(chapterHref).toBe(`/dashboard/chapters/${persistedChapter.id}`);
   await openChapter.click();

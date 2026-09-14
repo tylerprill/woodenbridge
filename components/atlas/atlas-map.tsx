@@ -147,6 +147,31 @@ function journeyMapDataKey(
   ]);
 }
 
+function syncJourneyMarkerState(
+  markers: Marker[],
+  journey: AtlasJourneySummary,
+  selectedStopId: string | null,
+  playbackIndex: number | null,
+) {
+  const selectedStopIndex = selectedStopId
+    ? journey.stops.findIndex((stop) => stop.entryId === selectedStopId)
+    : -1;
+  const currentIndex =
+    selectedStopIndex >= 0 ? selectedStopIndex : playbackIndex;
+
+  markers.forEach((marker, index) => {
+    const element = marker.getElement();
+    element.dataset.current = currentIndex === index ? 'true' : 'false';
+    element.dataset.complete =
+      playbackIndex != null && index < playbackIndex ? 'true' : 'false';
+    if (currentIndex === index) {
+      element.setAttribute('aria-current', 'step');
+    } else {
+      element.removeAttribute('aria-current');
+    }
+  });
+}
+
 function mapAnimationDuration(duration: number) {
   return typeof window.matchMedia === 'function' &&
     window.matchMedia('(prefers-reduced-motion: reduce)').matches
@@ -280,6 +305,8 @@ export default function AtlasMap({
   const onJourneyStopSelectRef = useRef(onJourneyStopSelect);
   const selectedRef = useRef<string | null>(null);
   const selectedJourneyRef = useRef<string | null>(selectedJourneyId);
+  const selectedJourneyStopRef = useRef<string | null>(selectedJourneyStopId);
+  const journeyPlaybackIndexRef = useRef<number | null>(journeyPlaybackIndex);
   const builderSelectedRef = useRef(new Set<string>());
   const journeyMarkersRef = useRef<Marker[]>([]);
   const hoveredFeatureRef = useRef<string | number | null>(null);
@@ -318,6 +345,14 @@ export default function AtlasMap({
   useEffect(() => {
     selectedJourneyRef.current = selectedJourneyId;
   }, [selectedJourneyId]);
+
+  useEffect(() => {
+    selectedJourneyStopRef.current = selectedJourneyStopId;
+  }, [selectedJourneyStopId]);
+
+  useEffect(() => {
+    journeyPlaybackIndexRef.current = journeyPlaybackIndex;
+  }, [journeyPlaybackIndex]);
 
   useEffect(() => {
     placementRef.current = placementMode;
@@ -943,6 +978,12 @@ export default function AtlasMap({
         .setLngLat(coordinates[index])
         .addTo(map);
     });
+    syncJourneyMarkerState(
+      journeyMarkersRef.current,
+      journey,
+      selectedJourneyStopRef.current,
+      journeyPlaybackIndexRef.current,
+    );
 
     return () => {
       journeyMarkersRef.current.forEach((marker) => marker.remove());
@@ -951,35 +992,22 @@ export default function AtlasMap({
   }, [journeys, mapLoaded, mode, selectedJourneyId]);
 
   useEffect(() => {
-    if (mode !== 'journeys' || !selectedJourneyId) return;
+    if (!mapLoaded || mode !== 'journeys' || !selectedJourneyId) return;
     const journey = journeys.find(
       (candidate) => candidate.id === selectedJourneyId,
     );
     if (!journey) return;
 
-    const selectedStopIndex = selectedJourneyStopId
-      ? journey.stops.findIndex(
-          (stop) => stop.entryId === selectedJourneyStopId,
-        )
-      : -1;
-    const currentIndex =
-      selectedStopIndex >= 0 ? selectedStopIndex : journeyPlaybackIndex;
-    journeyMarkersRef.current.forEach((marker, index) => {
-      const element = marker.getElement();
-      element.dataset.current = currentIndex === index ? 'true' : 'false';
-      element.dataset.complete =
-        journeyPlaybackIndex != null && index < journeyPlaybackIndex
-          ? 'true'
-          : 'false';
-      if (currentIndex === index) {
-        element.setAttribute('aria-current', 'step');
-      } else {
-        element.removeAttribute('aria-current');
-      }
-    });
+    syncJourneyMarkerState(
+      journeyMarkersRef.current,
+      journey,
+      selectedJourneyStopId,
+      journeyPlaybackIndex,
+    );
   }, [
     journeyPlaybackIndex,
     journeys,
+    mapLoaded,
     mode,
     selectedJourneyId,
     selectedJourneyStopId,

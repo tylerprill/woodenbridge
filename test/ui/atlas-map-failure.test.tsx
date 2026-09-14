@@ -2,14 +2,22 @@
  * @jest-environment jsdom
  */
 
-import { act, fireEvent, render, screen } from '@testing-library/react';
+import {
+  act,
+  fireEvent,
+  render,
+  screen,
+  waitFor,
+} from '@testing-library/react';
 
 import type { AtlasView } from '@/app/lib/atlas/definitions';
+import type { AtlasJourneySummary } from '@/app/lib/atlas/journeys/definitions';
 import { sanitizeOpenFreeMapStyle } from '@/app/lib/maps/openfreemap-style';
 import AtlasMap from '@/components/atlas/atlas-map';
 
 const mockMapConstructor = jest.fn();
 const mockEventHandlers = new Map<string, (event?: unknown) => void>();
+const mockMarkerElements: HTMLButtonElement[] = [];
 
 jest.mock(
   'maplibre-gl',
@@ -20,7 +28,23 @@ jest.mock(
     },
     AttributionControl: jest.fn(),
     ScaleControl: jest.fn(),
-    LngLatBounds: jest.fn(),
+    LngLatBounds: function MockLngLatBounds() {
+      const bounds = { extend: jest.fn() };
+      bounds.extend.mockReturnValue(bounds);
+      return bounds;
+    },
+    Marker: function MockMarker({ element }: { element: HTMLButtonElement }) {
+      mockMarkerElements.push(element);
+      const marker = {
+        addTo: jest.fn(),
+        getElement: jest.fn(() => element),
+        remove: jest.fn(),
+        setLngLat: jest.fn(),
+      };
+      marker.addTo.mockReturnValue(marker);
+      marker.setLngLat.mockReturnValue(marker);
+      return marker;
+    },
     setWorkerUrl: jest.fn(),
   }),
   { virtual: true },
@@ -40,8 +64,18 @@ function createMapMock() {
     keyboard: { disableRotation: jest.fn() },
     touchZoomRotate: { disableRotation: jest.fn() },
     addControl: jest.fn(),
+    addLayer: jest.fn(),
+    addSource: jest.fn(),
+    easeTo: jest.fn(),
+    fitBounds: jest.fn(),
+    getBearing: jest.fn(() => 0),
     setStyle: jest.fn(),
     getCanvas: jest.fn(() => canvas),
+    getContainer: jest.fn(() => document.createElement('div')),
+    getLayer: jest.fn(() => undefined),
+    getPitch: jest.fn(() => 0),
+    getSource: jest.fn(() => undefined),
+    getZoom: jest.fn(() => 4),
     on: jest.fn((event: string, ...args: unknown[]) => {
       if (args.length === 1 && typeof args[0] === 'function') {
         mockEventHandlers.set(event, args[0] as (event?: unknown) => void);
@@ -49,8 +83,44 @@ function createMapMock() {
     }),
     remove: jest.fn(),
     resize: jest.fn(),
+    setLayoutProperty: jest.fn(),
+    setProjection: jest.fn(),
+    setSky: jest.fn(),
   };
 }
+
+const delayedJourney: AtlasJourneySummary = {
+  id: '00000000-0000-4000-8000-000000000001',
+  title: 'A delayed journey',
+  version: 1,
+  updatedAt: '2026-09-14T12:00:00.000Z',
+  startDate: '2026-09-10',
+  endDate: '2026-09-11',
+  memoryCount: 2,
+  drawable: true,
+  stops: [
+    {
+      entryId: '00000000-0000-4000-8000-000000000011',
+      position: 0,
+      title: 'First stop',
+      placeLabel: 'Detroit, Michigan',
+      placeName: 'Detroit',
+      visitedOn: '2026-09-10',
+      latitude: 42.3314,
+      longitude: -83.0458,
+    },
+    {
+      entryId: '00000000-0000-4000-8000-000000000012',
+      position: 1,
+      title: 'Selected stop',
+      placeLabel: 'Ann Arbor, Michigan',
+      placeName: 'Ann Arbor',
+      visitedOn: '2026-09-11',
+      latitude: 42.2808,
+      longitude: -83.743,
+    },
+  ],
+};
 
 function renderMap(view = initialView) {
   return render(
@@ -73,6 +143,7 @@ describe('Atlas map failure recovery', () => {
   beforeEach(() => {
     jest.clearAllMocks();
     mockEventHandlers.clear();
+    mockMarkerElements.length = 0;
     mockMapConstructor.mockImplementation(() => createMapMock());
   });
 
@@ -182,6 +253,38 @@ describe('Atlas map failure recovery', () => {
       'Atlas map error:',
       expect.any(Error),
     );
+  });
+
+  it('synchronizes a deep-linked stop when a delayed map finishes loading', async () => {
+    render(
+      <AtlasMap
+        entries={[]}
+        initialView={initialView}
+        interactionLocked={false}
+        selectedId={null}
+        placementMode={false}
+        focusRequest={{ id: null, nonce: 0 }}
+        fitRequest={0}
+        onSelect={jest.fn()}
+        onPlace={jest.fn()}
+        onViewChange={jest.fn()}
+        mode="journeys"
+        journeys={[delayedJourney]}
+        selectedJourneyId={delayedJourney.id}
+        selectedJourneyStopId={delayedJourney.stops[1].entryId}
+      />,
+    );
+
+    expect(mockMarkerElements).toHaveLength(0);
+    act(() => {
+      mockEventHandlers.get('load')?.();
+    });
+
+    await waitFor(() => expect(mockMarkerElements).toHaveLength(2));
+    expect(mockMarkerElements[0]).toHaveAttribute('data-current', 'false');
+    expect(mockMarkerElements[0]).not.toHaveAttribute('aria-current');
+    expect(mockMarkerElements[1]).toHaveAttribute('data-current', 'true');
+    expect(mockMarkerElements[1]).toHaveAttribute('aria-current', 'step');
   });
 
   it('times out a stalled load and recreates the map on retry', () => {
