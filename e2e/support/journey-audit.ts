@@ -1,47 +1,59 @@
 import { expect, type Page } from '@playwright/test';
 
+/** Serializable DOM inspection shared by Playwright and layout regressions. */
+export function getMapFirstBuilderLayoutErrors() {
+  const map = document.querySelector('.maplibregl-map');
+  const builder = document.querySelector(
+    'section[aria-labelledby="journey-builder-title"]',
+  );
+  if (!map || !builder) return ['Builder or map is missing'];
+  const canvas = map.getBoundingClientRect();
+  const panel = builder.getBoundingClientRect();
+  const errors: string[] = [];
+  if (canvas.width < 100 || canvas.height < 100) {
+    errors.push('Builder leaves no usable map area');
+  }
+  if (
+    canvas.left < panel.right - 1 &&
+    canvas.right > panel.left + 1 &&
+    canvas.top < panel.bottom - 1 &&
+    canvas.bottom > panel.top + 1
+  ) {
+    errors.push('Builder controls cover the map canvas');
+  }
+  const attribution = map.querySelector('.maplibregl-ctrl-attrib');
+  if (attribution) {
+    const credits = attribution.getBoundingClientRect();
+    const style = getComputedStyle(attribution);
+    // MapLibre keeps a display:none, zero-rect control when a style has no
+    // attribution (including CI's background-only map). It is not overflow.
+    const rendered =
+      credits.width > 0 &&
+      credits.height > 0 &&
+      style.display !== 'none' &&
+      style.visibility !== 'hidden' &&
+      style.visibility !== 'collapse' &&
+      style.opacity !== '0';
+    if (
+      rendered &&
+      (credits.left < canvas.left - 1 ||
+        credits.right > canvas.right + 1 ||
+        credits.top < canvas.top - 1 ||
+        credits.bottom > canvas.bottom + 1)
+    ) {
+      errors.push('Map credits extend outside the visible canvas');
+    }
+  }
+  return errors;
+}
+
 /** Builder controls reserve space rather than obscuring the selectable map. */
 export async function expectMapFirstJourneyBuilder(page: Page) {
   await expect(page.locator('[data-atlas-surface="builder"]')).toBeVisible();
   await expect
-    .poll(
-      () =>
-        page.evaluate(() => {
-          const map = document.querySelector('.maplibregl-map');
-          const builder = document.querySelector(
-            'section[aria-labelledby="journey-builder-title"]',
-          );
-          if (!map || !builder) return ['Builder or map is missing'];
-          const canvas = map.getBoundingClientRect();
-          const panel = builder.getBoundingClientRect();
-          const errors: string[] = [];
-          if (canvas.width < 100 || canvas.height < 100) {
-            errors.push('Builder leaves no usable map area');
-          }
-          if (
-            canvas.left < panel.right - 1 &&
-            canvas.right > panel.left + 1 &&
-            canvas.top < panel.bottom - 1 &&
-            canvas.bottom > panel.top + 1
-          ) {
-            errors.push('Builder controls cover the map canvas');
-          }
-          const attribution = document.querySelector('.maplibregl-ctrl-attrib');
-          if (attribution) {
-            const credits = attribution.getBoundingClientRect();
-            if (
-              credits.left < canvas.left - 1 ||
-              credits.right > canvas.right + 1 ||
-              credits.top < canvas.top - 1 ||
-              credits.bottom > canvas.bottom + 1
-            ) {
-              errors.push('Map credits extend outside the visible canvas');
-            }
-          }
-          return errors;
-        }),
-      { message: 'Journey builder leaves its map visible and unobstructed' },
-    )
+    .poll(() => page.evaluate(getMapFirstBuilderLayoutErrors), {
+      message: 'Journey builder leaves its map visible and unobstructed',
+    })
     .toEqual([]);
   await expect(
     page.getByRole('button', { name: 'Cancel journey builder' }),
