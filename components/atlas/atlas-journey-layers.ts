@@ -6,12 +6,17 @@ import type {
 } from 'maplibre-gl';
 
 import type { AtlasJourneySummary } from '@/app/lib/atlas/journeys/definitions';
-import { createGentleChapterRouteSegments } from '@/app/lib/chapters/route-geometry';
+import {
+  createGentleChapterRouteSegments,
+  unwrapChapterCoordinates,
+} from '@/app/lib/chapters/route-geometry';
 
 export const ATLAS_JOURNEY_ROUTE_SOURCE = 'field-atlas-journey-routes';
 export const ATLAS_JOURNEY_ENDPOINT_SOURCE = 'field-atlas-journey-endpoints';
 export const ATLAS_JOURNEY_ROUTE_CASING_LAYER =
   'field-atlas-journey-route-casing';
+export const ATLAS_JOURNEY_ROUTE_CONTINUITY_LAYER =
+  'field-atlas-journey-route-continuity';
 export const ATLAS_JOURNEY_ROUTE_LAYER = 'field-atlas-journey-route-lines';
 export const ATLAS_JOURNEY_ROUTE_PROGRESS_LAYER =
   'field-atlas-journey-route-progress';
@@ -28,6 +33,7 @@ export const ATLAS_JOURNEY_INTERACTIVE_LAYERS = [
 
 const ATLAS_JOURNEY_LAYERS = [
   ATLAS_JOURNEY_ROUTE_CASING_LAYER,
+  ATLAS_JOURNEY_ROUTE_CONTINUITY_LAYER,
   ATLAS_JOURNEY_ROUTE_LAYER,
   ATLAS_JOURNEY_ROUTE_PROGRESS_LAYER,
   ATLAS_JOURNEY_ROUTE_HIT_LAYER,
@@ -128,17 +134,20 @@ export function journeysToEndpointGeoJson(
     features: drawableJourneys(journeys).flatMap((journey) => {
       const first = journey.stops[0];
       const last = journey.stops.at(-1);
-      if (!first || !last) return [];
+      const coordinates = unwrapChapterCoordinates(journey.stops);
+      const firstCoordinate = coordinates[0];
+      const lastCoordinate = coordinates.at(-1);
+      if (!first || !last || !firstCoordinate || !lastCoordinate) return [];
 
       return [
-        { stop: first, endpoint: 'start' },
-        { stop: last, endpoint: 'end' },
-      ].map(({ stop, endpoint }) => ({
+        { coordinate: firstCoordinate, endpoint: 'start' },
+        { coordinate: lastCoordinate, endpoint: 'end' },
+      ].map(({ coordinate, endpoint }) => ({
         type: 'Feature' as const,
         id: `${journey.id}:${endpoint}`,
         geometry: {
           type: 'Point' as const,
-          coordinates: [stop.longitude, stop.latitude],
+          coordinates: coordinate,
         },
         properties: {
           journeyId: journey.id,
@@ -218,6 +227,44 @@ export function addAtlasJourneyLayers(
         0.28,
       ],
       'line-dasharray': [1.4, 1.05],
+    },
+  };
+  const routeContinuity: LineLayerSpecification = {
+    id: ATLAS_JOURNEY_ROUTE_CONTINUITY_LAYER,
+    type: 'line',
+    source: ATLAS_JOURNEY_ROUTE_SOURCE,
+    layout: {
+      'line-cap': 'round',
+      'line-join': 'round',
+      'line-sort-key': [
+        'case',
+        ['==', ['get', 'selected'], true],
+        2,
+        ['==', ['get', 'hovered'], true],
+        1,
+        0,
+      ],
+    },
+    paint: {
+      // Keep an unbroken strand beneath the decorative dash pattern so a
+      // route always visibly reaches the center of every anchored stop.
+      'line-color': ['get', 'color'],
+      'line-width': [
+        'case',
+        ['==', ['get', 'selected'], true],
+        2,
+        ['==', ['get', 'hovered'], true],
+        1.5,
+        1,
+      ],
+      'line-opacity': [
+        'case',
+        ['==', ['get', 'selected'], true],
+        ['case', ['==', ['get', 'playbackState'], 'ahead'], 0.24, 0.68],
+        ['==', ['get', 'hovered'], true],
+        0.34,
+        0.12,
+      ],
     },
   };
   const routeProgress: LineLayerSpecification = {
@@ -309,6 +356,7 @@ export function addAtlasJourneyLayers(
 
   [
     routeCasing,
+    routeContinuity,
     routeLine,
     routeProgress,
     routeHitArea,

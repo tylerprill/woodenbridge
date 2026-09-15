@@ -1,5 +1,7 @@
 import type { AtlasJourneySummary } from '@/app/lib/atlas/journeys/definitions';
 import {
+  ATLAS_JOURNEY_ROUTE_CONTINUITY_LAYER,
+  addAtlasJourneyLayers,
   journeyIdsFromRenderedFeatures,
   journeysToEndpointGeoJson,
   journeysToRouteGeoJson,
@@ -120,6 +122,63 @@ describe('Atlas journey map layers', () => {
         (feature) => feature.properties?.selected === true,
       ),
     ).toBe(true);
+  });
+
+  it('keeps endpoint dots on the same unwrapped world copy as the route', () => {
+    const value = journey({
+      memoryCount: 2,
+      stops: [
+        {
+          ...journey().stops[0],
+          longitude: 179,
+          latitude: 10,
+        },
+        {
+          ...journey().stops[1],
+          longitude: -179,
+          latitude: 11,
+        },
+      ],
+    });
+    const state = { selectedJourneyId: value.id };
+    const routes = journeysToRouteGeoJson([value], state);
+    const endpoints = journeysToEndpointGeoJson([value], state);
+
+    expect(routes.features[0].geometry.coordinates[0]).toEqual([179, 10]);
+    expect(routes.features[0].geometry.coordinates.at(-1)).toEqual([181, 11]);
+    expect(
+      endpoints.features.map((feature) => feature.geometry.coordinates),
+    ).toEqual([
+      [179, 10],
+      [181, 11],
+    ]);
+  });
+
+  it('renders a continuous route strand beneath the decorative dashes', () => {
+    const layers: Array<Record<string, unknown>> = [];
+    const map = {
+      addLayer: jest.fn((layer: Record<string, unknown>) => layers.push(layer)),
+      addSource: jest.fn(),
+      getLayer: jest.fn(() => undefined),
+      getSource: jest.fn(() => undefined),
+    };
+
+    addAtlasJourneyLayers(map as never, [journey()], {
+      selectedJourneyId: journey().id,
+    });
+
+    const continuity = layers.find(
+      (layer) => layer.id === ATLAS_JOURNEY_ROUTE_CONTINUITY_LAYER,
+    );
+    expect(continuity).toMatchObject({
+      type: 'line',
+      layout: {
+        'line-cap': 'round',
+        'line-join': 'round',
+        'line-sort-key': expect.any(Array),
+      },
+    });
+    expect(continuity?.paint).not.toHaveProperty('line-dasharray');
   });
 
   it('omits degraded journeys that no longer contain a drawable route', () => {
