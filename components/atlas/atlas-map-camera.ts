@@ -7,6 +7,9 @@ export type AtlasMapPadding = {
 
 export type AtlasMapCoordinate = readonly [longitude: number, latitude: number];
 
+export type AtlasJourneyLayout =
+  'wide-right' | 'right' | 'bottom' | 'landscape';
+
 const LONGITUDE_CIRCLE = 360;
 const LONGITUDE_TIE_EPSILON = 1e-9;
 const MERCATOR_WORLD_SIZE_AT_ZOOM_ZERO = 512;
@@ -168,6 +171,36 @@ export function alignCoordinatesToMinimalLongitudeEnvelope(
         : normalized;
     return [baseLongitude + best.worldShift * LONGITUDE_CIRCLE, latitude];
   });
+}
+
+/**
+ * Places coordinates in the world copy already selected for a fitted route.
+ * Use the complete sampled route envelope, not a second stop-only envelope,
+ * so fresh DOM markers share the same physical endpoints as the route lines.
+ */
+export function alignCoordinatesToLongitudeEnvelope(
+  coordinates: readonly AtlasMapCoordinate[],
+  envelopeCoordinates: readonly AtlasMapCoordinate[],
+): [longitude: number, latitude: number][] {
+  let west = Infinity;
+  let east = -Infinity;
+  for (const [longitude] of envelopeCoordinates) {
+    if (!Number.isFinite(longitude)) continue;
+    west = Math.min(west, longitude);
+    east = Math.max(east, longitude);
+  }
+  if (!Number.isFinite(west) || !Number.isFinite(east)) {
+    return coordinates.map(([longitude, latitude]) => [longitude, latitude]);
+  }
+
+  const center = west / 2 + east / 2;
+  return coordinates.map(([longitude, latitude]) => [
+    Number.isFinite(longitude)
+      ? longitude +
+        LONGITUDE_CIRCLE * Math.round((center - longitude) / LONGITUDE_CIRCLE)
+      : longitude,
+    latitude,
+  ]);
 }
 
 /**
@@ -357,22 +390,32 @@ export function getAtlasFocusPadding(
 }
 
 /**
- * Journey panels use a left rail on medium/wide canvases, a bottom sheet on
- * narrow canvases, and a right rail in short landscape. Keep the active stop
- * inside the actually visible map region for each layout.
+ * Journey panels use a right dock on medium/wide canvases, a bottom sheet on
+ * narrow canvases, and a compact rail in short landscape. Prefer the live CSS
+ * layout: a short map canvas does not imply a short landscape viewport.
  */
 export function getAtlasJourneyFocusPadding(
   width: number,
   height: number,
   playback = false,
+  layout?: AtlasJourneyLayout,
 ): AtlasMapPadding {
   const safeWidth = Number.isFinite(width) ? Math.max(0, width) : 0;
   const safeHeight = Number.isFinite(height) ? Math.max(0, height) : 0;
   const horizontalBudget = Math.max(0, safeWidth - 2);
-  const top = Math.min(90, Math.max(0, Math.floor((safeHeight - 2) / 2)));
-  const bottom = Math.min(80, Math.max(0, safeHeight - top - 2));
+  const resolvedLayout =
+    layout ??
+    (safeHeight <= 480 && safeWidth > 480
+      ? 'landscape'
+      : safeWidth <= 640
+        ? 'bottom'
+        : safeWidth > 896
+          ? 'wide-right'
+          : 'right');
 
-  if (safeHeight <= 480 && safeWidth > 480) {
+  if (resolvedLayout === 'landscape') {
+    const top = Math.min(90, Math.max(0, Math.floor((safeHeight - 2) / 2)));
+    const bottom = Math.min(80, Math.max(0, safeHeight - top - 2));
     const left = Math.min(48, Math.floor(horizontalBudget / 2));
     const panelWidth = Math.min(352, Math.max(0, safeWidth - 90));
     const right = Math.min(
@@ -381,11 +424,18 @@ export function getAtlasJourneyFocusPadding(
     );
     return { top, right, bottom, left };
   }
-  if (safeWidth > 640) {
-    const right = Math.min(64, Math.floor(horizontalBudget / 2));
-    const left = Math.min(
-      safeWidth > 896 ? 538 : 420,
-      Math.max(0, horizontalBudget - right),
+  if (resolvedLayout === 'right' || resolvedLayout === 'wide-right') {
+    const wide = resolvedLayout === 'wide-right';
+    const top = Math.min(
+      wide ? 190 : 170,
+      Math.max(0, Math.floor((safeHeight - 2) / 2)),
+    );
+    const bottom = Math.min(80, Math.max(0, safeHeight - top - 2));
+    const left = Math.min(wide ? 112 : 24, Math.floor(horizontalBudget / 2));
+    const panelWidth = Math.min(384, safeWidth * 0.4);
+    const right = Math.min(
+      Math.ceil(panelWidth + (wide ? 20 : 12) + 16),
+      Math.max(0, horizontalBudget - left),
     );
     return { top, right, bottom, left };
   }
@@ -395,10 +445,17 @@ export function getAtlasJourneyFocusPadding(
     Math.max(playback ? 56 : 18, Math.round(safeHeight * 0.06)),
     Math.max(0, safeHeight - 2),
   );
-  // Portrait playback trays can reach 76% of the canvas. Reserve 78% plus
-  // 10px so the active 44px dot stays above the sheet and attribution gutter.
+  // Portrait playback trays can reach 76% of the workspace. A proportional
+  // inset alone loses complete-dot clearance on short canvases, so also solve
+  // for a 22px marker radius, 9px sheet gap, 8px gutter and rounding allowance.
+  const desiredBottom = playback
+    ? Math.max(
+        Math.round(safeHeight * 0.78) + 10,
+        Math.ceil(safeHeight * 0.52 + sheetTop + 80),
+      )
+    : Math.round(safeHeight * 0.64);
   const sheetBottom = Math.min(
-    Math.round(safeHeight * (playback ? 0.78 : 0.64)) + (playback ? 10 : 0),
+    desiredBottom,
     Math.max(0, safeHeight - sheetTop - 2),
   );
   return { ...base, top: sheetTop, bottom: sheetBottom };
@@ -408,8 +465,9 @@ export function getAtlasJourneyFocusPadding(
 export function getAtlasJourneyFitPadding(
   width: number,
   height: number,
+  layout?: AtlasJourneyLayout,
 ): AtlasMapPadding {
-  const base = getAtlasJourneyFocusPadding(width, height);
+  const base = getAtlasJourneyFocusPadding(width, height, false, layout);
   const safeWidth = Number.isFinite(width) ? Math.max(0, width) : 0;
   const safeHeight = Number.isFinite(height) ? Math.max(0, height) : 0;
   const horizontalInset = Math.min(

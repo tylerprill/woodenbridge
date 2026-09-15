@@ -9,6 +9,7 @@ import {
   screen,
   waitFor,
 } from '@testing-library/react';
+import type { ComponentProps } from 'react';
 
 import type { AtlasView } from '@/app/lib/atlas/definitions';
 import type { AtlasJourneySummary } from '@/app/lib/atlas/journeys/definitions';
@@ -75,10 +76,15 @@ jest.mock(
       const marker = {
         addTo: jest.fn(),
         getElement: jest.fn(() => element),
-        remove: jest.fn(),
+        remove: jest.fn(() => element.remove()),
         setLngLat: jest.fn(),
       };
-      marker.addTo.mockReturnValue(marker);
+      marker.addTo.mockImplementation(
+        (map: { getContainer: () => HTMLElement }) => {
+          map.getContainer().append(element);
+          return marker;
+        },
+      );
       marker.setLngLat.mockReturnValue(marker);
       mockMarkers.push(marker);
       return marker;
@@ -133,6 +139,7 @@ function createMapMock({
     getBearing: jest.fn(() => 0),
     setStyle: jest.fn(),
     getCanvas: jest.fn(() => canvas),
+    getCenter: jest.fn(() => ({ lng: 0, lat: 0 })),
     getContainer: jest.fn(() => container),
     getLayer: jest.fn(() => undefined),
     getPitch: jest.fn(() => 0),
@@ -208,6 +215,29 @@ function renderMap(view = initialView) {
       onViewChange={jest.fn()}
     />,
   );
+}
+
+function renderJourneyMap(
+  journey = delayedJourney,
+  overrides: Partial<ComponentProps<typeof AtlasMap>> = {},
+) {
+  const props = {
+    entries: [],
+    initialView,
+    interactionLocked: false,
+    selectedId: null,
+    placementMode: false,
+    focusRequest: { id: null, nonce: 0 },
+    fitRequest: 0,
+    onSelect: jest.fn(),
+    onPlace: jest.fn(),
+    onViewChange: jest.fn(),
+    mode: 'journeys' as const,
+    journeys: [journey],
+    selectedJourneyId: journey.id,
+    ...overrides,
+  };
+  return { ...render(<AtlasMap {...props} />), props };
 }
 
 describe('Atlas map failure recovery', () => {
@@ -348,7 +378,6 @@ describe('Atlas map failure recovery', () => {
         selectedJourneyStopId={delayedJourney.stops[1].entryId}
       />,
     );
-
     expect(mockMarkerElements).toHaveLength(0);
     act(() => {
       mockEventHandlers.get('load')?.();
@@ -524,6 +553,181 @@ describe('Atlas map failure recovery', () => {
     expect(map.fitBounds).not.toHaveBeenCalled();
   });
 
+  it('uses the CSS bottom-sheet layout when a tall portrait viewport has a short canvas', async () => {
+    jest.replaceProperty(window, 'innerWidth', 600);
+    jest.replaceProperty(window, 'innerHeight', 510);
+    const map = createMapMock({ width: 600, height: 400 });
+    const workspace = document.createElement('section');
+    workspace.className = 'atlas-workspace-root';
+    workspace.style.setProperty('--atlas-journey-layout', 'bottom');
+    // The workspace is authoritative, not a contradictory descendant token
+    // or the short canvas height that would previously infer a right rail.
+    map.getContainer().style.setProperty('--atlas-journey-layout', 'landscape');
+    workspace.append(map.getContainer());
+    mockMapConstructor.mockReturnValue(map);
+
+    const { container: renderedContainer } = render(
+      <AtlasMap
+        entries={[]}
+        initialView={initialView}
+        interactionLocked={false}
+        selectedId={null}
+        placementMode={false}
+        focusRequest={{ id: null, nonce: 0 }}
+        fitRequest={0}
+        onSelect={jest.fn()}
+        onPlace={jest.fn()}
+        onViewChange={jest.fn()}
+        mode="journeys"
+        journeys={[delayedJourney]}
+        selectedJourneyId={delayedJourney.id}
+        selectedJourneyStopId={delayedJourney.stops[1].entryId}
+      />,
+    );
+    renderedContainer.append(workspace);
+
+    act(() => {
+      mockEventHandlers.get('load')?.();
+    });
+    await waitFor(() => expect(map.easeTo).toHaveBeenCalled());
+
+    expect(map.setPadding).toHaveBeenCalledWith({
+      top: 46,
+      right: 94,
+      bottom: 278,
+      left: 94,
+    });
+    expect(map.getPadding()).toEqual({
+      top: 24,
+      right: 72,
+      bottom: 256,
+      left: 72,
+    });
+  });
+
+  it.each(['overview', 'active stop'])(
+    'refreshes the %s camera after a CSS layout switch without a canvas resize',
+    async (cameraMode) => {
+      const map = createMapMock({ width: 1000, height: 400 });
+      const workspace = document.createElement('section');
+      workspace.className = 'atlas-workspace-root';
+      workspace.style.setProperty('--atlas-journey-layout', 'wide-right');
+      workspace.append(map.getContainer());
+      mockMapConstructor.mockReturnValue(map);
+      const hasSelectedStop = cameraMode === 'active stop';
+
+      const { container: renderedContainer } = render(
+        <AtlasMap
+          entries={[]}
+          initialView={initialView}
+          interactionLocked={false}
+          selectedId={null}
+          placementMode={false}
+          focusRequest={{ id: null, nonce: 0 }}
+          fitRequest={0}
+          onSelect={jest.fn()}
+          onPlace={jest.fn()}
+          onViewChange={jest.fn()}
+          mode="journeys"
+          journeys={[delayedJourney]}
+          selectedJourneyId={delayedJourney.id}
+          selectedJourneyStopId={
+            hasSelectedStop ? delayedJourney.stops[1].entryId : null
+          }
+        />,
+      );
+      renderedContainer.append(workspace);
+
+      act(() => {
+        mockEventHandlers.get('load')?.();
+      });
+      await waitFor(() => expect(map.fitBounds).toHaveBeenCalled());
+      expect(map.getPadding()).toEqual(
+        hasSelectedStop
+          ? { top: 190, right: 420, bottom: 80, left: 112 }
+          : { top: 212, right: 442, bottom: 102, left: 134 },
+      );
+
+      map.fitBounds.mockClear();
+      map.easeTo.mockClear();
+      workspace.style.setProperty('--atlas-journey-layout', 'right');
+      fireEvent(window, new Event('resize'));
+
+      await waitFor(() =>
+        expect(
+          hasSelectedStop ? map.easeTo : map.fitBounds,
+        ).toHaveBeenCalledTimes(1),
+      );
+      expect(map.getPadding()).toEqual(
+        hasSelectedStop
+          ? { top: 170, right: 412, bottom: 80, left: 24 }
+          : { top: 192, right: 434, bottom: 102, left: 46 },
+      );
+
+      map.fitBounds.mockClear();
+      map.easeTo.mockClear();
+      workspace.style.setProperty('--atlas-journey-layout', 'bottom');
+      fireEvent(window, new Event('resize'));
+
+      await waitFor(() =>
+        expect(
+          hasSelectedStop ? map.easeTo : map.fitBounds,
+        ).toHaveBeenCalledTimes(1),
+      );
+      expect(map.getPadding()).toEqual(
+        hasSelectedStop
+          ? { top: 24, right: 120, bottom: 256, left: 120 }
+          : { top: 46, right: 142, bottom: 278, left: 142 },
+      );
+      expect(map.getContainer().clientWidth).toBe(1000);
+      expect(map.getContainer().clientHeight).toBe(400);
+    },
+  );
+
+  it.each([895, 896])(
+    'preserves the wide toolbar gutter on a %ipx canvas inside a wide CSS container',
+    async (width) => {
+      const map = createMapMock({ width, height: 700 });
+      const workspace = document.createElement('section');
+      workspace.className = 'atlas-workspace-root';
+      workspace.style.setProperty('--atlas-journey-layout', 'wide-right');
+      Object.defineProperty(workspace, 'clientWidth', { value: width + 2 });
+      workspace.append(map.getContainer());
+      mockMapConstructor.mockReturnValue(map);
+
+      const { container: renderedContainer } = render(
+        <AtlasMap
+          entries={[]}
+          initialView={initialView}
+          interactionLocked={false}
+          selectedId={null}
+          placementMode={false}
+          focusRequest={{ id: null, nonce: 0 }}
+          fitRequest={0}
+          onSelect={jest.fn()}
+          onPlace={jest.fn()}
+          onViewChange={jest.fn()}
+          mode="journeys"
+          journeys={[delayedJourney]}
+          selectedJourneyId={delayedJourney.id}
+          selectedJourneyStopId={delayedJourney.stops[1].entryId}
+        />,
+      );
+      renderedContainer.append(workspace);
+
+      act(() => {
+        mockEventHandlers.get('load')?.();
+      });
+      await waitFor(() => expect(map.easeTo).toHaveBeenCalled());
+      expect(map.getPadding()).toEqual({
+        top: 190,
+        right: Math.ceil(width * 0.4 + 36),
+        bottom: 80,
+        left: 112,
+      });
+    },
+  );
+
   it('locks geodesic route endpoints to the exact marker coordinates', async () => {
     const map = createMapMock();
     mockMapConstructor.mockReturnValue(map);
@@ -602,7 +806,7 @@ describe('Atlas map failure recovery', () => {
     await waitFor(() =>
       expect(map.easeTo).toHaveBeenLastCalledWith(
         expect.objectContaining({
-          padding: { top: 56, right: 47, bottom: 377, left: 47 },
+          padding: { top: 56, right: 47, bottom: 381, left: 47 },
         }),
       ),
     );
@@ -659,10 +863,10 @@ describe('Atlas map failure recovery', () => {
     expect(map.setProjection).toHaveBeenCalledWith({ type: 'globe' });
     expect(map.setTransformConstrain).toHaveBeenCalledWith(null);
     expect(map.getPadding()).toEqual({
-      top: 112,
-      right: 86,
+      top: 212,
+      right: 442,
       bottom: 102,
-      left: 560,
+      left: 134,
     });
     expect(map.fitBounds).toHaveBeenCalledWith(
       expect.anything(),
@@ -931,10 +1135,10 @@ describe('Atlas map failure recovery', () => {
     });
     await waitFor(() => expect(map.fitBounds).toHaveBeenCalled());
     expect(map.getPadding()).toEqual({
-      top: 90,
-      right: 64,
+      top: 190,
+      right: 420,
       bottom: 80,
-      left: 538,
+      left: 112,
     });
 
     map.fitBounds.mockClear();
@@ -960,11 +1164,189 @@ describe('Atlas map failure recovery', () => {
       }),
     );
     expect(map.getPadding()).toEqual({
-      top: 112,
-      right: 86,
+      top: 212,
+      right: 442,
       bottom: 102,
-      left: 560,
+      left: 134,
     });
+  });
+
+  it('recreates world-Journey markers at the settled route copy and preserves focused stop access', async () => {
+    const worldJourney: AtlasJourneySummary = {
+      ...delayedJourney,
+      memoryCount: 10,
+      stops: [
+        [12.4924, 41.8902],
+        [31.1342, 29.9792],
+        [35.4444, 30.3285],
+        [78.0421, 27.1751],
+        [103.867, 13.4125],
+        [116.5704, 40.4319],
+        [151.2153, -33.8568],
+        [-109.2766, -27.1259],
+        [-72.545, -13.1631],
+        [-88.5678, 20.6843],
+      ].map(([longitude, latitude], index) => ({
+        ...delayedJourney.stops[0],
+        entryId: `world-stop-${index}`,
+        position: index,
+        longitude,
+        latitude,
+      })),
+    };
+    const map = createMapMock({ width: 742, height: 925 });
+    map.cameraForBounds.mockReturnValue({
+      center: [150, 0],
+      zoom: 0.3,
+      bearing: 0,
+    });
+    map.getCenter.mockReturnValue({ lng: 150, lat: 0 });
+    map.getZoom.mockReturnValue(0.3);
+    mockMapConstructor.mockReturnValue(map);
+    const { container } = renderJourneyMap(worldJourney);
+    container.append(map.getContainer());
+    act(() => mockEventHandlers.get('load')?.());
+    await waitFor(() => expect(mockMarkers).toHaveLength(10));
+    const previousMarkers = mockMarkers.slice();
+    previousMarkers[2].getElement().focus();
+    const focus = jest.spyOn(HTMLElement.prototype, 'focus');
+    const routeSource = map.getSource(ATLAS_JOURNEY_ROUTE_SOURCE);
+    const previousSourceUpdates = routeSource?.setData.mock.calls.length;
+
+    act(() => mockEventHandlers.get('moveend')?.());
+    await waitFor(() => expect(mockMarkers).toHaveLength(20));
+    const freshMarkers = mockMarkers.slice(10);
+    const fittedCoordinates = mockBoundsExtends
+      .at(-1)!
+      .mock.calls.map(([coordinate]) => coordinate as [number, number]);
+
+    freshMarkers.forEach((marker, index) => {
+      expect(previousMarkers[index].remove).toHaveBeenCalledTimes(1);
+      expect(marker.getElement()).not.toBe(previousMarkers[index].getElement());
+      expect(fittedCoordinates).toContainEqual(
+        marker.setLngLat.mock.calls[0][0],
+      );
+    });
+    expect(freshMarkers[0].setLngLat).toHaveBeenCalledWith([12.4924, 41.8902]);
+    expect(document.activeElement).toBe(freshMarkers[2].getElement());
+    expect(focus).toHaveBeenLastCalledWith({ preventScroll: true });
+    expect(routeSource?.setData.mock.calls.length).toBe(previousSourceUpdates);
+  });
+
+  it('shifts fresh markers with an equivalent settled camera world copy', async () => {
+    const map = createMapMock();
+    map.cameraForBounds.mockReturnValue({
+      center: [190, 0],
+      zoom: 4,
+      bearing: 0,
+    });
+    map.getCenter.mockReturnValue({ lng: -170, lat: 0 });
+    mockMapConstructor.mockReturnValue(map);
+    const { container } = renderJourneyMap();
+    container.append(map.getContainer());
+    act(() => mockEventHandlers.get('load')?.());
+    await waitFor(() => expect(mockMarkers).toHaveLength(2));
+    const fittedCoordinates = mockBoundsExtends
+      .at(-1)!
+      .mock.calls.map(([coordinate]) => coordinate as [number, number]);
+
+    act(() => mockEventHandlers.get('moveend')?.());
+    await waitFor(() => expect(mockMarkers).toHaveLength(4));
+    mockMarkers.slice(2).forEach((marker) => {
+      const [longitude, latitude] = marker.setLngLat.mock.calls[0][0];
+      expect(fittedCoordinates).toContainEqual([longitude + 360, latitude]);
+    });
+  });
+
+  it('refreshes an explicit whole-path fit even when a stop remains selected', async () => {
+    const map = createMapMock();
+    mockMapConstructor.mockReturnValue(map);
+    const { props, rerender } = renderJourneyMap(delayedJourney, {
+      selectedJourneyStopId: delayedJourney.stops[1].entryId,
+    });
+    act(() => mockEventHandlers.get('load')?.());
+    await waitFor(() => expect(mockMarkers).toHaveLength(2));
+    rerender(<AtlasMap {...props} journeyFitRequest={1} />);
+    act(() => mockEventHandlers.get('moveend')?.());
+    await waitFor(() => expect(mockMarkers).toHaveLength(4));
+    expect(mockMarkers[3].getElement()).toHaveAttribute('aria-current', 'step');
+  });
+
+  it('discards interrupted whole fits and fits superseded by stop focus', async () => {
+    const map = createMapMock();
+    mockMapConstructor.mockReturnValue(map);
+    const { props, rerender } = renderJourneyMap();
+    act(() => mockEventHandlers.get('load')?.());
+    await waitFor(() => expect(mockMarkers).toHaveLength(2));
+    map.getCenter.mockReturnValue({ lng: 10, lat: 0 });
+    act(() => mockEventHandlers.get('moveend')?.());
+    map.getCenter.mockReturnValue({ lng: 0, lat: 0 });
+    act(() => mockEventHandlers.get('moveend')?.());
+    expect(mockMarkers).toHaveLength(2);
+
+    rerender(<AtlasMap {...props} journeyFitRequest={1} />);
+    rerender(
+      <AtlasMap
+        {...props}
+        journeyFitRequest={1}
+        selectedJourneyStopId={delayedJourney.stops[1].entryId}
+      />,
+    );
+    act(() => mockEventHandlers.get('moveend')?.());
+    expect(mockMarkers).toHaveLength(2);
+  });
+
+  it('handles synchronous reduced-motion fits without stale completion listeners', async () => {
+    const map = createMapMock();
+    mockMapConstructor.mockReturnValue(map);
+    jest.spyOn(window, 'matchMedia').mockImplementation((query) => ({
+      matches: query === '(prefers-reduced-motion: reduce)',
+      media: query,
+      onchange: null,
+      addListener: jest.fn(),
+      removeListener: jest.fn(),
+      addEventListener: jest.fn(),
+      removeEventListener: jest.fn(),
+      dispatchEvent: jest.fn(),
+    }));
+    map.fitBounds.mockImplementation((_bounds, options) => {
+      if (options.duration === 0) mockEventHandlers.get('moveend')?.();
+    });
+    renderJourneyMap();
+    act(() => mockEventHandlers.get('load')?.());
+    await waitFor(() => expect(mockMarkers).toHaveLength(4));
+    expect(map.fitBounds).toHaveBeenLastCalledWith(
+      expect.anything(),
+      expect.objectContaining({ duration: 0 }),
+    );
+    act(() => mockEventHandlers.get('moveend')?.());
+    expect(mockMarkers).toHaveLength(4);
+  });
+
+  it('does not restore stale marker focus after Places or steal focus from another control', async () => {
+    const map = createMapMock();
+    mockMapConstructor.mockReturnValue(map);
+    const { props, rerender, container } = renderJourneyMap();
+    container.append(map.getContainer());
+    const otherControl = document.createElement('button');
+    container.append(otherControl);
+    act(() => mockEventHandlers.get('load')?.());
+    await waitFor(() => expect(mockMarkers).toHaveLength(2));
+    mockMarkers[0].getElement().focus();
+    rerender(<AtlasMap {...props} mode="places" />);
+    otherControl.focus();
+    rerender(<AtlasMap {...props} />);
+    expect(document.activeElement).toBe(otherControl);
+
+    const currentMarkers = mockMarkers.slice(2);
+    currentMarkers[0].getElement().focus();
+    currentMarkers[0].remove.mockImplementation(() => {
+      currentMarkers[0].getElement().remove();
+      otherControl.focus();
+    });
+    act(() => mockEventHandlers.get('moveend')?.());
+    await waitFor(() => expect(mockMarkers).toHaveLength(6));
+    expect(document.activeElement).toBe(otherControl);
   });
 
   it('times out a stalled load and recreates the map on retry', () => {

@@ -247,6 +247,17 @@ describe('Atlas Journey Lens', () => {
       { scroll: false },
     );
 
+    const relive = screen.getByRole('button', { name: 'Relive' });
+    const actions = relive.closest('footer');
+    expect(actions).not.toBeNull();
+    expect(actions?.parentElement).toHaveAttribute(
+      'aria-labelledby',
+      'journey-tray-title',
+    );
+    expect(actions).not.toContainElement(
+      screen.getByRole('list', { name: 'Leelanau weekend stops' }),
+    );
+
     await user.click(screen.getByRole('button', { name: 'Relive' }));
     expect(await screen.findByText('First light over the dune.')).toBeVisible();
     await user.click(

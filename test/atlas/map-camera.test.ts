@@ -1,12 +1,17 @@
 import { mat4, vec4 } from 'gl-matrix';
-import { createGeodesicChapterRoute } from '@/app/lib/chapters/route-geometry';
 import {
+  createGeodesicChapterRoute,
+  createGeodesicChapterStopCoordinates,
+} from '@/app/lib/chapters/route-geometry';
+import {
+  alignCoordinatesToLongitudeEnvelope,
   alignCoordinatesToMinimalLongitudeEnvelope,
   getAtlasFitPadding,
   getAtlasFocusPadding,
   getAtlasJourneyFitPadding,
   getAtlasJourneyFocusPadding,
   getAtlasJourneyGlobeFitZoomLimit,
+  type AtlasJourneyLayout,
   type AtlasMapCoordinate,
   type AtlasMapPadding,
 } from '@/components/atlas/atlas-map-camera';
@@ -234,29 +239,188 @@ describe('Atlas map camera longitude alignment', () => {
   });
 });
 
-describe('Atlas globe Journey fit limit', () => {
-  it('fits every global route sample beside a rail wider than half the canvas', () => {
-    const coordinates = createGeodesicChapterRoute([
-      { longitude: -75.1652, latitude: 39.9526 },
-      { longitude: 76.8897, latitude: 43.2389 },
-      { longitude: 18.4241, latitude: -33.9249 },
-    ]);
-    const padding = getAtlasJourneyFitPadding(901, 700);
-    const center = boundsCandidateCenter(coordinates);
-    const limit = getAtlasJourneyGlobeFitZoomLimit(
-      coordinates,
-      901,
-      700,
-      padding,
-      center,
-      VERTICAL_FOV_DEGREES,
-    );
+describe('Atlas fitted route longitude alignment', () => {
+  it.each(['globe', 'mercator'] as const)(
+    'keeps chronological world-Journey markers on the exact fitted %s route endpoints',
+    (projection) => {
+      const points = [
+        { longitude: 12.4924, latitude: 41.8902 }, // Rome
+        { longitude: 31.1342, latitude: 29.9792 }, // Giza
+        { longitude: 35.4444, latitude: 30.3285 }, // Jordan
+        { longitude: 78.0421, latitude: 27.1751 }, // Taj Mahal
+        { longitude: 103.8597, latitude: 13.4125 }, // Angkor
+        { longitude: 116.5704, latitude: 40.4319 }, // China
+        { longitude: 151.2153, latitude: -33.8568 }, // Sydney
+        { longitude: -109.3502, latitude: -27.1127 }, // Rapa Nui
+        { longitude: -72.545, latitude: -13.1631 }, // Machu Picchu
+        { longitude: -88.5678, latitude: 20.6843 }, // Chichen Itza
+      ];
+      const chronologicalStops = createGeodesicChapterStopCoordinates(points, {
+        projection,
+      });
+      const fittedRoute = alignCoordinatesToMinimalLongitudeEnvelope(
+        createGeodesicChapterRoute(points, { projection }),
+      );
+      const freshStops = alignCoordinatesToLongitudeEnvelope(
+        chronologicalStops,
+        fittedRoute,
+      );
+      const longitudes = fittedRoute.map(([longitude]) => longitude);
+      const west = Math.min(...longitudes);
+      const east = Math.max(...longitudes);
 
-    expect(padding.left).toBeGreaterThan(901 / 2);
-    expect(limit).toBeGreaterThan(-2);
-    expect(limit).toBeLessThan(1.4175); // Unpadded globe refinement clipped both outer stops.
-    expectGlobeRouteInsideInset(coordinates, 901, 700, padding, center, limit);
+      expect(east - west).toBeLessThanOrEqual(360);
+      expect(
+        alignCoordinatesToMinimalLongitudeEnvelope(chronologicalStops),
+      ).not.toEqual(freshStops);
+      freshStops.forEach((coordinate, index) => {
+        expect(coordinate[0]).toBeGreaterThanOrEqual(west);
+        expect(coordinate[0]).toBeLessThanOrEqual(east);
+        expect(fittedRoute).toContainEqual(coordinate);
+        expect(coordinate[1]).toBe(points[index].latitude);
+        const worldShift = (coordinate[0] - points[index].longitude) / 360;
+        expect(worldShift).toBeCloseTo(Math.round(worldShift), 12);
+      });
+    },
+  );
+
+  it('places stops from several unwrapped worlds into an already fitted envelope', () => {
+    const coordinates = [
+      [480, 12],
+      [-590, -24],
+      [870, 35],
+    ] as const;
+    expect(
+      alignCoordinatesToLongitudeEnvelope(coordinates, [
+        [120, 12],
+        [132, -10],
+        [150, 35],
+      ]),
+    ).toEqual([
+      [120, 12],
+      [130, -24],
+      [150, 35],
+    ]);
   });
+
+  it('uses finite envelope longitudes without depending on sample order or latitude', () => {
+    const coordinates = [[-179, 11]] as const;
+    const envelope = [
+      [179, NaN],
+      [Infinity, 0],
+      [NaN, 0],
+      [181, 8],
+    ] as const;
+    const expected = [[181, 11]];
+    expect(alignCoordinatesToLongitudeEnvelope(coordinates, envelope)).toEqual(
+      expected,
+    );
+    expect(
+      alignCoordinatesToLongitudeEnvelope(coordinates, [...envelope].reverse()),
+    ).toEqual(expected);
+  });
+
+  it.each([
+    { label: 'empty', envelope: [] },
+    {
+      label: 'non-finite',
+      envelope: [
+        [NaN, 0],
+        [Infinity, 1],
+        [-Infinity, 2],
+      ],
+    },
+  ] as { label: string; envelope: AtlasMapCoordinate[] }[])(
+    'returns fresh unchanged coordinates for an $label envelope',
+    ({ envelope }) => {
+      const coordinates = [
+        [480, 12],
+        [NaN, 3],
+        [Infinity, -4],
+      ] as const;
+      const aligned = alignCoordinatesToLongitudeEnvelope(
+        coordinates,
+        envelope,
+      );
+      expect(aligned).toEqual(coordinates);
+      expect(aligned).not.toBe(coordinates);
+      aligned.forEach((coordinate, index) => {
+        expect(coordinate).not.toBe(coordinates[index]);
+      });
+    },
+  );
+
+  it('clones without mutating frozen input coordinates or fitted samples', () => {
+    const coordinates = Object.freeze([
+      Object.freeze([480, 12] as const),
+      Object.freeze([Infinity, 3] as const),
+    ]);
+    const envelope = Object.freeze([
+      Object.freeze([120, 8] as const),
+      Object.freeze([150, -10] as const),
+    ]);
+    const aligned = alignCoordinatesToLongitudeEnvelope(coordinates, envelope);
+    expect(aligned).toEqual([
+      [120, 12],
+      [Infinity, 3],
+    ]);
+    expect(coordinates).toEqual([
+      [480, 12],
+      [Infinity, 3],
+    ]);
+    expect(envelope).toEqual([
+      [120, 8],
+      [150, -10],
+    ]);
+    expect(aligned[0]).not.toBe(coordinates[0]);
+    expect(alignCoordinatesToLongitudeEnvelope([], envelope)).toEqual([]);
+  });
+});
+
+describe('Atlas globe Journey fit limit', () => {
+  it.each([
+    {
+      label: 'the right dock',
+      padding: getAtlasJourneyFitPadding(901, 700),
+      widerThanHalf: false,
+    },
+    {
+      label: 'a right rail wider than half the canvas',
+      padding: { top: 112, right: 560, bottom: 102, left: 86 },
+      widerThanHalf: true,
+    },
+  ])(
+    'fits every global route sample beside $label',
+    ({ padding, widerThanHalf }) => {
+      const coordinates = createGeodesicChapterRoute([
+        { longitude: -75.1652, latitude: 39.9526 },
+        { longitude: 76.8897, latitude: 43.2389 },
+        { longitude: 18.4241, latitude: -33.9249 },
+      ]);
+      const center = boundsCandidateCenter(coordinates);
+      const limit = getAtlasJourneyGlobeFitZoomLimit(
+        coordinates,
+        901,
+        700,
+        padding,
+        center,
+        VERTICAL_FOV_DEGREES,
+      );
+
+      expect(padding.right).toBeGreaterThan(padding.left);
+      expect(padding.right > 901 / 2).toBe(widerThanHalf);
+      expect(limit).toBeGreaterThan(-2);
+      expect(limit).toBeLessThan(1.4175); // Unpadded globe refinement clipped both outer stops.
+      expectGlobeRouteInsideInset(
+        coordinates,
+        901,
+        700,
+        padding,
+        center,
+        limit,
+      );
+    },
+  );
 
   it('corrects a poleward front-side route that a Mercator estimate over-zooms', () => {
     const coordinates = createGeodesicChapterRoute([
@@ -508,7 +672,7 @@ describe('Atlas globe Journey fit limit', () => {
       (distance * radius) / Math.sqrt(distance ** 2 + 2 * distance * radius);
     const project = globeProjection(901, 700, padding, center, limit);
 
-    expect(apparentRadius).toBeCloseTo(127.5, 10);
+    expect(apparentRadius).toBeCloseTo(174, 10);
     expect(apparentRadius * 2).toBeGreaterThan(200);
     expect(project(coordinates[1]).visible).toBe(false);
     // Check the whole surface geometrically, without claiming back-side
@@ -542,8 +706,8 @@ describe('Atlas globe Journey fit limit', () => {
     ] as const;
     const distance = 700 / (2 * Math.tan(radians(VERTICAL_FOV_DEGREES) / 2));
     const allowedRadius =
-      (127.5 * distance) /
-      (Math.sin(radians(45)) * distance - 127.5 * (1 - Math.cos(radians(45))));
+      (174 * distance) /
+      (Math.sin(radians(45)) * distance - 174 * (1 - Math.cos(radians(45))));
     const expected = Math.log2((allowedRadius * 2 * Math.PI) / 512);
     const limit = getAtlasJourneyGlobeFitZoomLimit(
       coordinates,
@@ -577,7 +741,7 @@ describe('Atlas globe Journey fit limit', () => {
     expect(limit).toBeGreaterThan(-2 + Math.log2(Math.cos(radians(center[1]))));
     expect(
       (distance * radius) / Math.sqrt(distance ** 2 + 2 * distance * radius),
-    ).toBeCloseTo(127.5, 10);
+    ).toBeCloseTo(174, 10);
   });
 
   it('retains the close-route zoom ceiling for coincident stops', () => {
@@ -737,14 +901,175 @@ describe('Atlas map camera padding', () => {
     });
   });
 
-  it('preserves room for the left Journey panel when focusing a stop', () => {
+  it('preserves room for the desktop right Journey dock and left controls when focusing a stop', () => {
     expect(getAtlasJourneyFocusPadding(1000, 752)).toEqual({
-      top: 90,
-      right: 64,
+      top: 190,
+      right: 420,
       bottom: 80,
-      left: 538,
+      left: 112,
     });
   });
+
+  it.each([
+    [640, { top: 42, right: 77, bottom: 448, left: 77 }],
+    [641, { top: 170, right: 285, bottom: 80, left: 24 }],
+    [896, { top: 170, right: 387, bottom: 80, left: 24 }],
+    [897, { top: 190, right: 395, bottom: 80, left: 112 }],
+  ] as const)(
+    'matches the Journey container breakpoint at %ipx',
+    (width, padding) => {
+      expect(getAtlasJourneyFocusPadding(width, 700)).toEqual(padding);
+    },
+  );
+
+  it.each([
+    [480, { top: 90, right: 386, bottom: 80, left: 48 }],
+    [481, { top: 29, right: 72, bottom: 308, left: 72 }],
+  ] as const)(
+    'matches the inferred short-landscape boundary at %ipx high',
+    (height, padding) => {
+      expect(getAtlasJourneyFocusPadding(600, height)).toEqual(padding);
+    },
+  );
+
+  it('honors an explicit CSS bottom sheet over the short-height inference', () => {
+    expect(getAtlasJourneyFocusPadding(600, 400, false, 'bottom')).toEqual({
+      top: 24,
+      right: 72,
+      bottom: 256,
+      left: 72,
+    });
+    expect(getAtlasJourneyFocusPadding(600, 400, true, 'bottom')).toEqual({
+      top: 56,
+      right: 72,
+      bottom: 342,
+      left: 72,
+    });
+    expect(getAtlasJourneyFocusPadding(600, 400, false, 'bottom')).not.toEqual(
+      getAtlasJourneyFocusPadding(600, 400),
+    );
+  });
+
+  it.each([400, 480])(
+    'honors an explicit compact right dock on a %ipx-high desktop canvas',
+    (height) => {
+      const padding = { top: 170, right: 412, bottom: 80, left: 24 };
+      expect(getAtlasJourneyFocusPadding(1000, height, false, 'right')).toEqual(
+        padding,
+      );
+      expect(getAtlasJourneyFocusPadding(1000, height, true, 'right')).toEqual(
+        padding,
+      );
+      expect(
+        getAtlasJourneyFocusPadding(1000, height, false, 'right'),
+      ).not.toEqual(getAtlasJourneyFocusPadding(1000, height));
+    },
+  );
+
+  it.each([
+    [895, { top: 190, right: 394, bottom: 80, left: 112 }],
+    [896, { top: 190, right: 395, bottom: 80, left: 112 }],
+  ] as const)(
+    'honors the explicit wide CSS right dock on a %ipx canvas without re-inferring its container breakpoint',
+    (width, padding) => {
+      expect(
+        getAtlasJourneyFocusPadding(width, 700, false, 'wide-right'),
+      ).toEqual(padding);
+      expect(
+        getAtlasJourneyFocusPadding(width, 700, true, 'wide-right'),
+      ).toEqual(padding);
+      expect(
+        getAtlasJourneyFocusPadding(width, 700, false, 'wide-right'),
+      ).not.toEqual(getAtlasJourneyFocusPadding(width, 700));
+    },
+  );
+
+  it('honors an explicit landscape rail below the old width inference', () => {
+    expect(getAtlasJourneyFocusPadding(480, 320, false, 'landscape')).toEqual({
+      top: 90,
+      right: 386,
+      bottom: 80,
+      left: 48,
+    });
+    expect(
+      getAtlasJourneyFocusPadding(480, 320, false, 'landscape'),
+    ).not.toEqual(getAtlasJourneyFocusPadding(480, 320));
+  });
+
+  it.each([
+    {
+      layout: 'right' as const,
+      width: 1000,
+      height: 400,
+      padding: { top: 192, right: 434, bottom: 102, left: 46 },
+    },
+    {
+      layout: 'wide-right' as const,
+      width: 895,
+      height: 700,
+      padding: { top: 212, right: 416, bottom: 102, left: 134 },
+    },
+    {
+      layout: 'bottom' as const,
+      width: 600,
+      height: 400,
+      padding: { top: 46, right: 94, bottom: 278, left: 94 },
+    },
+    {
+      layout: 'landscape' as const,
+      width: 480,
+      height: 320,
+      padding: { top: 112, right: 408, bottom: 102, left: 70 },
+    },
+  ])(
+    'adds a complete 22px dot inset around the explicit $layout layout',
+    ({ layout, width, height, padding }) => {
+      expect(getAtlasJourneyFitPadding(width, height, layout)).toEqual(padding);
+      const focus = getAtlasJourneyFocusPadding(width, height, false, layout);
+      for (const side of ['top', 'right', 'bottom', 'left'] as const) {
+        expect(padding[side] - focus[side]).toBe(22);
+      }
+    },
+  );
+
+  it.each<AtlasJourneyLayout>(['wide-right', 'right', 'bottom', 'landscape'])(
+    'keeps explicit %s layout padding finite and inside zero, tiny, and invalid dimensions',
+    (layout) => {
+      for (const [width, height] of [
+        [0, 0],
+        [1, 1],
+        [2, 2],
+        [3, 4],
+        [12, 15],
+        [320, 100],
+        [600, 0],
+        [0, 400],
+        [-1, -3],
+        [NaN, Infinity],
+        [Infinity, NaN],
+      ]) {
+        const safeWidth = Number.isFinite(width) ? Math.max(0, width) : 0;
+        const safeHeight = Number.isFinite(height) ? Math.max(0, height) : 0;
+        for (const padding of [
+          getAtlasJourneyFocusPadding(width, height, false, layout),
+          getAtlasJourneyFocusPadding(width, height, true, layout),
+          getAtlasJourneyFitPadding(width, height, layout),
+        ]) {
+          expect(padding.left + padding.right).toBeLessThanOrEqual(
+            Math.max(0, safeWidth - 2),
+          );
+          expect(padding.top + padding.bottom).toBeLessThanOrEqual(
+            Math.max(0, safeHeight - 2),
+          );
+          expect(
+            Object.values(padding).every(
+              (inset) => Number.isFinite(inset) && inset >= 0,
+            ),
+          ).toBe(true);
+        }
+      }
+    },
+  );
 
   it('preserves room for the compact Journey bottom sheet', () => {
     expect(getAtlasJourneyFocusPadding(390, 756)).toEqual({
@@ -767,17 +1092,40 @@ describe('Atlas map camera padding', () => {
     );
   });
 
-  it.each([568, 480])(
+  it.each([
+    [568, 453],
+    [480, 386],
+  ])(
     'keeps the entire active pin above the playback sheet on a 320px-wide %ipx canvas',
-    (height) => {
+    (height, bottom) => {
       const padding = getAtlasJourneyFocusPadding(320, height, true);
       const markerCenter = (padding.top + height - padding.bottom) / 2;
-      const sheetTop = height * (1 - 0.76) - 8.8;
+      const physicalSheetTop = height * 0.24 - 9;
 
       expect(padding.top).toBe(56);
-      expect(padding.bottom).toBe(Math.round(height * 0.78) + 10);
+      expect(padding.bottom).toBe(bottom);
       expect(markerCenter - 22).toBeGreaterThan(0);
-      expect(markerCenter + 22).toBeLessThan(sheetTop);
+      expect(markerCenter + 22).toBeLessThanOrEqual(physicalSheetTop - 8);
+      expect(padding.top + padding.bottom).toBeLessThanOrEqual(height - 2);
+    },
+  );
+
+  it.each([
+    [400, 342],
+    [414, 352],
+    [469, 380],
+    [510, 408],
+  ])(
+    'keeps an 8px gutter between the full 44px playback marker and the physical bottom sheet on a %ipx-high canvas',
+    (height, bottom) => {
+      const padding = getAtlasJourneyFocusPadding(390, height, true, 'bottom');
+      const markerCenter = (padding.top + height - padding.bottom) / 2;
+      const physicalSheetTop = height * 0.24 - 9;
+
+      expect(padding.top).toBe(56);
+      expect(padding.bottom).toBe(bottom);
+      expect(markerCenter - 22).toBeGreaterThan(0);
+      expect(markerCenter + 22).toBeLessThanOrEqual(physicalSheetTop - 8);
       expect(padding.top + padding.bottom).toBeLessThanOrEqual(height - 2);
     },
   );

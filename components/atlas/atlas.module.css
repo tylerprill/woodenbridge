@@ -1,4 +1,6 @@
 .workspace {
+  --atlas-journey-layout: wide-right;
+  --atlas-journey-rail-width: min(24rem, 40%);
   --atlas-glass: rgba(251, 250, 245, 0.82);
   --atlas-glass-strong: rgba(251, 250, 245, 0.94);
   --atlas-line: rgba(16, 35, 29, 0.14);
@@ -2204,12 +2206,25 @@
 }
 
 .journeyTray {
-  top: 11.4rem;
-  left: 6.6rem;
+  /* Keep remembered paths at the map's edge, below the search control. */
+  top: 5.75rem;
+  right: 1.25rem;
+  bottom: auto;
+  left: auto;
   min-width: 0;
   grid-template-rows: auto minmax(0, 1fr);
-  width: min(25.5rem, calc(100% - 8rem));
-  max-height: min(40rem, calc(100% - 15.2rem));
+  width: var(--atlas-journey-rail-width);
+  max-height: calc(100% - 7rem);
+  animation-name: drawer-enter;
+}
+
+.journeyTray[data-detail='true'] {
+  grid-template-rows: auto minmax(0, 1fr) auto;
+}
+
+.workspace[data-journey-panel-open='true']
+  :global(.maplibregl-ctrl-bottom-right) {
+  right: calc(var(--atlas-journey-rail-width) + 2.25rem);
 }
 
 .journeyTray > header {
@@ -2600,7 +2615,8 @@
   display: grid;
   min-width: 0;
   grid-template-columns: repeat(3, minmax(0, 1fr));
-  margin-top: 1rem;
+  padding: 0.75rem 1rem calc(0.75rem + env(safe-area-inset-bottom));
+  border-top: 1px solid rgba(16, 35, 29, 0.09);
   gap: 0.45rem;
 }
 
@@ -3074,6 +3090,10 @@
 }
 
 @container dashboard-content (max-width: 56rem) {
+  .workspace {
+    --atlas-journey-layout: right;
+  }
+
   .atlasHeader {
     top: 0.75rem;
     right: 0.75rem;
@@ -3153,13 +3173,16 @@
   }
 
   .journeyTray {
-    top: 10.7rem;
-    right: auto;
-    bottom: 0.75rem;
-    left: 0.75rem;
-    width: min(24rem, calc(100% - 1.5rem));
-    max-height: calc(100% - 11.45rem);
-    animation-name: tray-enter;
+    top: 5rem;
+    right: 0.75rem;
+    bottom: auto;
+    left: auto;
+    max-height: calc(100% - 5.75rem);
+  }
+
+  .workspace[data-journey-panel-open='true']
+    :global(.maplibregl-ctrl-bottom-right) {
+    right: calc(var(--atlas-journey-rail-width) + 1.75rem);
   }
 
   .journeyActions :is(button, a),
@@ -3188,6 +3211,10 @@
 }
 
 @container dashboard-content (max-width: 40rem) {
+  .workspace {
+    --atlas-journey-layout: bottom;
+  }
+
   .workspace[data-journey-panel-open='true'] .atlasHeader,
   .workspace[data-journey-panel-open='true'] .toolDock {
     visibility: hidden;
@@ -3217,7 +3244,7 @@
   }
 
   .workspace[data-atlas-surface='playback'] .journeyTray {
-    /* Camera playback padding reserves 78% + 10px above this 76% sheet. */
+    /* Camera playback padding keeps a full-marker gutter above this sheet. */
     max-height: min(76%, calc(100% - 1.1rem));
   }
 
@@ -3228,9 +3255,14 @@
 
   .workspace[data-journey-panel-open='true']
     :global(.maplibregl-ctrl-bottom-right) {
-    top: 0.55rem;
+    top: 0.25rem;
     right: 0.55rem;
     bottom: auto;
+  }
+
+  .workspace[data-journey-panel-open='true'] :global(.maplibregl-ctrl-attrib) {
+    /* MapLibre's extra vertical margin would enter the retained dot area. */
+    margin-block: 0;
   }
 
   .workspace[data-journey-panel-open='true']
@@ -3301,8 +3333,9 @@
   }
 }
 
-@media (max-height: 480px) {
+@media (max-height: 480px) and (orientation: landscape) {
   .workspace {
+    --atlas-journey-layout: landscape;
     min-height: 0;
   }
 
@@ -3443,6 +3476,13 @@
     :global(.maplibregl-ctrl-bottom-right) {
     right: auto;
     left: 0.55rem;
+    width: calc(100% - min(22rem, calc(100% - 5.6rem)) - 1.1rem);
+  }
+
+  .workspace[data-journey-panel-open='true'] :global(.maplibregl-ctrl-attrib) {
+    /* Let expanded credits wrap before they reach the landscape inspector. */
+    max-width: calc(100% - 56px);
+    overflow-wrap: anywhere;
   }
 
   .workspace[data-journey-panel-open='true'] .searchWrap {
@@ -3458,7 +3498,7 @@
   }
 }
 
-@media (max-height: 360px) {
+@media (max-height: 360px) and (orientation: landscape) {
   /* Preserve a useful stop preview on extra-short phones instead of spending
      the rail's entire height on its three persistent control bars. */
   .workspace[data-atlas-surface='playback'] .journeyTray > header,
@@ -3467,6 +3507,11 @@
   }
 
   .workspace[data-atlas-surface='playback'] .journeyPlaybackFooter {
+    padding-top: 0.15rem;
+    padding-bottom: calc(0.15rem + env(safe-area-inset-bottom));
+  }
+
+  .journeyActions {
     padding-top: 0.15rem;
     padding-bottom: calc(0.15rem + env(safe-area-inset-bottom));
   }

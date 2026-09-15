@@ -4,6 +4,7 @@ import { E2E_FIXTURE } from '../scripts/seed-e2e.js';
 import {
   expectActiveJourneyDotClearOfOverlays,
   expectJourneyPlaybackPreviewHasRoom,
+  expectVisibleJourneyDotsClearOfOverlays,
 } from './support/journey-audit';
 import { auditCurrentPage, monitorBrowserIssues } from './support/ui-audit';
 
@@ -163,6 +164,18 @@ test('Journey Lens connects the Atlas, playback, and Chapter workshop', async ({
   ).toBeVisible();
   await auditJourneyState(page, testInfo, 'overview', monitor);
 
+  await page
+    .getByRole('button', { name: new RegExp(primaryJourney.title, 'i') })
+    .click();
+  await expect(
+    page.getByRole('heading', { level: 2, name: primaryJourney.title }),
+  ).toBeVisible();
+  await expectVisibleJourneyDotsClearOfOverlays(page);
+  await expect(page.getByRole('button', { name: 'Relive' })).toBeInViewport({
+    ratio: 1,
+  });
+  await auditJourneyState(page, testInfo, 'fitted-detail', monitor);
+
   const detailUrl = new URL('/dashboard', 'http://field-atlas.test');
   detailUrl.searchParams.set('view', 'journeys');
   detailUrl.searchParams.set('journey', primaryJourney.id);
@@ -197,6 +210,8 @@ test('Journey Lens connects the Atlas, playback, and Chapter workshop', async ({
       name: new RegExp(`^Stop 2 of 4: ${memories[1].title}`, 'i'),
     }),
   ).toHaveAttribute('aria-current', 'step');
+  await expectActiveJourneyDotClearOfOverlays(page);
+  await expect(page.getByRole('button', { name: 'Relive' })).toBeInViewport();
   await auditJourneyState(page, testInfo, 'detail', monitor);
 
   await page.getByRole('button', { name: 'Relive' }).click();

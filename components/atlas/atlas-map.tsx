@@ -46,11 +46,13 @@ import {
 } from './atlas-layers';
 import {
   alignCoordinatesToMinimalLongitudeEnvelope,
+  alignCoordinatesToLongitudeEnvelope,
   getAtlasFitPadding,
   getAtlasFocusPadding,
   getAtlasJourneyFitPadding,
   getAtlasJourneyFocusPadding,
   getAtlasJourneyGlobeFitZoomLimit,
+  type AtlasJourneyLayout,
 } from './atlas-map-camera';
 import styles from './atlas.module.css';
 
@@ -115,6 +117,13 @@ const JOURNEYS_MIN_ZOOM = -2;
 const MAP_MAX_ZOOM = 18;
 const MERCATOR_MAX_LATITUDE = 85.0511287798066;
 const EMPTY_MAP_PADDING = { top: 0, right: 0, bottom: 0, left: 0 } as const;
+
+type PreparedJourneyMarkerFit = {
+  journeyId: string;
+  coordinates: [number, number][];
+  center: [number, number];
+  zoom: number;
+};
 
 // Mercator normally zooms in until the world fills the entire canvas height.
 // A Journey bottom sheet covers most of a tall phone canvas, so that default
@@ -218,6 +227,24 @@ function prepareMapForBoundsFit(map: MapLibreMap) {
   return { width, height };
 }
 
+function resolveJourneyLayout(
+  map: MapLibreMap,
+): AtlasJourneyLayout | undefined {
+  const container = map.getContainer();
+  const workspace = container.closest('.atlas-workspace-root') ?? container;
+  const layout = window
+    .getComputedStyle(workspace)
+    .getPropertyValue('--atlas-journey-layout')
+    .trim();
+
+  return layout === 'wide-right' ||
+    layout === 'right' ||
+    layout === 'bottom' ||
+    layout === 'landscape'
+    ? layout
+    : undefined;
+}
+
 function resolveJourneyRouteProjection(
   map: MapLibreMap,
   fallback: ChapterRouteProjection,
@@ -236,7 +263,10 @@ function fitJourneyStops(
   journeys: AtlasJourneySummary[],
   selectedJourneyId: string | null,
   projection: ChapterRouteProjection,
+  onFitPrepared?: (fit: PreparedJourneyMarkerFit | null) => void,
 ) {
+  // Cancel the previous fit before stop/resize can emit its moveend event.
+  onFitPrepared?.(null);
   const selectedJourney = selectedJourneyId
     ? journeys.find((journey) => journey.id === selectedJourneyId)
     : null;
@@ -251,7 +281,13 @@ function fitJourneyStops(
   try {
     const canvas = prepareMapForBoundsFit(map);
     if (!canvas) return;
-    const padding = getAtlasJourneyFocusPadding(canvas.width, canvas.height);
+    const layout = resolveJourneyLayout(map);
+    const padding = getAtlasJourneyFocusPadding(
+      canvas.width,
+      canvas.height,
+      false,
+      layout,
+    );
     if (stops.length === 1) {
       const coordinate = createGeodesicChapterStopCoordinates(stops, {
         projection,
@@ -280,7 +316,11 @@ function fitJourneyStops(
     // Retaining the inset moves the screen center into the exposed map area
     // instead of moving Mercator toward a pole or rotating the globe away
     // from the route when a Journey rail occupies over half the canvas.
-    const fitPadding = getAtlasJourneyFitPadding(canvas.width, canvas.height);
+    const fitPadding = getAtlasJourneyFitPadding(
+      canvas.width,
+      canvas.height,
+      layout,
+    );
     map.setPadding(fitPadding);
     let maxZoom = 8.5;
     if (projection === 'globe') {
@@ -295,6 +335,26 @@ function fitJourneyStops(
         [center.lng, center.lat],
         map.getVerticalFieldOfView(),
       );
+    } else if (selectedJourney && onFitPrepared) {
+      const candidate = map.cameraForBounds(bounds, { padding: 0, maxZoom });
+      if (
+        candidate?.center &&
+        typeof candidate.zoom === 'number' &&
+        Number.isFinite(candidate.zoom)
+      ) {
+        const center = maplibregl.LngLat.convert(candidate.center);
+        onFitPrepared({
+          journeyId: selectedJourney.id,
+          coordinates: alignCoordinatesToLongitudeEnvelope(
+            createGeodesicChapterStopCoordinates(selectedJourney.stops, {
+              projection,
+            }),
+            coordinates,
+          ),
+          center: [center.lng, center.lat],
+          zoom: Math.max(JOURNEYS_MIN_ZOOM, candidate.zoom),
+        });
+      }
     }
     map.fitBounds(bounds, {
       padding: 0,
@@ -303,6 +363,7 @@ function fitJourneyStops(
       essential: true,
     });
   } catch (error) {
+    onFitPrepared?.(null);
     console.error('Atlas journey camera fit failed:', error);
   }
 }
@@ -314,6 +375,7 @@ function focusJourneyStop(
   selectedJourneyStopId: string | null,
   journeyPlaybackIndex: number | null,
   projection: ChapterRouteProjection,
+  onBeforeFocus?: () => void,
 ) {
   const journey = journeys.find(
     (candidate) => candidate.id === selectedJourneyId,
@@ -338,6 +400,7 @@ function focusJourneyStop(
 
   const container = map.getContainer();
   try {
+    onBeforeFocus?.();
     map.easeTo({
       center: coordinate,
       zoom: Math.max(map.getZoom(), 7),
@@ -345,6 +408,7 @@ function focusJourneyStop(
         container.clientWidth,
         container.clientHeight,
         journeyPlaybackIndex != null,
+        resolveJourneyLayout(map),
       ),
       duration: mapAnimationDuration(720),
       essential: true,
@@ -436,6 +500,25 @@ export default function AtlasMap({
   const journeyPlaybackIndexRef = useRef<number | null>(journeyPlaybackIndex);
   const builderSelectedRef = useRef(new Set<string>());
   const journeyMarkersRef = useRef<Marker[]>([]);
+  const focusedJourneyMarkerRef = useRef<{
+    journeyId: string;
+    entryId: string;
+    element: HTMLElement;
+  } | null>(null);
+  const pendingJourneyMarkerFitRef = useRef<
+    | (PreparedJourneyMarkerFit & {
+        map: MapLibreMap;
+        geometryKey: string;
+        selectedStopId: string | null;
+        playbackIndex: number | null;
+      })
+    | null
+  >(null);
+  const settledJourneyMarkerFitRef = useRef<{
+    journeyId: string;
+    geometryKey: string;
+    coordinates: [number, number][];
+  } | null>(null);
   const hoveredFeatureRef = useRef<string | number | null>(null);
   const pointerFrameRef = useRef<number | null>(null);
   const [mapLoaded, setMapLoaded] = useState(false);
@@ -443,6 +526,7 @@ export default function AtlasMap({
   const [mapAttempt, setMapAttempt] = useState(0);
   const [tooltip, setTooltip] = useState<AtlasTooltip | null>(null);
   const [hoveredJourneyId, setHoveredJourneyId] = useState<string | null>(null);
+  const [journeyMarkerFitVersion, setJourneyMarkerFitVersion] = useState(0);
   const mapDataKeyValue = useMemo(() => mapDataKey(entries), [entries]);
   const journeyMapDataKeyValue = useMemo(
     () => journeyMapDataKey(journeys),
@@ -454,6 +538,22 @@ export default function AtlasMap({
     null,
   );
   const journeyRouteProjectionRef = useRef<ChapterRouteProjection>('mercator');
+
+  function prepareJourneyMarkerFit(
+    map: MapLibreMap,
+    fit: PreparedJourneyMarkerFit | null,
+  ) {
+    settledJourneyMarkerFitRef.current = null;
+    pendingJourneyMarkerFitRef.current = fit
+      ? {
+          ...fit,
+          map,
+          geometryKey: journeyMapDataKey(journeysRef.current),
+          selectedStopId: selectedJourneyStopRef.current,
+          playbackIndex: journeyPlaybackIndexRef.current,
+        }
+      : null;
+  }
 
   useEffect(() => {
     entriesRef.current = entries;
@@ -572,6 +672,7 @@ export default function AtlasMap({
     let hasLoaded = false;
     let lastCanvasWidth = map.getContainer().clientWidth;
     let lastCanvasHeight = map.getContainer().clientHeight;
+    let lastJourneyLayout = resolveJourneyLayout(map);
     const scheduleResize = () => {
       if (resizeFrame !== null) cancelAnimationFrame(resizeFrame);
       resizeFrame = requestAnimationFrame(() => {
@@ -582,10 +683,17 @@ export default function AtlasMap({
         const height = liveContainer.clientHeight;
         const sizeChanged =
           width !== lastCanvasWidth || height !== lastCanvasHeight;
+        const journeyLayout = resolveJourneyLayout(map);
+        const journeyLayoutChanged = journeyLayout !== lastJourneyLayout;
         lastCanvasWidth = width;
         lastCanvasHeight = height;
+        lastJourneyLayout = journeyLayout;
         map.resize();
-        if (!hasLoaded || !sizeChanged || modeRef.current !== 'journeys') {
+        if (
+          !hasLoaded ||
+          (!sizeChanged && !journeyLayoutChanged) ||
+          modeRef.current !== 'journeys'
+        ) {
           return;
         }
         if (
@@ -596,6 +704,7 @@ export default function AtlasMap({
             selectedJourneyStopRef.current,
             journeyPlaybackIndexRef.current,
             journeyRouteProjectionRef.current,
+            () => prepareJourneyMarkerFit(map, null),
           )
         ) {
           fitJourneyStops(
@@ -603,6 +712,7 @@ export default function AtlasMap({
             journeysRef.current,
             selectedJourneyRef.current,
             journeyRouteProjectionRef.current,
+            (fit) => prepareJourneyMarkerFit(map, fit),
           );
         }
       });
@@ -687,6 +797,39 @@ export default function AtlasMap({
 
     const handleMoveEnd = () => {
       const center = map.getCenter();
+      const prepared = pendingJourneyMarkerFitRef.current;
+      pendingJourneyMarkerFitRef.current = null;
+      if (
+        prepared &&
+        prepared.map === map &&
+        mapRef.current === map &&
+        modeRef.current === 'journeys' &&
+        selectedJourneyRef.current === prepared.journeyId &&
+        selectedJourneyStopRef.current === prepared.selectedStopId &&
+        journeyPlaybackIndexRef.current === prepared.playbackIndex &&
+        prepared.geometryKey === journeyMapDataKey(journeysRef.current)
+      ) {
+        const worldShift =
+          360 * Math.round((center.lng - prepared.center[0]) / 360);
+        const reachedTarget =
+          Math.abs(center.lng - prepared.center[0] - worldShift) < 1e-5 &&
+          Math.abs(center.lat - prepared.center[1]) < 1e-5 &&
+          Math.abs(map.getZoom() - prepared.zoom) < 1e-5;
+        if (reachedTarget) {
+          // Native Marker's smartWrap retains its previous screen position,
+          // which can strand dots in a neighboring world copy under the rail.
+          // Fresh instances at the settled fit use the same route envelope.
+          settledJourneyMarkerFitRef.current = {
+            journeyId: prepared.journeyId,
+            geometryKey: prepared.geometryKey,
+            coordinates: prepared.coordinates.map(([longitude, latitude]) => [
+              longitude + worldShift,
+              latitude,
+            ]),
+          };
+          setJourneyMarkerFitVersion((version) => version + 1);
+        }
+      }
       onViewChangeRef.current({
         latitude: center.lat,
         longitude: center.lng,
@@ -881,6 +1024,9 @@ export default function AtlasMap({
     map.on('movestart', () => setTooltip(null));
 
     const cleanupMap = () => {
+      pendingJourneyMarkerFitRef.current = null;
+      settledJourneyMarkerFitRef.current = null;
+      focusedJourneyMarkerRef.current = null;
       window.clearTimeout(loadTimer);
       resizeObserver?.disconnect();
       window.removeEventListener('resize', scheduleResize);
@@ -1088,12 +1234,17 @@ export default function AtlasMap({
 
   useEffect(() => {
     const map = mapRef.current;
-    if (!map || !mapLoaded || mode !== 'journeys') return;
+    if (!map || !mapLoaded || mode !== 'journeys') {
+      pendingJourneyMarkerFitRef.current = null;
+      settledJourneyMarkerFitRef.current = null;
+      return;
+    }
     fitJourneyStops(
       map,
       journeysRef.current,
       selectedJourneyId,
       journeyRouteProjectionRef.current,
+      (fit) => prepareJourneyMarkerFit(map, fit),
     );
   }, [journeyFitRequest, journeys, mapLoaded, mode, selectedJourneyId]);
 
@@ -1110,6 +1261,7 @@ export default function AtlasMap({
       selectedJourneyStopId,
       journeyPlaybackIndex,
       journeyRouteProjectionRef.current,
+      () => prepareJourneyMarkerFit(map, null),
     );
   }, [
     journeyPlaybackIndex,
@@ -1121,6 +1273,8 @@ export default function AtlasMap({
   ]);
 
   useEffect(() => {
+    const focusedMarker = focusedJourneyMarkerRef.current;
+    focusedJourneyMarkerRef.current = null;
     journeyMarkersRef.current.forEach((marker) => marker.remove());
     journeyMarkersRef.current = [];
 
@@ -1134,9 +1288,14 @@ export default function AtlasMap({
     );
     if (!journey?.stops.length) return;
 
-    const coordinates = createGeodesicChapterStopCoordinates(journey.stops, {
-      projection: journeyRouteProjectionRef.current,
-    });
+    const settledFit = settledJourneyMarkerFitRef.current;
+    const coordinates =
+      settledFit?.journeyId === journey.id &&
+      settledFit.geometryKey === journeyMapDataKeyValue
+        ? settledFit.coordinates
+        : createGeodesicChapterStopCoordinates(journey.stops, {
+            projection: journeyRouteProjectionRef.current,
+          });
 
     journeyMarkersRef.current = journey.stops.map((stop, index) => {
       const element = document.createElement('button');
@@ -1186,12 +1345,44 @@ export default function AtlasMap({
       selectedJourneyStopRef.current,
       journeyPlaybackIndexRef.current,
     );
+    if (
+      focusedMarker?.journeyId === journey.id &&
+      (document.activeElement === document.body ||
+        document.activeElement === focusedMarker.element)
+    ) {
+      const index = journey.stops.findIndex(
+        (stop) => stop.entryId === focusedMarker.entryId,
+      );
+      journeyMarkersRef.current[index]
+        ?.getElement()
+        .focus({ preventScroll: true });
+    }
 
     return () => {
+      focusedJourneyMarkerRef.current = null;
+      journeyMarkersRef.current.forEach((marker, index) => {
+        if (document.activeElement === marker.getElement()) {
+          const entryId = journey.stops[index]?.entryId;
+          if (entryId) {
+            focusedJourneyMarkerRef.current = {
+              journeyId: journey.id,
+              entryId,
+              element: marker.getElement(),
+            };
+          }
+        }
+      });
       journeyMarkersRef.current.forEach((marker) => marker.remove());
       journeyMarkersRef.current = [];
     };
-  }, [journeys, mapLoaded, mode, selectedJourneyId]);
+  }, [
+    journeyMapDataKeyValue,
+    journeyMarkerFitVersion,
+    journeys,
+    mapLoaded,
+    mode,
+    selectedJourneyId,
+  ]);
 
   useEffect(() => {
     if (!mapLoaded || mode !== 'journeys' || !selectedJourneyId) return;
