@@ -88,6 +88,42 @@ async function auditJourneyState(
   );
 }
 
+async function expectJourneyDotContentCenteredInMarkers(page: Page) {
+  const centerErrors = await page
+    .locator('button.maplibregl-marker[aria-label^="Stop "]')
+    .evaluateAll((markers) =>
+      markers.map((marker) => {
+        const dot = marker.querySelector('span');
+        if (!dot)
+          return { x: Number.POSITIVE_INFINITY, y: Number.POSITIVE_INFINITY };
+        const markerBounds = marker.getBoundingClientRect();
+        const dotBounds = dot.getBoundingClientRect();
+        return {
+          x: Math.abs(
+            markerBounds.left +
+              markerBounds.width / 2 -
+              (dotBounds.left + dotBounds.width / 2),
+          ),
+          y: Math.abs(
+            markerBounds.top +
+              markerBounds.height / 2 -
+              (dotBounds.top + dotBounds.height / 2),
+          ),
+        };
+      }),
+    );
+
+  expect(centerErrors.length).toBeGreaterThan(1);
+  for (const error of centerErrors) {
+    expect
+      .soft(error.x, 'Journey dot horizontal content drift')
+      .toBeLessThan(0.6);
+    expect
+      .soft(error.y, 'Journey dot vertical content drift')
+      .toBeLessThan(0.6);
+  }
+}
+
 test('Journey Lens connects the Atlas, playback, and Chapter workshop', async ({
   page,
 }, testInfo) => {
@@ -151,6 +187,7 @@ test('Journey Lens connects the Atlas, playback, and Chapter workshop', async ({
     'button.maplibregl-marker[aria-label^="Stop "]',
   );
   await expect(mapStops).toHaveCount(memories.length);
+  await expectJourneyDotContentCenteredInMarkers(page);
   await expect(
     page.getByRole('button', {
       name: new RegExp(`^Stop 2 of 4: ${memories[1].title}`, 'i'),

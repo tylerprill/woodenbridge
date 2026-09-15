@@ -134,6 +134,12 @@
   touch-action: manipulation;
 }
 
+.journeyMapMarker[data-current='true'],
+.journeyMapMarker:hover,
+.journeyMapMarker:focus-visible {
+  z-index: 2;
+}
+
 .journeyMapMarker span {
   display: grid;
   width: 1.72rem;

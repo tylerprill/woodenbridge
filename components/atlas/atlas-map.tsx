@@ -19,7 +19,6 @@ import {
   getAtlasPlaceContextLabel,
 } from '@/app/lib/atlas/place';
 import {
-  createChapterMarkerOffsets,
   createGentleChapterRoute,
   unwrapChapterCoordinates,
 } from '@/app/lib/chapters/route-geometry';
@@ -956,7 +955,6 @@ export default function AtlasMap({
     if (!journey?.stops.length) return;
 
     const coordinates = unwrapChapterCoordinates(journey.stops);
-    const offsets = createChapterMarkerOffsets(journey.stops);
 
     journeyMarkersRef.current = journey.stops.map((stop, index) => {
       const element = document.createElement('button');
@@ -986,7 +984,13 @@ export default function AtlasMap({
       return new maplibregl.Marker({
         element,
         anchor: 'center',
-        offset: offsets[index],
+        // The numbered dot and route vertex must resolve to the exact same
+        // screen coordinate. Pixel offsets detach markers as the map zooms;
+        // subpixel positioning also avoids MapLibre's final integer rounding.
+        // Nearby stops may overlap at whole-route zoom, but the stop list
+        // remains the complete accessible selector and the active dot rises.
+        offset: [0, 0],
+        subpixelPositioning: true,
       })
         .setLngLat(coordinates[index])
         .addTo(map);

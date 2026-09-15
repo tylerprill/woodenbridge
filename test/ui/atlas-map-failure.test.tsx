@@ -18,6 +18,18 @@ import AtlasMap from '@/components/atlas/atlas-map';
 const mockMapConstructor = jest.fn();
 const mockEventHandlers = new Map<string, (event?: unknown) => void>();
 const mockMarkerElements: HTMLButtonElement[] = [];
+const mockMarkerOptions: Array<{
+  anchor?: string;
+  element: HTMLButtonElement;
+  offset?: [number, number];
+  subpixelPositioning?: boolean;
+}> = [];
+const mockMarkers: Array<{
+  addTo: jest.Mock;
+  getElement: jest.Mock;
+  remove: jest.Mock;
+  setLngLat: jest.Mock;
+}> = [];
 
 jest.mock(
   'maplibre-gl',
@@ -33,8 +45,15 @@ jest.mock(
       bounds.extend.mockReturnValue(bounds);
       return bounds;
     },
-    Marker: function MockMarker({ element }: { element: HTMLButtonElement }) {
+    Marker: function MockMarker(options: {
+      anchor?: string;
+      element: HTMLButtonElement;
+      offset?: [number, number];
+      subpixelPositioning?: boolean;
+    }) {
+      const { element } = options;
       mockMarkerElements.push(element);
+      mockMarkerOptions.push(options);
       const marker = {
         addTo: jest.fn(),
         getElement: jest.fn(() => element),
@@ -43,6 +62,7 @@ jest.mock(
       };
       marker.addTo.mockReturnValue(marker);
       marker.setLngLat.mockReturnValue(marker);
+      mockMarkers.push(marker);
       return marker;
     },
     setWorkerUrl: jest.fn(),
@@ -159,6 +179,8 @@ describe('Atlas map failure recovery', () => {
     jest.clearAllMocks();
     mockEventHandlers.clear();
     mockMarkerElements.length = 0;
+    mockMarkerOptions.length = 0;
+    mockMarkers.length = 0;
     mockMapConstructor.mockImplementation(() => createMapMock());
   });
 
@@ -300,6 +322,22 @@ describe('Atlas map failure recovery', () => {
     expect(mockMarkerElements[0]).not.toHaveAttribute('aria-current');
     expect(mockMarkerElements[1]).toHaveAttribute('data-current', 'true');
     expect(mockMarkerElements[1]).toHaveAttribute('aria-current', 'step');
+    expect(
+      mockMarkerOptions.map(({ anchor, offset, subpixelPositioning }) => ({
+        anchor,
+        offset,
+        subpixelPositioning,
+      })),
+    ).toEqual([
+      { anchor: 'center', offset: [0, 0], subpixelPositioning: true },
+      { anchor: 'center', offset: [0, 0], subpixelPositioning: true },
+    ]);
+    expect(
+      mockMarkers.map((marker) => marker.setLngLat.mock.calls[0]?.[0]),
+    ).toEqual([
+      [delayedJourney.stops[0].longitude, delayedJourney.stops[0].latitude],
+      [delayedJourney.stops[1].longitude, delayedJourney.stops[1].latitude],
+    ]);
   });
 
   it('clears retained stop padding before refitting every journey', async () => {
