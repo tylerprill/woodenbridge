@@ -3378,6 +3378,11 @@
     max-height: none;
   }
 
+  .workspace[data-atlas-surface='playback'] .journeyTray {
+    /* Override the narrow portrait sheet's more-specific 76% height cap. */
+    max-height: none;
+  }
+
   .journeyPlaybackArtwork {
     width: 100%;
     height: 100%;
@@ -3450,6 +3455,27 @@
   .journeyOverview,
   .journeyPlaybackBody {
     min-height: 0;
+  }
+}
+
+@media (max-height: 360px) {
+  /* Preserve a useful stop preview on extra-short phones instead of spending
+     the rail's entire height on its three persistent control bars. */
+  .workspace[data-atlas-surface='playback'] .journeyTray > header,
+  .workspace[data-atlas-surface='playback'] .journeyPlaybackControls {
+    padding-block: 0.15rem;
+  }
+
+  .workspace[data-atlas-surface='playback'] .journeyPlaybackFooter {
+    padding-top: 0.15rem;
+    padding-bottom: calc(0.15rem + env(safe-area-inset-bottom));
+  }
+
+  .workspace[data-atlas-surface='playback'] .journeyPlaybackControls button,
+  .workspace[data-atlas-surface='playback']
+    .journeyPlaybackFooter
+    :is(button, a) {
+    min-height: 2.75rem;
   }
 }
 

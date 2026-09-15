@@ -201,6 +201,34 @@ describe('Atlas Journey Lens', () => {
     );
   });
 
+  it('keeps the Places placement tool named when its visible label is hidden', async () => {
+    const user = userEvent.setup();
+    render(
+      <AtlasWorkspace
+        displayName="Explorer"
+        initialData={initialData}
+        initialMode="journeys"
+      />,
+    );
+
+    await user.click(screen.getByRole('button', { name: 'Places' }));
+    const addMemory = screen.getByRole('button', {
+      name: 'Add memory',
+    });
+    expect(addMemory).toHaveAttribute('aria-label', 'Add memory');
+    await user.click(addMemory);
+
+    const cancelPin = screen.getByRole('button', {
+      name: 'Cancel pin',
+    });
+    expect(cancelPin).toHaveAttribute('aria-label', 'Cancel pin');
+    await user.click(cancelPin);
+    expect(screen.getByRole('button', { name: 'Add memory' })).toHaveAttribute(
+      'aria-label',
+      'Add memory',
+    );
+  });
+
   it('opens a journey, relives it, and keeps map-stop selection in sync', async () => {
     const user = userEvent.setup();
     render(

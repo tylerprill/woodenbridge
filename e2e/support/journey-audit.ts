@@ -1,5 +1,18 @@
 import { expect, type Page } from '@playwright/test';
 
+/** A scrollable details preview must not collapse beneath the fixed controls. */
+export async function expectJourneyPlaybackPreviewHasRoom(page: Page) {
+  const details = page
+    .locator('section[aria-labelledby="journey-playback-title"]')
+    .getByRole('region', { name: /^Stop \d+ details$/ });
+  await expect(details).toBeVisible();
+  await expect
+    .poll(async () => (await details.boundingBox())?.height ?? 0, {
+      message: 'Playback retains at least a touch-sized details preview',
+    })
+    .toBeGreaterThanOrEqual(44);
+}
+
 /** Check the complete hit target, not only the center of the numbered dot. */
 export async function expectActiveJourneyDotClearOfOverlays(page: Page) {
   const marker = page.locator('button.maplibregl-marker[aria-current="step"]');

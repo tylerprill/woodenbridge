@@ -1460,6 +1460,7 @@ export function AtlasWorkspace({
               className={styles.addButton}
               data-active={placementMode ? 'true' : 'false'}
               aria-pressed={placementMode}
+              aria-label={placementMode ? 'Cancel pin' : 'Add memory'}
               onClick={() => {
                 setPlacementMode((current) => !current);
                 dispatchExperience(
