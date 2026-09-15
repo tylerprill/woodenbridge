@@ -1,10 +1,13 @@
 import type { AtlasJourneySummary } from '@/app/lib/atlas/journeys/definitions';
+import { createGeodesicChapterStopCoordinates } from '@/app/lib/chapters/route-geometry';
 import {
   ATLAS_JOURNEY_ROUTE_CONTINUITY_LAYER,
   addAtlasJourneyLayers,
+  clearAtlasJourneyLayerState,
   journeyIdsFromRenderedFeatures,
   journeysToEndpointGeoJson,
   journeysToRouteGeoJson,
+  syncAtlasJourneyLayerState,
 } from '@/components/atlas/atlas-journey-layers';
 
 function journey(
@@ -56,12 +59,49 @@ function journey(
 }
 
 describe('Atlas journey map layers', () => {
+  it('promotes unique string feature IDs through the renderer for both sources', () => {
+    const values = [
+      journey({ id: '10000000-0000-4000-8000-000000000001' }),
+      journey({ id: '10000000-0000-4000-8000-000000000002' }),
+    ];
+    const map = {
+      addLayer: jest.fn(),
+      addSource: jest.fn(),
+      getLayer: jest.fn(() => undefined),
+      getSource: jest.fn(() => undefined),
+    };
+
+    addAtlasJourneyLayers(map as never, values, 'globe');
+
+    expect(map.addSource).toHaveBeenCalledTimes(2);
+    ['field-atlas-journey-routes', 'field-atlas-journey-endpoints'].forEach(
+      (sourceId) => {
+        expect(map.addSource).toHaveBeenCalledWith(
+          sourceId,
+          expect.objectContaining({
+            type: 'geojson',
+            promoteId: 'featureId',
+          }),
+        );
+      },
+    );
+    const features = [
+      ...journeysToRouteGeoJson(values).features,
+      ...journeysToEndpointGeoJson(values).features,
+    ];
+    const promotedIds = features.map(
+      (feature) => feature.properties?.featureId,
+    );
+
+    expect(promotedIds).toEqual(features.map((feature) => feature.id));
+    expect(new Set(promotedIds).size).toBe(features.length);
+    expect(features).toHaveLength(8);
+    expect(promotedIds.every((id) => typeof id === 'string')).toBe(true);
+  });
+
   it('emits one independently addressable feature for each route leg', () => {
     const value = journey();
-    const routes = journeysToRouteGeoJson([value], {
-      selectedJourneyId: value.id,
-      playbackStopIndex: 1,
-    });
+    const routes = journeysToRouteGeoJson([value]);
 
     expect(routes.features).toHaveLength(2);
     expect(routes.features.map((feature) => feature.id)).toEqual([
@@ -72,37 +112,97 @@ describe('Atlas journey map layers', () => {
       expect.objectContaining({
         journeyId: value.id,
         segmentIndex: 0,
-        selected: true,
-        playbackState: 'complete',
       }),
       expect.objectContaining({
         journeyId: value.id,
         segmentIndex: 1,
-        selected: true,
-        playbackState: 'active',
       }),
     ]);
+    expect(routes.features[0].properties).not.toHaveProperty('selected');
+    expect(routes.features[0].properties).not.toHaveProperty('hovered');
+    expect(routes.features[0].properties).not.toHaveProperty('playbackState');
   });
 
-  it('keeps playback styling idle on unselected journeys', () => {
-    const value = journey();
-    const routes = journeysToRouteGeoJson([value], {
-      selectedJourneyId: 'another-journey',
-      playbackStopIndex: 2,
+  it('uses Earth-following geometry for long Atlas legs', () => {
+    const value = journey({
+      memoryCount: 2,
+      stops: [
+        {
+          ...journey().stops[0],
+          longitude: -75,
+          latitude: 40,
+        },
+        {
+          ...journey().stops[1],
+          longitude: 75,
+          latitude: 40,
+        },
+      ],
     });
+    const [route] = journeysToRouteGeoJson([value]).features;
+
+    expect(route.geometry.coordinates[0]).toEqual([-75, 40]);
+    expect(route.geometry.coordinates.at(-1)).toEqual([75, 40]);
+    expect(
+      Math.max(
+        ...route.geometry.coordinates.map((coordinate) => coordinate[1]),
+      ),
+    ).toBeGreaterThan(70);
+  });
+
+  it('switches polar legs between globe and Mercator-safe geometry', () => {
+    const value = journey({
+      memoryCount: 2,
+      stops: [
+        { ...journey().stops[0], longitude: 0, latitude: 80 },
+        { ...journey().stops[1], longitude: 180, latitude: 80 },
+      ],
+    });
+    const globeCoordinates = journeysToRouteGeoJson([value], 'globe')
+      .features[0].geometry.coordinates;
+    const mercatorCoordinates = journeysToRouteGeoJson([value], 'mercator')
+      .features[0].geometry.coordinates;
 
     expect(
-      routes.features.every(
-        (feature) => feature.properties?.playbackState === 'idle',
+      Math.max(...globeCoordinates.map(([, latitude]) => latitude)),
+    ).toBeGreaterThan(89);
+    expect(
+      Math.max(...mercatorCoordinates.map(([, latitude]) => latitude)),
+    ).toBeLessThan(81);
+    expect(
+      Math.max(
+        ...mercatorCoordinates
+          .slice(1)
+          .map(([longitude], index) =>
+            Math.abs(longitude - mercatorCoordinates[index][0]),
+          ),
       ),
-    ).toBe(true);
+    ).toBeLessThanOrEqual(2.0000001);
+  });
+
+  it('keeps canonical pole endpoints identical to their zero-length route', () => {
+    const value = journey({
+      memoryCount: 2,
+      stops: [
+        { ...journey().stops[0], longitude: 0, latitude: 90 },
+        { ...journey().stops[1], longitude: 180, latitude: 90 },
+      ],
+    });
+    const route = journeysToRouteGeoJson([value], 'mercator').features[0]
+      .geometry.coordinates;
+    const endpoints = journeysToEndpointGeoJson([value], 'mercator').features;
+
+    expect(route).toHaveLength(2);
+    expect(route[0]).toEqual(route[1]);
+    expect(endpoints.map((feature) => feature.geometry.coordinates)).toEqual([
+      route[0],
+      route[1],
+    ]);
   });
 
   it('emits only the overview endpoints for every drawable journey', () => {
     const value = journey();
-    const endpoints = journeysToEndpointGeoJson([value], {
-      selectedJourneyId: value.id,
-    });
+    const endpoints = journeysToEndpointGeoJson([value]);
 
     expect(endpoints.features).toHaveLength(2);
     expect(endpoints.features.map((feature) => feature.id)).toEqual([
@@ -117,12 +217,47 @@ describe('Atlas journey map layers', () => {
       value.stops[2].longitude,
       value.stops[2].latitude,
     ]);
-    expect(
-      endpoints.features.every(
-        (feature) => feature.properties?.selected === true,
-      ),
-    ).toBe(true);
+    expect(endpoints.features[0].properties).not.toHaveProperty('selected');
+    expect(endpoints.features[0].properties).not.toHaveProperty('hovered');
   });
+
+  it.each(['globe', 'mercator'] as const)(
+    'keeps exact poles and beyond-cap stops aligned across %s lines, dots, and numbered markers',
+    (projection) => {
+      const value = journey({
+        memoryCount: 4,
+        stops: [
+          { ...journey().stops[0], longitude: 120, latitude: 90 },
+          { ...journey().stops[1], longitude: 120, latitude: 88 },
+          { ...journey().stops[2], longitude: 120, latitude: -88 },
+          { ...journey().stops[2], longitude: 120, latitude: -90 },
+        ],
+      });
+      const markerCoordinates = createGeodesicChapterStopCoordinates(
+        value.stops,
+        { projection },
+      );
+      const routes = journeysToRouteGeoJson([value], projection).features;
+      const endpoints = journeysToEndpointGeoJson([value], projection).features;
+
+      routes.forEach((route, index) => {
+        expect(route.geometry.coordinates[0]).toEqual(markerCoordinates[index]);
+        expect(route.geometry.coordinates.at(-1)).toEqual(
+          markerCoordinates[index + 1],
+        );
+      });
+      expect(endpoints.map((feature) => feature.geometry.coordinates)).toEqual([
+        markerCoordinates[0],
+        markerCoordinates.at(-1),
+      ]);
+      markerCoordinates.forEach(([, latitude]) => {
+        expect(Math.abs(latitude)).toBeCloseTo(85.0451287798066, 10);
+      });
+      expect(value.stops.map((stop) => stop.latitude)).toEqual([
+        90, 88, -88, -90,
+      ]);
+    },
+  );
 
   it('keeps endpoint dots on the same unwrapped world copy as the route', () => {
     const value = journey({
@@ -140,9 +275,8 @@ describe('Atlas journey map layers', () => {
         },
       ],
     });
-    const state = { selectedJourneyId: value.id };
-    const routes = journeysToRouteGeoJson([value], state);
-    const endpoints = journeysToEndpointGeoJson([value], state);
+    const routes = journeysToRouteGeoJson([value]);
+    const endpoints = journeysToEndpointGeoJson([value]);
 
     expect(routes.features[0].geometry.coordinates[0]).toEqual([179, 10]);
     expect(routes.features[0].geometry.coordinates.at(-1)).toEqual([181, 11]);
@@ -163,9 +297,7 @@ describe('Atlas journey map layers', () => {
       getSource: jest.fn(() => undefined),
     };
 
-    addAtlasJourneyLayers(map as never, [journey()], {
-      selectedJourneyId: journey().id,
-    });
+    addAtlasJourneyLayers(map as never, [journey()], 'globe');
 
     const continuity = layers.find(
       (layer) => layer.id === ATLAS_JOURNEY_ROUTE_CONTINUITY_LAYER,
@@ -175,10 +307,99 @@ describe('Atlas journey map layers', () => {
       layout: {
         'line-cap': 'round',
         'line-join': 'round',
-        'line-sort-key': expect.any(Array),
       },
     });
     expect(continuity?.paint).not.toHaveProperty('line-dasharray');
+
+    const emphasisContinuity = layers.find(
+      (layer) => layer.id === 'field-atlas-journey-route-emphasis-continuity',
+    );
+    expect(emphasisContinuity?.paint).not.toHaveProperty('line-dasharray');
+  });
+
+  it('keeps interaction styling in paint-only feature-state expressions', () => {
+    const layers: Array<Record<string, unknown>> = [];
+    const map = {
+      addLayer: jest.fn((layer: Record<string, unknown>) => layers.push(layer)),
+      addSource: jest.fn(),
+      getLayer: jest.fn(() => undefined),
+      getSource: jest.fn(() => undefined),
+    };
+
+    addAtlasJourneyLayers(map as never, [journey()], 'globe');
+
+    const serializedLayers = JSON.stringify(layers);
+    expect(serializedLayers).toContain('feature-state');
+    expect(serializedLayers).toContain('playbackState');
+    expect(serializedLayers).not.toContain('global-state');
+    expect(layers.every((layer) => layer.filter === undefined)).toBe(true);
+    expect(
+      layers.every(
+        (layer) =>
+          !(layer.layout as Record<string, unknown> | undefined)?.[
+            'line-sort-key'
+          ] &&
+          !(layer.layout as Record<string, unknown> | undefined)?.[
+            'circle-sort-key'
+          ],
+      ),
+    ).toBe(true);
+
+    expect(
+      layers.find((layer) => layer.id === 'field-atlas-journey-route-hit-area'),
+    ).toMatchObject({
+      paint: { 'line-width': 24, 'line-opacity': 0.001 },
+    });
+  });
+
+  it('updates only route legs whose interaction state changed', () => {
+    const map = {
+      setFeatureState: jest.fn(),
+    };
+    const value = journey();
+    const state = {
+      selectedJourneyId: value.id,
+      hoveredJourneyId: value.id,
+      playbackStopIndex: 1,
+    };
+
+    syncAtlasJourneyLayerState(map as never, [value], null, state);
+    expect(map.setFeatureState).toHaveBeenCalledTimes(4);
+    expect(map.setFeatureState).toHaveBeenCalledWith(
+      { source: 'field-atlas-journey-routes', id: `${value.id}:0` },
+      { selected: true, hovered: true, playbackState: 'complete' },
+    );
+    expect(map.setFeatureState).toHaveBeenCalledWith(
+      { source: 'field-atlas-journey-routes', id: `${value.id}:1` },
+      { selected: true, hovered: true, playbackState: 'active' },
+    );
+    expect(map.setFeatureState).toHaveBeenCalledWith(
+      { source: 'field-atlas-journey-endpoints', id: `${value.id}:start` },
+      { selected: true, hovered: true },
+    );
+
+    map.setFeatureState.mockClear();
+    syncAtlasJourneyLayerState(map as never, [value], state, state);
+    expect(map.setFeatureState).not.toHaveBeenCalled();
+
+    const advancedState = { ...state, playbackStopIndex: 2 };
+    syncAtlasJourneyLayerState(map as never, [value], state, advancedState);
+    expect(map.setFeatureState).toHaveBeenCalledTimes(1);
+    expect(map.setFeatureState).toHaveBeenCalledWith(
+      { source: 'field-atlas-journey-routes', id: `${value.id}:1` },
+      { playbackState: 'complete' },
+    );
+  });
+
+  it('clears retained feature state when route source data changes', () => {
+    const map = { removeFeatureState: jest.fn() };
+
+    clearAtlasJourneyLayerState(map as never);
+
+    expect(map.removeFeatureState.mock.calls).toEqual([
+      [{ source: 'field-atlas-journey-routes' }],
+      [{ source: 'field-atlas-journey-endpoints' }],
+    ]);
   });
 
   it('omits degraded journeys that no longer contain a drawable route', () => {
@@ -188,13 +409,8 @@ describe('Atlas journey map layers', () => {
       stops: journey().stops.slice(0, 1),
     });
 
-    expect(
-      journeysToRouteGeoJson([degraded], { selectedJourneyId: null }).features,
-    ).toEqual([]);
-    expect(
-      journeysToEndpointGeoJson([degraded], { selectedJourneyId: null })
-        .features,
-    ).toEqual([]);
+    expect(journeysToRouteGeoJson([degraded]).features).toEqual([]);
+    expect(journeysToEndpointGeoJson([degraded]).features).toEqual([]);
   });
 
   it('deduplicates overlapping line legs and keeps the selection first', () => {

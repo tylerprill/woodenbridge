@@ -3217,7 +3217,8 @@
   }
 
   .workspace[data-atlas-surface='playback'] .journeyTray {
-    max-height: min(82%, calc(100% - 1.1rem));
+    /* Camera playback padding reserves 78% + 10px above this 76% sheet. */
+    max-height: min(76%, calc(100% - 1.1rem));
   }
 
   .journeyPlaybackArtwork {

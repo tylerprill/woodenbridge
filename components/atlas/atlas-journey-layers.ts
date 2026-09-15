@@ -1,5 +1,6 @@
 import type {
   CircleLayerSpecification,
+  ExpressionSpecification,
   GeoJSONSource,
   LineLayerSpecification,
   Map,
@@ -7,8 +8,9 @@ import type {
 
 import type { AtlasJourneySummary } from '@/app/lib/atlas/journeys/definitions';
 import {
-  createGentleChapterRouteSegments,
-  unwrapChapterCoordinates,
+  createGeodesicChapterRouteSegments,
+  createGeodesicChapterStopCoordinates,
+  type ChapterRouteProjection,
 } from '@/app/lib/chapters/route-geometry';
 
 export const ATLAS_JOURNEY_ROUTE_SOURCE = 'field-atlas-journey-routes';
@@ -18,6 +20,9 @@ export const ATLAS_JOURNEY_ROUTE_CASING_LAYER =
 export const ATLAS_JOURNEY_ROUTE_CONTINUITY_LAYER =
   'field-atlas-journey-route-continuity';
 export const ATLAS_JOURNEY_ROUTE_LAYER = 'field-atlas-journey-route-lines';
+const ATLAS_JOURNEY_ROUTE_EMPHASIS_CONTINUITY_LAYER =
+  'field-atlas-journey-route-emphasis-continuity';
+const ATLAS_JOURNEY_ROUTE_EMPHASIS_LAYER = 'field-atlas-journey-route-emphasis';
 export const ATLAS_JOURNEY_ROUTE_PROGRESS_LAYER =
   'field-atlas-journey-route-progress';
 export const ATLAS_JOURNEY_ROUTE_HIT_LAYER =
@@ -32,9 +37,11 @@ export const ATLAS_JOURNEY_INTERACTIVE_LAYERS = [
 ] as const;
 
 const ATLAS_JOURNEY_LAYERS = [
-  ATLAS_JOURNEY_ROUTE_CASING_LAYER,
   ATLAS_JOURNEY_ROUTE_CONTINUITY_LAYER,
   ATLAS_JOURNEY_ROUTE_LAYER,
+  ATLAS_JOURNEY_ROUTE_CASING_LAYER,
+  ATLAS_JOURNEY_ROUTE_EMPHASIS_CONTINUITY_LAYER,
+  ATLAS_JOURNEY_ROUTE_EMPHASIS_LAYER,
   ATLAS_JOURNEY_ROUTE_PROGRESS_LAYER,
   ATLAS_JOURNEY_ROUTE_HIT_LAYER,
   ATLAS_JOURNEY_ENDPOINT_HALO_LAYER,
@@ -63,25 +70,53 @@ function journeyColor(id: string) {
   return JOURNEY_PALETTE[hash % JOURNEY_PALETTE.length];
 }
 
-function drawableJourneys(journeys: AtlasJourneySummary[]) {
-  return journeys.filter(
-    (journey) =>
-      journey.drawable &&
-      journey.stops.length >= 2 &&
-      journey.stops.every(
-        (stop) =>
-          Number.isFinite(stop.latitude) && Number.isFinite(stop.longitude),
-      ),
+function isDrawableJourney(journey: AtlasJourneySummary) {
+  return (
+    journey.drawable &&
+    journey.stops.length >= 2 &&
+    journey.stops.every(
+      (stop) =>
+        Number.isFinite(stop.latitude) && Number.isFinite(stop.longitude),
+    )
   );
+}
+
+function drawableJourneys(journeys: AtlasJourneySummary[]) {
+  return journeys.filter(isDrawableJourney);
+}
+
+function selectedJourneyExpression(): ExpressionSpecification {
+  return ['boolean', ['feature-state', 'selected'], false];
+}
+
+function hoveredJourneyExpression(): ExpressionSpecification {
+  return ['boolean', ['feature-state', 'hovered'], false];
+}
+
+function playbackStateExpression(): ExpressionSpecification {
+  return ['string', ['feature-state', 'playbackState'], 'idle'];
+}
+
+function activePlaybackExpression(): ExpressionSpecification {
+  return ['==', playbackStateExpression(), 'active'];
+}
+
+function completePlaybackExpression(): ExpressionSpecification {
+  return ['==', playbackStateExpression(), 'complete'];
+}
+
+function aheadPlaybackExpression(): ExpressionSpecification {
+  return ['==', playbackStateExpression(), 'ahead'];
 }
 
 function playbackState(
   journeyId: string,
   segmentStartIndex: number,
   segmentEndIndex: number,
-  state: AtlasJourneyLayerState,
+  state: AtlasJourneyLayerState | null,
 ) {
   if (
+    !state ||
     journeyId !== state.selectedJourneyId ||
     state.playbackStopIndex == null
   ) {
@@ -94,47 +129,44 @@ function playbackState(
 
 export function journeysToRouteGeoJson(
   journeys: AtlasJourneySummary[],
-  state: AtlasJourneyLayerState,
+  projection: ChapterRouteProjection = 'globe',
 ): GeoJSON.FeatureCollection<GeoJSON.LineString> {
   return {
     type: 'FeatureCollection',
     features: drawableJourneys(journeys).flatMap((journey) =>
-      createGentleChapterRouteSegments(journey.stops).map((segment) => ({
-        type: 'Feature' as const,
-        id: `${journey.id}:${segment.startIndex}`,
-        geometry: {
-          type: 'LineString' as const,
-          coordinates: segment.coordinates,
-        },
-        properties: {
-          journeyId: journey.id,
-          title: journey.title,
-          segmentIndex: segment.startIndex,
-          color: journeyColor(journey.id),
-          selected: journey.id === state.selectedJourneyId,
-          hovered: journey.id === state.hoveredJourneyId,
-          playbackState: playbackState(
-            journey.id,
-            segment.startIndex,
-            segment.endIndex,
-            state,
-          ),
-        },
-      })),
+      createGeodesicChapterRouteSegments(journey.stops, { projection }).map(
+        (segment) => ({
+          type: 'Feature' as const,
+          id: `${journey.id}:${segment.startIndex}`,
+          geometry: {
+            type: 'LineString' as const,
+            coordinates: segment.coordinates,
+          },
+          properties: {
+            featureId: `${journey.id}:${segment.startIndex}`,
+            journeyId: journey.id,
+            title: journey.title,
+            segmentIndex: segment.startIndex,
+            color: journeyColor(journey.id),
+          },
+        }),
+      ),
     ),
   };
 }
 
 export function journeysToEndpointGeoJson(
   journeys: AtlasJourneySummary[],
-  state: AtlasJourneyLayerState,
+  projection: ChapterRouteProjection = 'globe',
 ): GeoJSON.FeatureCollection<GeoJSON.Point> {
   return {
     type: 'FeatureCollection',
     features: drawableJourneys(journeys).flatMap((journey) => {
       const first = journey.stops[0];
       const last = journey.stops.at(-1);
-      const coordinates = unwrapChapterCoordinates(journey.stops);
+      const coordinates = createGeodesicChapterStopCoordinates(journey.stops, {
+        projection,
+      });
       const firstCoordinate = coordinates[0];
       const lastCoordinate = coordinates.at(-1);
       if (!first || !last || !firstCoordinate || !lastCoordinate) return [];
@@ -150,12 +182,11 @@ export function journeysToEndpointGeoJson(
           coordinates: coordinate,
         },
         properties: {
+          featureId: `${journey.id}:${endpoint}`,
           journeyId: journey.id,
           title: journey.title,
           endpoint,
           color: journeyColor(journey.id),
-          selected: journey.id === state.selectedJourneyId,
-          hovered: journey.id === state.hoveredJourneyId,
         },
       }));
     }),
@@ -165,18 +196,22 @@ export function journeysToEndpointGeoJson(
 export function addAtlasJourneyLayers(
   map: Map,
   journeys: AtlasJourneySummary[],
-  state: AtlasJourneyLayerState,
+  projection: ChapterRouteProjection,
 ) {
   if (!map.getSource(ATLAS_JOURNEY_ROUTE_SOURCE)) {
     map.addSource(ATLAS_JOURNEY_ROUTE_SOURCE, {
       type: 'geojson',
-      data: journeysToRouteGeoJson(journeys, state),
+      // Vector-tile transport coerces feature.id; preserve full string keys
+      // from properties so rendered feature-state matches selection/playback.
+      promoteId: 'featureId',
+      data: journeysToRouteGeoJson(journeys, projection),
     });
   }
   if (!map.getSource(ATLAS_JOURNEY_ENDPOINT_SOURCE)) {
     map.addSource(ATLAS_JOURNEY_ENDPOINT_SOURCE, {
       type: 'geojson',
-      data: journeysToEndpointGeoJson(journeys, state),
+      promoteId: 'featureId',
+      data: journeysToEndpointGeoJson(journeys, projection),
     });
   }
 
@@ -184,46 +219,25 @@ export function addAtlasJourneyLayers(
     id: ATLAS_JOURNEY_ROUTE_CASING_LAYER,
     type: 'line',
     source: ATLAS_JOURNEY_ROUTE_SOURCE,
-    filter: ['==', ['get', 'selected'], true],
     layout: { 'line-cap': 'round', 'line-join': 'round' },
     paint: {
       'line-color': '#fbfaf5',
       'line-width': 8,
-      'line-opacity': 0.88,
+      'line-opacity': ['case', selectedJourneyExpression(), 0.88, 0],
     },
   };
   const routeLine: LineLayerSpecification = {
     id: ATLAS_JOURNEY_ROUTE_LAYER,
     type: 'line',
     source: ATLAS_JOURNEY_ROUTE_SOURCE,
-    layout: {
-      'line-cap': 'round',
-      'line-join': 'round',
-      'line-sort-key': [
-        'case',
-        ['==', ['get', 'selected'], true],
-        2,
-        ['==', ['get', 'hovered'], true],
-        1,
-        0,
-      ],
-    },
+    layout: { 'line-cap': 'round', 'line-join': 'round' },
     paint: {
       'line-color': ['get', 'color'],
-      'line-width': [
-        'case',
-        ['==', ['get', 'selected'], true],
-        3.5,
-        ['==', ['get', 'hovered'], true],
-        3,
-        2,
-      ],
+      'line-width': 2,
       'line-opacity': [
         'case',
-        ['==', ['get', 'selected'], true],
-        ['case', ['==', ['get', 'playbackState'], 'ahead'], 0.42, 0.96],
-        ['==', ['get', 'hovered'], true],
-        0.75,
+        ['any', selectedJourneyExpression(), hoveredJourneyExpression()],
+        0,
         0.28,
       ],
       'line-dasharray': [1.4, 1.05],
@@ -233,65 +247,86 @@ export function addAtlasJourneyLayers(
     id: ATLAS_JOURNEY_ROUTE_CONTINUITY_LAYER,
     type: 'line',
     source: ATLAS_JOURNEY_ROUTE_SOURCE,
-    layout: {
-      'line-cap': 'round',
-      'line-join': 'round',
-      'line-sort-key': [
-        'case',
-        ['==', ['get', 'selected'], true],
-        2,
-        ['==', ['get', 'hovered'], true],
-        1,
-        0,
-      ],
-    },
+    layout: { 'line-cap': 'round', 'line-join': 'round' },
     paint: {
       // Keep an unbroken strand beneath the decorative dash pattern so a
       // route always visibly reaches the center of every anchored stop.
       'line-color': ['get', 'color'],
+      'line-width': 1,
+      'line-opacity': [
+        'case',
+        ['any', selectedJourneyExpression(), hoveredJourneyExpression()],
+        0,
+        0.12,
+      ],
+    },
+  };
+  const routeEmphasisContinuity: LineLayerSpecification = {
+    id: ATLAS_JOURNEY_ROUTE_EMPHASIS_CONTINUITY_LAYER,
+    type: 'line',
+    source: ATLAS_JOURNEY_ROUTE_SOURCE,
+    layout: { 'line-cap': 'round', 'line-join': 'round' },
+    paint: {
+      'line-color': ['get', 'color'],
       'line-width': [
         'case',
-        ['==', ['get', 'selected'], true],
+        selectedJourneyExpression(),
         2,
-        ['==', ['get', 'hovered'], true],
+        hoveredJourneyExpression(),
         1.5,
         1,
       ],
       'line-opacity': [
         'case',
-        ['==', ['get', 'selected'], true],
-        ['case', ['==', ['get', 'playbackState'], 'ahead'], 0.24, 0.68],
-        ['==', ['get', 'hovered'], true],
+        selectedJourneyExpression(),
+        ['case', aheadPlaybackExpression(), 0.24, 0.68],
+        hoveredJourneyExpression(),
         0.34,
-        0.12,
+        0,
       ],
+    },
+  };
+  const routeEmphasis: LineLayerSpecification = {
+    id: ATLAS_JOURNEY_ROUTE_EMPHASIS_LAYER,
+    type: 'line',
+    source: ATLAS_JOURNEY_ROUTE_SOURCE,
+    layout: { 'line-cap': 'round', 'line-join': 'round' },
+    paint: {
+      'line-color': ['get', 'color'],
+      'line-width': [
+        'case',
+        selectedJourneyExpression(),
+        3.5,
+        hoveredJourneyExpression(),
+        3,
+        2,
+      ],
+      'line-opacity': [
+        'case',
+        selectedJourneyExpression(),
+        ['case', aheadPlaybackExpression(), 0.42, 0.96],
+        hoveredJourneyExpression(),
+        0.75,
+        0,
+      ],
+      'line-dasharray': [1.4, 1.05],
     },
   };
   const routeProgress: LineLayerSpecification = {
     id: ATLAS_JOURNEY_ROUTE_PROGRESS_LAYER,
     type: 'line',
     source: ATLAS_JOURNEY_ROUTE_SOURCE,
-    filter: [
-      'match',
-      ['get', 'playbackState'],
-      ['complete', 'active'],
-      true,
-      false,
-    ],
     layout: { 'line-cap': 'round', 'line-join': 'round' },
     paint: {
       'line-color': '#10231d',
-      'line-width': [
-        'case',
-        ['==', ['get', 'playbackState'], 'active'],
-        4.5,
-        4,
-      ],
+      'line-width': ['case', activePlaybackExpression(), 4.5, 4],
       'line-opacity': [
         'case',
-        ['==', ['get', 'playbackState'], 'active'],
+        activePlaybackExpression(),
         0.72,
+        completePlaybackExpression(),
         0.98,
+        0,
       ],
     },
   };
@@ -311,13 +346,13 @@ export function addAtlasJourneyLayers(
     type: 'circle',
     source: ATLAS_JOURNEY_ENDPOINT_SOURCE,
     paint: {
-      'circle-radius': ['case', ['==', ['get', 'selected'], true], 12, 9],
+      'circle-radius': ['case', selectedJourneyExpression(), 12, 9],
       'circle-color': ['get', 'color'],
       'circle-opacity': [
         'case',
-        ['==', ['get', 'selected'], true],
+        selectedJourneyExpression(),
         0.22,
-        ['==', ['get', 'hovered'], true],
+        hoveredJourneyExpression(),
         0.18,
         0.1,
       ],
@@ -328,36 +363,28 @@ export function addAtlasJourneyLayers(
     id: ATLAS_JOURNEY_ENDPOINT_LAYER,
     type: 'circle',
     source: ATLAS_JOURNEY_ENDPOINT_SOURCE,
-    layout: {
-      'circle-sort-key': [
-        'case',
-        ['==', ['get', 'selected'], true],
-        2,
-        ['==', ['get', 'hovered'], true],
-        1,
-        0,
-      ],
-    },
     paint: {
       'circle-radius': [
         'case',
-        ['==', ['get', 'selected'], true],
+        selectedJourneyExpression(),
         5.5,
-        ['==', ['get', 'hovered'], true],
+        hoveredJourneyExpression(),
         5,
         4,
       ],
       'circle-color': ['get', 'color'],
       'circle-stroke-width': 2,
       'circle-stroke-color': '#fbfaf5',
-      'circle-opacity': ['case', ['==', ['get', 'selected'], true], 1, 0.78],
+      'circle-opacity': ['case', selectedJourneyExpression(), 1, 0.78],
     },
   };
 
   [
-    routeCasing,
     routeContinuity,
     routeLine,
+    routeCasing,
+    routeEmphasisContinuity,
+    routeEmphasis,
     routeProgress,
     routeHitArea,
     endpointHalo,
@@ -370,7 +397,7 @@ export function addAtlasJourneyLayers(
 export function updateAtlasJourneySources(
   map: Map,
   journeys: AtlasJourneySummary[],
-  state: AtlasJourneyLayerState,
+  projection: ChapterRouteProjection,
 ) {
   const routeSource = map.getSource(
     ATLAS_JOURNEY_ROUTE_SOURCE,
@@ -378,8 +405,102 @@ export function updateAtlasJourneySources(
   const endpointSource = map.getSource(
     ATLAS_JOURNEY_ENDPOINT_SOURCE,
   ) as GeoJSONSource | null;
-  routeSource?.setData(journeysToRouteGeoJson(journeys, state));
-  endpointSource?.setData(journeysToEndpointGeoJson(journeys, state));
+  routeSource?.setData(journeysToRouteGeoJson(journeys, projection));
+  endpointSource?.setData(journeysToEndpointGeoJson(journeys, projection));
+}
+
+export function clearAtlasJourneyLayerState(map: Map) {
+  map.removeFeatureState({ source: ATLAS_JOURNEY_ROUTE_SOURCE });
+  map.removeFeatureState({ source: ATLAS_JOURNEY_ENDPOINT_SOURCE });
+}
+
+export function syncAtlasJourneyLayerState(
+  map: Map,
+  journeys: AtlasJourneySummary[],
+  previousState: AtlasJourneyLayerState | null,
+  state: AtlasJourneyLayerState,
+) {
+  const affectedJourneyIds = new Set(
+    [
+      previousState?.selectedJourneyId,
+      previousState?.hoveredJourneyId,
+      state.selectedJourneyId,
+      state.hoveredJourneyId,
+    ].filter((id): id is string => typeof id === 'string'),
+  );
+
+  journeys.forEach((journey) => {
+    if (!affectedJourneyIds.has(journey.id) || !isDrawableJourney(journey)) {
+      return;
+    }
+
+    journey.stops.slice(0, -1).forEach((_, segmentIndex) => {
+      const previousFeatureState = {
+        selected: journey.id === previousState?.selectedJourneyId,
+        hovered: journey.id === previousState?.hoveredJourneyId,
+        playbackState: playbackState(
+          journey.id,
+          segmentIndex,
+          segmentIndex + 1,
+          previousState,
+        ),
+      };
+      const nextFeatureState = {
+        selected: journey.id === state.selectedJourneyId,
+        hovered: journey.id === state.hoveredJourneyId,
+        playbackState: playbackState(
+          journey.id,
+          segmentIndex,
+          segmentIndex + 1,
+          state,
+        ),
+      };
+      const changedState = Object.fromEntries(
+        Object.entries(nextFeatureState).filter(
+          ([key, value]) =>
+            previousFeatureState[key as keyof typeof previousFeatureState] !==
+            value,
+        ),
+      );
+
+      if (Object.keys(changedState).length) {
+        map.setFeatureState(
+          {
+            source: ATLAS_JOURNEY_ROUTE_SOURCE,
+            id: `${journey.id}:${segmentIndex}`,
+          },
+          changedState,
+        );
+      }
+    });
+
+    const previousEndpointState = {
+      selected: journey.id === previousState?.selectedJourneyId,
+      hovered: journey.id === previousState?.hoveredJourneyId,
+    };
+    const nextEndpointState = {
+      selected: journey.id === state.selectedJourneyId,
+      hovered: journey.id === state.hoveredJourneyId,
+    };
+    const changedEndpointState = Object.fromEntries(
+      Object.entries(nextEndpointState).filter(
+        ([key, value]) =>
+          previousEndpointState[key as keyof typeof previousEndpointState] !==
+          value,
+      ),
+    );
+    if (!Object.keys(changedEndpointState).length) return;
+
+    (['start', 'end'] as const).forEach((endpoint) => {
+      map.setFeatureState(
+        {
+          source: ATLAS_JOURNEY_ENDPOINT_SOURCE,
+          id: `${journey.id}:${endpoint}`,
+        },
+        changedEndpointState,
+      );
+    });
+  });
 }
 
 export function setAtlasJourneyLayerVisibility(map: Map, visible: boolean) {
