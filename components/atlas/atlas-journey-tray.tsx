@@ -173,23 +173,6 @@ export function AtlasJourneyTray({
               </li>
             ))}
           </ol>
-          <div className={styles.journeyActions}>
-            <button
-              type="button"
-              onClick={() => onStartPlayback(selectedJourney.id)}
-              disabled={!selectedJourney.drawable}
-            >
-              <PlayIcon aria-hidden="true" /> Relive
-            </button>
-            <Link href={`/dashboard/chapters/${selectedJourney.id}`}>
-              <BookOpenIcon aria-hidden="true" /> Read chapter
-            </Link>
-            <Link
-              href={`/dashboard/chapters/${selectedJourney.id}/edit?source=atlas`}
-            >
-              <PencilIcon aria-hidden="true" /> Edit
-            </Link>
-          </div>
         </div>
       ) : (
         <div className={styles.journeyOverview}>
@@ -285,6 +268,25 @@ export function AtlasJourneyTray({
           )}
         </div>
       )}
+      {selectedJourney ? (
+        <footer className={styles.journeyActions}>
+          <button
+            type="button"
+            onClick={() => onStartPlayback(selectedJourney.id)}
+            disabled={!selectedJourney.drawable}
+          >
+            <PlayIcon aria-hidden="true" /> Relive
+          </button>
+          <Link href={`/dashboard/chapters/${selectedJourney.id}`}>
+            <BookOpenIcon aria-hidden="true" /> Read chapter
+          </Link>
+          <Link
+            href={`/dashboard/chapters/${selectedJourney.id}/edit?source=atlas`}
+          >
+            <PencilIcon aria-hidden="true" /> Edit
+          </Link>
+        </footer>
+      ) : null}
     </section>
   );
 }

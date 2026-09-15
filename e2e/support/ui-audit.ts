@@ -14,6 +14,7 @@ type BrowserIssue =
       level: 'error' | 'warning';
       message: string;
       url?: string;
+      documentUrl?: string;
     }
   | { kind: 'page-error'; message: string }
   | { kind: 'request-failed'; message: string; url: string }
@@ -31,6 +32,7 @@ type BrowserIssueMonitor = {
 
 type AuditOptions = {
   accessibility?: boolean;
+  expectedMapTeardown?: boolean;
   expectedHeading?: string | RegExp;
   expectedPath?: string | RegExp;
   expectedSelector?: string;
@@ -69,6 +71,7 @@ export function monitorBrowserIssues(page: Page): BrowserIssueMonitor {
         level,
         message: messageText,
         url: location.url || undefined,
+        documentUrl: page.url(),
       });
     }
   };
@@ -151,7 +154,7 @@ export function monitorBrowserIssues(page: Page): BrowserIssueMonitor {
 
   const issueKey = (issue: BrowserIssue) => {
     if (issue.kind === 'console') {
-      return `${issue.kind}:${issue.level}:${issue.url ?? ''}:${issue.message}`;
+      return `${issue.kind}:${issue.level}:${issue.documentUrl ?? ''}:${issue.url ?? ''}:${issue.message}`;
     }
     if (issue.kind === 'http-response') {
       return `${issue.kind}:${issue.status}:${issue.resourceType}:${issue.url}`;
@@ -193,6 +196,26 @@ function sameDocumentUrl(candidate: string, pageUrl: string) {
   } catch {
     return false;
   }
+}
+
+/** Only a warning recorded on the completed destination may be teardown noise. */
+export function isExpectedMapTeardownWarning(
+  issue: BrowserIssue,
+  pageUrl: string,
+  activeMapCanvases: number,
+  expectedMapTeardown = false,
+) {
+  // MapLibre remove() intentionally releases its WebGL context. Firefox warns
+  // about this after navigation. A queued warning captured on the live Atlas
+  // must still fail, even if the destination no longer contains a map.
+  return Boolean(
+    expectedMapTeardown &&
+    activeMapCanvases === 0 &&
+    issue.kind === 'console' &&
+    issue.level === 'warning' &&
+    sameDocumentUrl(issue.documentUrl ?? '', pageUrl) &&
+    /^\[JavaScript Warning: "WebGL context was lost\."\s/.test(issue.message),
+  );
 }
 
 function isExpectedDocumentFailure(
@@ -415,6 +438,7 @@ export async function auditCurrentPage(
       );
 
     return {
+      activeMapCanvases: document.querySelectorAll('.maplibregl-canvas').length,
       clippedControls,
       failedImages: Array.from(document.images)
         .filter((image) => image.complete && image.naturalWidth === 0)
@@ -464,7 +488,13 @@ export async function auditCurrentPage(
     .flush()
     .filter(
       (issue) =>
-        !isExpectedDocumentFailure(issue, page.url(), options.expectedStatus),
+        !isExpectedDocumentFailure(issue, page.url(), options.expectedStatus) &&
+        !isExpectedMapTeardownWarning(
+          issue,
+          page.url(),
+          metrics.activeMapCanvases,
+          options.expectedMapTeardown,
+        ),
     )
     .map(describeBrowserIssue);
   expect.soft(runtimeBrowserIssues, `${label}: browser issues`).toEqual([]);

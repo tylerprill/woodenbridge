@@ -2,7 +2,7 @@
  * @jest-environment jsdom
  */
 
-import { render, screen, waitFor } from '@testing-library/react';
+import { render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 
 import type { AtlasData } from '@/app/lib/atlas/definitions';
@@ -11,6 +11,7 @@ import type {
   AtlasJourneyIndex,
 } from '@/app/lib/atlas/journeys/definitions';
 import { AtlasWorkspace } from '@/components/atlas/atlas-workspace';
+import { AtlasJourneyBuilder } from '@/components/atlas/atlas-journey-builder';
 
 const mockPush = jest.fn();
 const mockReplace = jest.fn();
@@ -37,15 +38,34 @@ jest.mock('@/components/atlas/atlas-map-loader', () => ({
   __esModule: true,
   default: ({
     selectedJourneyStopId,
+    builderSelectedEntryIds,
+    onSelect,
     onJourneyStopSelect,
   }: {
     selectedJourneyStopId?: string | null;
+    builderSelectedEntryIds?: string[];
+    onSelect?: (id: string) => void;
     onJourneyStopSelect?: (id: string) => void;
   }) => (
     <div data-testid="atlas-map">
       <output data-testid="selected-map-stop">
         {selectedJourneyStopId ?? 'none'}
       </output>
+      <output data-testid="selected-map-memories">
+        {builderSelectedEntryIds?.join(',') ?? ''}
+      </output>
+      <button
+        type="button"
+        onClick={() => onSelect?.('00000000-0000-4000-8000-000000000001')}
+      >
+        Select first map memory
+      </button>
+      <button
+        type="button"
+        onClick={() => onSelect?.('00000000-0000-4000-8000-000000000002')}
+      >
+        Select second map memory
+      </button>
       <button
         type="button"
         onClick={() =>
@@ -191,6 +211,13 @@ function response(body: unknown) {
   } as Response);
 }
 
+async function openJourneyBuilder(user: ReturnType<typeof userEvent.setup>) {
+  const journeys = await screen.findByRole('region', { name: 'Your journeys' });
+  await user.click(
+    await within(journeys).findByRole('button', { name: 'Create journey' }),
+  );
+}
+
 describe('Atlas Journey Lens', () => {
   beforeEach(() => {
     jest.clearAllMocks();
@@ -198,6 +225,34 @@ describe('Atlas Journey Lens', () => {
       String(input).includes(`/${JOURNEY_ID}`)
         ? response({ journey: journeyDetail })
         : response(journeyIndex),
+    );
+  });
+
+  it('keeps the Places placement tool named when its visible label is hidden', async () => {
+    const user = userEvent.setup();
+    render(
+      <AtlasWorkspace
+        displayName="Explorer"
+        initialData={initialData}
+        initialMode="journeys"
+      />,
+    );
+
+    await user.click(screen.getByRole('button', { name: 'Places' }));
+    const addMemory = screen.getByRole('button', {
+      name: 'Add memory',
+    });
+    expect(addMemory).toHaveAttribute('aria-label', 'Add memory');
+    await user.click(addMemory);
+
+    const cancelPin = screen.getByRole('button', {
+      name: 'Cancel pin',
+    });
+    expect(cancelPin).toHaveAttribute('aria-label', 'Cancel pin');
+    await user.click(cancelPin);
+    expect(screen.getByRole('button', { name: 'Add memory' })).toHaveAttribute(
+      'aria-label',
+      'Add memory',
     );
   });
 
@@ -217,6 +272,17 @@ describe('Atlas Journey Lens', () => {
     expect(mockPush).toHaveBeenCalledWith(
       `/dashboard?view=journeys&journey=${JOURNEY_ID}`,
       { scroll: false },
+    );
+
+    const relive = screen.getByRole('button', { name: 'Relive' });
+    const actions = relive.closest('footer');
+    expect(actions).not.toBeNull();
+    expect(actions?.parentElement).toHaveAttribute(
+      'aria-labelledby',
+      'journey-tray-title',
+    );
+    expect(actions).not.toContainElement(
+      screen.getByRole('list', { name: 'Leelanau weekend stops' }),
     );
 
     await user.click(screen.getByRole('button', { name: 'Relive' }));
@@ -244,7 +310,7 @@ describe('Atlas Journey Lens', () => {
     );
 
     await user.click(await screen.findByRole('button', { name: 'Review' }));
-    const link = screen.getByRole('link', { name: /Shape chapter/i });
+    const link = screen.getByRole('link', { name: 'Continue' });
     const href = link.getAttribute('href') ?? '';
     const url = new URL(href, 'https://field-atlas.test');
 
@@ -255,6 +321,365 @@ describe('Atlas Journey Lens', () => {
     expect(url.searchParams.get('title')).toBe('Leelanau memories');
     expect(url.searchParams.get('suggestion')).toBe('a'.repeat(64));
     expect(url.searchParams.get('suggestionSource')).toBe('atlas_history');
+  });
+
+  it('starts map-first with a collapsed list and only essential builder controls', async () => {
+    const user = userEvent.setup();
+    const { container } = render(
+      <AtlasWorkspace
+        displayName="Explorer"
+        initialData={initialData}
+        initialMode="journeys"
+      />,
+    );
+
+    await openJourneyBuilder(user);
+
+    const workspace = container.querySelector('.atlas-workspace-root');
+    expect(workspace).toHaveAttribute('data-atlas-surface', 'builder');
+    expect(workspace).toHaveAttribute('data-builder-list-open', 'false');
+    expect(screen.getByText('0 selected')).toBeVisible();
+    expect(
+      screen.getByRole('button', { name: 'Choose 2 more' }),
+    ).toBeDisabled();
+    expect(
+      screen.getAllByRole('button', { name: 'Cancel journey builder' }),
+    ).toHaveLength(1);
+    expect(
+      screen.queryByRole('button', { name: 'Back to journeys' }),
+    ).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole('button', { name: 'Cancel' }),
+    ).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole('heading', { name: 'Explorer’s world' }),
+    ).not.toBeInTheDocument();
+    expect(
+      screen.getByRole('heading', {
+        level: 1,
+        name: 'Build a journey in your Atlas',
+      }),
+    ).toHaveClass('sr-only');
+    expect(
+      screen.queryByRole('toolbar', { name: 'Journey tools' }),
+    ).not.toBeInTheDocument();
+    expect(
+      screen.getByRole('button', { name: 'Fit memories on map' }),
+    ).toBeVisible();
+
+    const toggle = screen.getByRole('button', { name: 'Show memories' });
+    expect(toggle).toHaveAttribute('aria-expanded', 'false');
+    expect(toggle).toHaveAttribute('aria-controls', 'atlas-builder-memories');
+    const list = document.getElementById('atlas-builder-memories');
+    expect(list).toHaveAttribute('hidden');
+    expect(list).not.toBeVisible();
+    expect(
+      screen.queryByRole('region', { name: 'Journey memories' }),
+    ).not.toBeInTheDocument();
+
+    await user.click(toggle);
+    expect(
+      screen.getByRole('button', { name: 'Hide memories' }),
+    ).toHaveAttribute('aria-expanded', 'true');
+    expect(workspace).toHaveAttribute('data-builder-list-open', 'true');
+    expect(
+      screen.getByRole('region', { name: 'Journey memories' }),
+    ).toBeVisible();
+    expect(list).not.toHaveAttribute('hidden');
+  });
+
+  it('keeps map selection and Continue available while the memory list is collapsed', async () => {
+    const user = userEvent.setup();
+    render(
+      <AtlasWorkspace
+        displayName="Explorer"
+        initialData={initialData}
+        initialMode="journeys"
+      />,
+    );
+
+    await openJourneyBuilder(user);
+    await user.click(
+      screen.getByRole('button', { name: 'Select second map memory' }),
+    );
+    expect(screen.getByText('1 selected')).toBeVisible();
+    expect(
+      screen.getByRole('button', { name: 'Choose 1 more' }),
+    ).toBeDisabled();
+    expect(
+      screen.getByRole('button', { name: 'Show memories' }),
+    ).toHaveAttribute('aria-expanded', 'false');
+    await user.click(
+      screen.getByRole('button', { name: 'Select first map memory' }),
+    );
+
+    const url = new URL(
+      screen.getByRole('link', { name: 'Continue' }).getAttribute('href') ?? '',
+      'https://field-atlas.test',
+    );
+    expect(url.searchParams.getAll('memory')).toEqual([
+      SECOND_MEMORY_ID,
+      FIRST_MEMORY_ID,
+    ]);
+    expect(screen.getByText('2 selected')).toBeVisible();
+    expect(screen.getByTestId('selected-map-memories')).toHaveTextContent(
+      `${SECOND_MEMORY_ID},${FIRST_MEMORY_ID}`,
+    );
+
+    await user.click(screen.getByRole('button', { name: 'Show memories' }));
+    const list = screen.getByRole('region', { name: 'Journey memories' });
+    const available = within(list).getAllByRole('button', { pressed: true });
+    expect(available).toHaveLength(2);
+    await user.click(screen.getByRole('button', { name: 'Hide memories' }));
+    expect(screen.getByText('2 selected')).toBeVisible();
+    expect(screen.getByRole('link', { name: 'Continue' })).toBeVisible();
+    expect(list).not.toBeVisible();
+
+    await user.click(screen.getByRole('button', { name: 'Show memories' }));
+    await user.click(
+      screen.getByRole('button', { name: 'Remove Leland harbor from journey' }),
+    );
+    expect(screen.getByText('1 selected')).toBeVisible();
+    expect(
+      screen.queryByRole('link', { name: 'Continue' }),
+    ).not.toBeInTheDocument();
+    expect(
+      screen.getByRole('button', { name: 'Choose 1 more' }),
+    ).toBeDisabled();
+    expect(screen.getByTestId('selected-map-memories')).toHaveTextContent(
+      FIRST_MEMORY_ID,
+    );
+    await user.click(
+      within(
+        screen.getByRole('region', { name: 'Journey memories' }),
+      ).getByRole('button', { name: /Leland harbor/, pressed: false }),
+    );
+    expect(screen.getByText('2 selected')).toBeVisible();
+    const restored = new URL(
+      screen.getByRole('link', { name: 'Continue' }).getAttribute('href') ?? '',
+      'https://field-atlas.test',
+    );
+    expect(restored.searchParams.getAll('memory')).toEqual([
+      FIRST_MEMORY_ID,
+      SECOND_MEMORY_ID,
+    ]);
+  });
+
+  it.each([false, true])(
+    'focuses the opened memories region so Tab reaches its controls (selected: %s)',
+    async (hasSelection) => {
+      const user = userEvent.setup();
+      render(
+        <AtlasWorkspace
+          displayName="Explorer"
+          initialData={initialData}
+          initialMode="journeys"
+        />,
+      );
+
+      await openJourneyBuilder(user);
+      if (hasSelection) {
+        await user.click(
+          screen.getByRole('button', { name: 'Select first map memory' }),
+        );
+      }
+      await user.click(screen.getByRole('button', { name: 'Show memories' }));
+      const memories = screen.getByRole('region', { name: 'Journey memories' });
+      expect(memories).toHaveAttribute('tabindex', '0');
+      await waitFor(() => expect(memories).toHaveFocus());
+      const firstEnabledControl = hasSelection
+        ? within(memories).getByRole('button', {
+            name: 'Remove Sleeping Bear sunrise from journey',
+          })
+        : within(memories).getByRole('button', {
+            name: /Sleeping Bear sunrise/,
+            pressed: false,
+          });
+      expect(firstEnabledControl).toBeEnabled();
+
+      await user.tab();
+      expect(firstEnabledControl).toHaveFocus();
+      expect(memories).toContainElement(document.activeElement as HTMLElement);
+      expect(
+        screen.getByRole('button', { name: 'Hide memories' }),
+      ).not.toHaveFocus();
+    },
+  );
+
+  it('preserves reviewed suggestion context and selected order when the list is collapsed again', async () => {
+    const user = userEvent.setup();
+    render(
+      <AtlasWorkspace
+        displayName="Explorer"
+        initialData={initialData}
+        initialMode="journeys"
+      />,
+    );
+
+    await user.click(await screen.findByRole('button', { name: 'Review' }));
+    expect(
+      screen.getByRole('button', { name: 'Show memories' }),
+    ).toHaveAttribute('aria-expanded', 'false');
+    await user.click(screen.getByRole('button', { name: 'Show memories' }));
+    expect(
+      screen.getByRole('button', {
+        name: 'Move Sleeping Bear sunrise earlier',
+      }),
+    ).toBeDisabled();
+    expect(
+      screen.getByRole('button', { name: 'Move Leland harbor later' }),
+    ).toBeDisabled();
+    await user.click(
+      screen.getByRole('button', { name: 'Move Leland harbor earlier' }),
+    );
+
+    const selected = screen.getByRole('list', { name: 'Selected memories' });
+    const items = within(selected).getAllByRole('listitem');
+    expect(items[0]).toHaveTextContent('Leland harbor');
+    expect(items[1]).toHaveTextContent('Sleeping Bear sunrise');
+    expect(
+      screen.getByText('Leland harbor moved to position 1 of 2.'),
+    ).toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: 'Hide memories' }));
+
+    const url = new URL(
+      screen.getByRole('link', { name: 'Continue' }).getAttribute('href') ?? '',
+      'https://field-atlas.test',
+    );
+    expect(url.searchParams.getAll('memory')).toEqual([
+      SECOND_MEMORY_ID,
+      FIRST_MEMORY_ID,
+    ]);
+    expect(url.searchParams.get('source')).toBe('atlas');
+    expect(url.searchParams.get('title')).toBe('Leelanau memories');
+    expect(url.searchParams.get('suggestion')).toBe('a'.repeat(64));
+    expect(url.searchParams.get('suggestionSource')).toBe('atlas_history');
+  });
+
+  it('opens the list with the search shortcut and collapses before cancelling on Escape', async () => {
+    const user = userEvent.setup();
+    const { container } = render(
+      <AtlasWorkspace
+        displayName="Explorer"
+        initialData={initialData}
+        initialMode="journeys"
+      />,
+    );
+
+    await openJourneyBuilder(user);
+    await user.click(
+      screen.getByRole('button', { name: 'Select first map memory' }),
+    );
+    await user.keyboard('{Control>}k{/Control}');
+    const hide = screen.getByRole('button', { name: 'Hide memories' });
+    const memories = screen.getByRole('region', { name: 'Journey memories' });
+    await waitFor(() => expect(memories).toHaveFocus());
+    expect(hide).toHaveAttribute('aria-expanded', 'true');
+    await user.keyboard('{Meta>}k{/Meta}');
+    expect(
+      screen.getByRole('button', { name: 'Hide memories' }),
+    ).toHaveAttribute('aria-expanded', 'true');
+    await waitFor(() => expect(memories).toHaveFocus());
+    expect(screen.getByText('1 selected')).toBeVisible();
+    await user.keyboard('{Escape}');
+    const show = screen.getByRole('button', { name: 'Show memories' });
+    await waitFor(() => expect(show).toHaveFocus());
+    expect(screen.getByText('1 selected')).toBeVisible();
+    expect(container.querySelector('.atlas-workspace-root')).toHaveAttribute(
+      'data-atlas-surface',
+      'builder',
+    );
+    await user.keyboard('{Escape}');
+
+    expect(
+      await screen.findByRole('heading', { name: 'Your journeys' }),
+    ).toBeVisible();
+    expect(
+      screen.queryByRole('button', { name: 'Show memories' }),
+    ).not.toBeInTheDocument();
+    await openJourneyBuilder(user);
+    expect(screen.getByText('0 selected')).toBeVisible();
+    expect(
+      screen.getByRole('button', { name: 'Show memories' }),
+    ).toHaveAttribute('aria-expanded', 'false');
+  });
+
+  it('cancels through its single control and restores the overview controls', async () => {
+    const user = userEvent.setup();
+    render(
+      <AtlasWorkspace
+        displayName="Explorer"
+        initialData={initialData}
+        initialMode="journeys"
+      />,
+    );
+
+    await openJourneyBuilder(user);
+    await user.click(screen.getByRole('button', { name: 'Show memories' }));
+    await user.click(
+      screen.getByRole('button', { name: 'Cancel journey builder' }),
+    );
+    expect(
+      await screen.findByRole('heading', { name: 'Your journeys' }),
+    ).toBeVisible();
+    expect(screen.getByRole('heading', { level: 1 })).toHaveTextContent(
+      'Explorer’s world',
+    );
+    expect(
+      screen.getByRole('toolbar', { name: 'Journey tools' }),
+    ).toBeVisible();
+    expect(
+      screen.queryByRole('region', { name: 'Journey memories' }),
+    ).not.toBeInTheDocument();
+    await openJourneyBuilder(user);
+    expect(
+      screen.getByRole('button', { name: 'Show memories' }),
+    ).toHaveAttribute('aria-expanded', 'false');
+  });
+
+  it('caps selection at 50 without disabling removal or Continue', async () => {
+    const onToggle = jest.fn();
+    const entries = Array.from({ length: 51 }, (_, index) => ({
+      ...initialData.entries[0],
+      id: `00000000-0000-4000-8000-${String(index + 1).padStart(12, '0')}`,
+      title: `Saved memory ${index + 1}`,
+    }));
+    const user = userEvent.setup();
+    render(
+      <AtlasJourneyBuilder
+        entries={entries}
+        selectedEntryIds={entries.slice(0, 50).map((entry) => entry.id)}
+        listOpen
+        onListOpenChange={jest.fn()}
+        onToggle={onToggle}
+        onMove={jest.fn()}
+        onCancel={jest.fn()}
+      />,
+    );
+
+    expect(screen.getByText('50 selected')).toBeVisible();
+    expect(
+      screen.getByRole('button', { name: /Saved memory 51/, pressed: false }),
+    ).toBeDisabled();
+    const selected = screen.getByRole('button', {
+      name: /^Saved memory 1 /,
+      pressed: true,
+    });
+    expect(selected).toBeEnabled();
+    await user.click(selected);
+    expect(onToggle).toHaveBeenCalledWith(entries[0].id);
+    expect(
+      screen.getByRole('button', {
+        name: 'Remove Saved memory 1 from journey',
+      }),
+    ).toBeEnabled();
+    const url = new URL(
+      screen.getByRole('link', { name: 'Continue' }).getAttribute('href') ?? '',
+      'https://field-atlas.test',
+    );
+    expect(url.searchParams.getAll('memory')).toEqual(
+      entries.slice(0, 50).map((entry) => entry.id),
+    );
   });
 
   it('returns focus to the Journey toolbar control when the panel closes', async () => {

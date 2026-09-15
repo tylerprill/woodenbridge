@@ -1,4 +1,9 @@
 .workspace {
+  --atlas-journey-layout: wide-right;
+  --atlas-journey-rail-width: min(24rem, 40%);
+  --atlas-builder-rail-width: 20rem;
+  --atlas-builder-bar-height: calc(4.125rem + env(safe-area-inset-bottom));
+  --atlas-builder-sheet-height: min(50%, 22rem);
   --atlas-glass: rgba(251, 250, 245, 0.82);
   --atlas-glass-strong: rgba(251, 250, 245, 0.94);
   --atlas-line: rgba(16, 35, 29, 0.14);
@@ -2204,12 +2209,25 @@
 }
 
 .journeyTray {
-  top: 11.4rem;
-  left: 6.6rem;
+  /* Keep remembered paths at the map's edge, below the search control. */
+  top: 5.75rem;
+  right: 1.25rem;
+  bottom: auto;
+  left: auto;
   min-width: 0;
   grid-template-rows: auto minmax(0, 1fr);
-  width: min(25.5rem, calc(100% - 8rem));
-  max-height: min(40rem, calc(100% - 15.2rem));
+  width: var(--atlas-journey-rail-width);
+  max-height: calc(100% - 7rem);
+  animation-name: drawer-enter;
+}
+
+.journeyTray[data-detail='true'] {
+  grid-template-rows: auto minmax(0, 1fr) auto;
+}
+
+.workspace[data-journey-panel-open='true']
+  :global(.maplibregl-ctrl-bottom-right) {
+  right: calc(var(--atlas-journey-rail-width) + 2.25rem);
 }
 
 .journeyTray > header {
@@ -2600,7 +2618,8 @@
   display: grid;
   min-width: 0;
   grid-template-columns: repeat(3, minmax(0, 1fr));
-  margin-top: 1rem;
+  padding: 0.75rem 1rem calc(0.75rem + env(safe-area-inset-bottom));
+  border-top: 1px solid rgba(16, 35, 29, 0.09);
   gap: 0.45rem;
 }
 
@@ -2638,21 +2657,142 @@
 }
 
 .journeyBuilder {
+  position: absolute;
+  right: 0;
+  bottom: 0;
+  left: 0;
+  z-index: 11;
+  display: grid;
+  height: var(--atlas-builder-bar-height);
+  min-width: 0;
+  overflow: hidden;
+  border-top: 1px solid var(--atlas-line);
+  background: var(--paper-light);
+  color: var(--forest-950);
+}
+
+.journeyBuilder > header {
+  min-width: 0;
+}
+
+.journeyBuilder h2 {
+  font-family: Georgia, 'Times New Roman', serif;
+  font-size: 1.35rem;
+  font-weight: 400;
+  line-height: 1.15;
+}
+
+.journeyBuilder > header p {
+  margin-top: 0.4rem;
+  color: var(--forest-600);
+  font-size: 0.72rem;
+  line-height: 1.4;
+}
+
+/* The canvas ends at the real builder strip/rail, never beneath its controls.
+   MapLibre can therefore fit pins using its actual visible canvas dimensions. */
+.workspace[data-atlas-surface='builder'] .mapFrame {
+  bottom: var(--atlas-builder-bar-height);
+}
+
+.workspace[data-atlas-surface='builder'][data-builder-list-open='true']
+  .mapFrame {
+  right: var(--atlas-builder-rail-width);
+  bottom: 0;
+}
+
+.workspace[data-atlas-surface='builder'][data-builder-list-open='true']
+  .journeyBuilder {
+  top: 0;
+  left: auto;
+  width: var(--atlas-builder-rail-width);
+  height: auto;
   grid-template-rows: auto minmax(0, 1fr) auto;
+  border-top: 0;
+  border-left: 1px solid var(--atlas-line);
+}
+
+.workspace[data-atlas-surface='builder'][data-builder-list-open='true']
+  .journeyBuilder
+  > header {
+  padding: 1rem 1rem 0.75rem;
+  border-bottom: 1px solid var(--atlas-line);
+}
+
+.workspace[data-atlas-surface='builder'] .atlasHeader,
+.workspace[data-atlas-surface='builder'] .toolDock {
+  display: none;
+}
+
+.journeyBuilderMapTools {
+  position: absolute;
+  top: 0.65rem;
+  left: 0.65rem;
+  z-index: 5;
+  display: flex;
+  max-width: calc(100% - 1.3rem);
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.journeyBuilderMapTools button {
+  display: grid;
+  width: 2.75rem;
+  height: 2.75rem;
+  flex: 0 0 auto;
+  place-items: center;
+  border: 1px solid var(--atlas-line);
+  border-radius: 50%;
+  background: var(--paper-light);
+  color: var(--forest-950);
+}
+
+.journeyBuilderMapTools svg {
+  width: 1rem;
+}
+
+.journeyBuilderMapTools p {
+  padding: 0.55rem 0.7rem;
+  border-radius: 999px;
+  background: var(--atlas-glass-strong);
+  color: var(--forest-600);
+  font-size: 0.72rem;
+  line-height: 1.3;
+}
+
+.workspace[data-atlas-surface='builder']
+  :global(.maplibregl-ctrl-bottom-right) {
+  top: auto;
+  right: 0.5rem;
+  bottom: 0.4rem;
+  left: auto;
+  width: auto;
+}
+
+.workspace[data-atlas-surface='builder'] :global(.maplibregl-ctrl-attrib) {
+  max-width: calc(100% - 1rem);
+  margin-block: 0;
+}
+
+.workspace[data-atlas-surface='builder']
+  :global(.maplibregl-ctrl-attrib-inner) {
+  overflow-wrap: anywhere;
 }
 
 .journeyBuilderBody {
-  padding: 0.9rem;
+  padding: 0.75rem 0.85rem;
+  outline-offset: -3px;
+}
+
+.journeyBuilderBody[hidden] {
+  display: none;
 }
 
 .journeyBuilderStatus {
-  display: flex;
-  align-items: baseline;
-  justify-content: space-between;
-  padding: 0 0.15rem 0.75rem;
+  padding-bottom: 0.5rem;
   color: var(--forest-600);
-  font-size: 0.61rem;
-  gap: 0.75rem;
+  font-size: 0.68rem;
+  line-height: 1.4;
 }
 
 .journeyBuilderStatus strong {
@@ -2666,7 +2806,7 @@
 
 .journeyBuilderSequence li {
   display: grid;
-  grid-template-columns: auto minmax(0, 1fr) auto;
+  grid-template-columns: 1.75rem minmax(0, 1fr);
   align-items: center;
   padding: 0.6rem;
   border: 1px solid rgba(16, 35, 29, 0.09);
@@ -2711,14 +2851,15 @@
 }
 
 .journeyBuilderSequence li > div:last-child {
+  grid-column: 2;
   display: flex;
-  gap: 0.1rem;
+  gap: 0.35rem;
 }
 
 .journeyBuilderSequence button {
   display: grid;
-  width: 2rem;
-  height: 2rem;
+  width: 2.75rem;
+  height: 2.75rem;
   place-items: center;
   border-radius: 50%;
   color: var(--forest-600);
@@ -2738,26 +2879,6 @@
   width: 0.72rem;
 }
 
-.journeyBuilderHint {
-  display: flex;
-  min-height: 4.5rem;
-  align-items: center;
-  justify-content: center;
-  padding: 0.8rem;
-  border: 1px dashed rgba(16, 35, 29, 0.18);
-  border-radius: 0.9rem;
-  color: var(--forest-600);
-  font-size: 0.65rem;
-  text-align: center;
-  gap: 0.5rem;
-}
-
-.journeyBuilderHint svg {
-  width: 0.9rem;
-  flex: 0 0 auto;
-  color: var(--timber);
-}
-
 .journeyBuilderAvailable {
   display: grid;
   margin-top: 1rem;
@@ -2772,6 +2893,7 @@
 .journeyBuilderAvailable > button {
   display: grid;
   width: 100%;
+  min-height: 2.75rem;
   grid-template-columns: auto minmax(0, 1fr);
   align-items: center;
   padding: 0.55rem;
@@ -2812,27 +2934,28 @@
 }
 
 .journeyBuilderFooter {
-  display: flex;
+  display: grid;
   width: 100%;
+  max-width: 28rem;
   min-width: 0;
+  margin-inline: auto;
+  grid-template-columns: 2.75rem minmax(0, 1fr) 5.6rem;
   align-items: center;
-  justify-content: flex-end;
-  padding: 0.8rem 1rem calc(0.8rem + env(safe-area-inset-bottom));
-  border-top: 1px solid rgba(16, 35, 29, 0.09);
-  gap: 0.45rem;
+  padding: 0.625rem 0.5rem calc(0.625rem + env(safe-area-inset-bottom));
+  gap: 0.375rem;
 }
 
 .journeyBuilderFooter :is(button, a) {
   display: inline-flex;
   min-width: 0;
-  min-height: 2.65rem;
+  min-height: 2.75rem;
   align-items: center;
   justify-content: center;
-  padding-inline: 0.9rem;
+  padding-inline: 0.4rem;
   border: 1px solid rgba(16, 35, 29, 0.12);
   border-radius: 999px;
   color: var(--forest-600);
-  font-size: 0.64rem;
+  font-size: 0.72rem;
   font-weight: 800;
   gap: 0.35rem;
   text-decoration: none;
@@ -2851,6 +2974,53 @@
 
 .journeyBuilderFooter svg {
   width: 0.75rem;
+  flex: 0 0 auto;
+}
+
+.journeyBuilderFooter .journeyBuilderToggle {
+  justify-content: flex-start;
+  padding-inline: 0.55rem;
+  border-color: transparent;
+  border-radius: 0.65rem;
+  text-align: left;
+  gap: 0.45rem;
+}
+
+.journeyBuilderToggle span {
+  display: grid;
+  min-width: 0;
+}
+
+.journeyBuilderToggle strong,
+.journeyBuilderToggle small {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.journeyBuilderToggle strong {
+  color: var(--forest-950);
+  font-size: 0.75rem;
+}
+
+.journeyBuilderToggle small {
+  margin-top: 0.1rem;
+  font-size: 0.64rem;
+  font-weight: 500;
+}
+
+.journeyBuilderFooter .journeyBuilderCancel {
+  padding: 0;
+  border-color: transparent;
+}
+
+.journeyBuilderCancel svg {
+  width: 1rem;
+}
+
+.journeyBuilderFooter button:not(:disabled):hover,
+.journeyBuilderFooter button:focus-visible {
+  background: rgba(16, 35, 29, 0.055);
 }
 
 .journeyPlayback {
@@ -3074,6 +3244,10 @@
 }
 
 @container dashboard-content (max-width: 56rem) {
+  .workspace {
+    --atlas-journey-layout: right;
+  }
+
   .atlasHeader {
     top: 0.75rem;
     right: 0.75rem;
@@ -3153,13 +3327,16 @@
   }
 
   .journeyTray {
-    top: 10.7rem;
-    right: auto;
-    bottom: 0.75rem;
-    left: 0.75rem;
-    width: min(24rem, calc(100% - 1.5rem));
-    max-height: calc(100% - 11.45rem);
-    animation-name: tray-enter;
+    top: 5rem;
+    right: 0.75rem;
+    bottom: auto;
+    left: auto;
+    max-height: calc(100% - 5.75rem);
+  }
+
+  .workspace[data-journey-panel-open='true']
+    :global(.maplibregl-ctrl-bottom-right) {
+    right: calc(var(--atlas-journey-rail-width) + 1.75rem);
   }
 
   .journeyActions :is(button, a),
@@ -3188,6 +3365,10 @@
 }
 
 @container dashboard-content (max-width: 40rem) {
+  .workspace {
+    --atlas-journey-layout: bottom;
+  }
+
   .workspace[data-journey-panel-open='true'] .atlasHeader,
   .workspace[data-journey-panel-open='true'] .toolDock {
     visibility: hidden;
@@ -3217,7 +3398,8 @@
   }
 
   .workspace[data-atlas-surface='playback'] .journeyTray {
-    max-height: min(82%, calc(100% - 1.1rem));
+    /* Camera playback padding keeps a full-marker gutter above this sheet. */
+    max-height: min(76%, calc(100% - 1.1rem));
   }
 
   .journeyPlaybackArtwork {
@@ -3227,9 +3409,14 @@
 
   .workspace[data-journey-panel-open='true']
     :global(.maplibregl-ctrl-bottom-right) {
-    top: 0.55rem;
+    top: 0.25rem;
     right: 0.55rem;
     bottom: auto;
+  }
+
+  .workspace[data-journey-panel-open='true'] :global(.maplibregl-ctrl-attrib) {
+    /* MapLibre's extra vertical margin would enter the retained dot area. */
+    margin-block: 0;
   }
 
   .workspace[data-journey-panel-open='true']
@@ -3300,9 +3487,29 @@
   }
 }
 
-@media (max-height: 480px) {
+@media (max-height: 480px) and (orientation: landscape) {
   .workspace {
+    --atlas-journey-layout: landscape;
     min-height: 0;
+  }
+
+  /* Match the compact-sheet policy: a name-sized lens card must not cover
+     the active route dot beside the Journey rail in short landscape. */
+  .workspace[data-journey-panel-open='true'] .atlasHeader {
+    visibility: hidden;
+    opacity: 0;
+    pointer-events: none;
+  }
+
+  .workspace[data-journey-panel-open='true'] .atlasHeader h1 {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip: rect(0 0 0 0);
+    clip-path: inset(50%);
+    visibility: visible;
+    white-space: nowrap;
   }
 
   .workspace[data-atlas-mode='places'] .toolDock {
@@ -3355,6 +3562,11 @@
     bottom: 0.55rem;
     left: auto;
     width: min(22rem, calc(100% - 5.6rem));
+    max-height: none;
+  }
+
+  .workspace[data-atlas-surface='playback'] .journeyTray {
+    /* Override the narrow portrait sheet's more-specific 76% height cap. */
     max-height: none;
   }
 
@@ -3418,6 +3630,13 @@
     :global(.maplibregl-ctrl-bottom-right) {
     right: auto;
     left: 0.55rem;
+    width: calc(100% - min(22rem, calc(100% - 5.6rem)) - 1.1rem);
+  }
+
+  .workspace[data-journey-panel-open='true'] :global(.maplibregl-ctrl-attrib) {
+    /* Let expanded credits wrap before they reach the landscape inspector. */
+    max-width: calc(100% - 56px);
+    overflow-wrap: anywhere;
   }
 
   .workspace[data-journey-panel-open='true'] .searchWrap {
@@ -3433,9 +3652,164 @@
   }
 }
 
+@media (max-height: 360px) and (orientation: landscape) {
+  /* Preserve a useful stop preview on extra-short phones instead of spending
+     the rail's entire height on its three persistent control bars. */
+  .workspace[data-atlas-surface='playback'] .journeyTray > header,
+  .workspace[data-atlas-surface='playback'] .journeyPlaybackControls {
+    padding-block: 0.15rem;
+  }
+
+  .workspace[data-atlas-surface='playback'] .journeyPlaybackFooter {
+    padding-top: 0.15rem;
+    padding-bottom: calc(0.15rem + env(safe-area-inset-bottom));
+  }
+
+  .journeyActions {
+    padding-top: 0.15rem;
+    padding-bottom: calc(0.15rem + env(safe-area-inset-bottom));
+  }
+
+  .workspace[data-atlas-surface='playback'] .journeyPlaybackControls button,
+  .workspace[data-atlas-surface='playback']
+    .journeyPlaybackFooter
+    :is(button, a) {
+    min-height: 2.75rem;
+  }
+}
+
 @media (prefers-reduced-motion: reduce) {
   .journeyLoading > span,
   .journeyOverlapChooser {
     animation: none;
+  }
+}
+
+/* Builder-specific responsive rules are intentionally last: inspector/sheet
+   overlays elsewhere in the Atlas must not move credits into this real rail. */
+@container dashboard-content (max-width: 40rem) {
+  .workspace[data-atlas-surface='builder'][data-builder-list-open='true']
+    .mapFrame {
+    right: 0;
+    bottom: var(--atlas-builder-sheet-height);
+  }
+
+  .workspace[data-atlas-surface='builder'][data-builder-list-open='true']
+    .journeyBuilder {
+    top: auto;
+    left: 0;
+    width: auto;
+    height: var(--atlas-builder-sheet-height);
+    border-top: 1px solid var(--atlas-line);
+    border-left: 0;
+  }
+
+  .workspace[data-atlas-surface='builder'][data-builder-list-open='true']
+    .journeyBuilder
+    > header {
+    padding: 0.7rem 0.85rem 0.6rem;
+  }
+
+  .journeyBuilder h2 {
+    font-size: 1.15rem;
+  }
+
+  .journeyBuilder > header p {
+    display: none;
+  }
+
+  .workspace[data-atlas-surface='builder']
+    :global(.maplibregl-ctrl-bottom-right) {
+    top: auto;
+    right: 0.4rem;
+    bottom: 0.4rem;
+    left: 0.4rem;
+    width: auto;
+  }
+
+  .workspace[data-atlas-surface='builder'] :global(.maplibregl-ctrl-attrib) {
+    max-width: 100%;
+    margin-block: 0;
+  }
+
+  .workspace[data-atlas-surface='builder']
+    :global(.maplibregl-ctrl-attrib-inner) {
+    max-width: calc(100% - 56px);
+  }
+}
+
+@media (max-height: 480px) and (orientation: landscape) {
+  .workspace[data-atlas-surface='builder'] {
+    --atlas-builder-rail-width: min(20rem, 58%);
+  }
+
+  .workspace[data-atlas-surface='builder'][data-builder-list-open='true']
+    .mapFrame {
+    right: var(--atlas-builder-rail-width);
+    bottom: 0;
+  }
+
+  .workspace[data-atlas-surface='builder'][data-builder-list-open='true']
+    .journeyBuilder {
+    top: 0;
+    left: auto;
+    width: var(--atlas-builder-rail-width);
+    height: auto;
+    border-top: 0;
+    border-left: 1px solid var(--atlas-line);
+  }
+
+  .workspace[data-atlas-surface='builder'][data-builder-list-open='true']
+    .journeyBuilderMapTools
+    p {
+    display: none;
+  }
+}
+
+/* A bottom strip consumes too much of a very short landscape canvas. Keep
+   compact controls in a narrow real rail, leaving the map its full height. */
+@media (max-height: 360px) and (orientation: landscape) {
+  .workspace[data-atlas-surface='builder'] {
+    --atlas-builder-compact-rail-width: min(10rem, 32%);
+  }
+
+  .workspace[data-atlas-surface='builder'][data-builder-list-open='false']
+    .mapFrame {
+    right: var(--atlas-builder-compact-rail-width);
+    bottom: 0;
+  }
+
+  .workspace[data-atlas-surface='builder'][data-builder-list-open='false']
+    .journeyBuilder {
+    top: 0;
+    left: auto;
+    width: var(--atlas-builder-compact-rail-width);
+    height: auto;
+    grid-template-rows: 1fr;
+    border-top: 0;
+    border-left: 1px solid var(--atlas-line);
+  }
+
+  .workspace[data-atlas-surface='builder'][data-builder-list-open='false']
+    .journeyBuilder
+    > header,
+  .workspace[data-atlas-surface='builder'][data-builder-list-open='false']
+    .journeyBuilderMapTools
+    p {
+    display: none;
+  }
+
+  .workspace[data-atlas-surface='builder'][data-builder-list-open='false']
+    .journeyBuilderFooter {
+    grid-template-columns: minmax(0, 1fr);
+    align-content: center;
+    padding: 0.5rem 0.5rem calc(0.5rem + env(safe-area-inset-bottom));
+    gap: 0.5rem;
+  }
+
+  .workspace[data-atlas-surface='builder'][data-builder-list-open='false']
+    .journeyBuilderCancel {
+    width: 2.75rem;
+    justify-self: center;
   }
 }
