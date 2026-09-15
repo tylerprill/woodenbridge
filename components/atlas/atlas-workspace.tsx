@@ -171,6 +171,7 @@ export function AtlasWorkspace({
   const [journeyDetailError, setJourneyDetailError] = useState('');
   const [builderSuggestion, setBuilderSuggestion] =
     useState<AtlasJourneySuggestion | null>(null);
+  const [builderListOpen, setBuilderListOpen] = useState(false);
   const [journeyFitRequest, setJourneyFitRequest] = useState(0);
   const [overlapJourneyIds, setOverlapJourneyIds] = useState<string[]>([]);
   const [fitRequest, setFitRequest] = useState(0);
@@ -239,6 +240,7 @@ export function AtlasWorkspace({
       setActiveSearchIndex(-1);
       setOverlapJourneyIds([]);
       setBuilderSuggestion(null);
+      setBuilderListOpen(false);
       if (initialMode === 'journeys') {
         setSelectedId(null);
         setPlacementMode(false);
@@ -597,6 +599,7 @@ export function AtlasWorkspace({
       setJourneyPanelOpen(nextMode === 'journeys');
       setOverlapJourneyIds([]);
       setBuilderSuggestion(null);
+      setBuilderListOpen(false);
       setQuery('');
       setActiveSearchIndex(-1);
       searchInputRef.current?.blur();
@@ -614,6 +617,7 @@ export function AtlasWorkspace({
     setJourneyPanelOpen(true);
     setOverlapJourneyIds([]);
     setBuilderSuggestion(null);
+    setBuilderListOpen(false);
     router.push(journeyDashboardHref(), { scroll: false });
   }, [router]);
 
@@ -676,6 +680,7 @@ export function AtlasWorkspace({
         .slice(0, 50);
       dispatchExperience({ type: 'start-builder', selectedEntryIds });
       setBuilderSuggestion(suggestion);
+      setBuilderListOpen(false);
       setJourneyPanelOpen(true);
       setOverlapJourneyIds([]);
       setQuery('');
@@ -1036,6 +1041,15 @@ export function AtlasWorkspace({
     const handleKeyDown = (event: KeyboardEvent) => {
       if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === 'k') {
         event.preventDefault();
+        if (buildingJourney) {
+          setBuilderListOpen(true);
+          requestAnimationFrame(() =>
+            document
+              .getElementById('atlas-builder-memories')
+              ?.focus({ preventScroll: true }),
+          );
+          return;
+        }
         if (selectedId) {
           setNotice('Close the memory editor before searching your atlas.');
           return;
@@ -1045,7 +1059,16 @@ export function AtlasWorkspace({
         return;
       }
 
-      if (event.key === 'Escape') {
+      if (event.key === 'Escape' && !event.defaultPrevented) {
+        if (buildingJourney && builderListOpen) {
+          setBuilderListOpen(false);
+          requestAnimationFrame(() =>
+            document
+              .getElementById('atlas-builder-toggle')
+              ?.focus({ preventScroll: true }),
+          );
+          return;
+        }
         if (document.activeElement === searchInputRef.current) {
           searchInputRef.current?.blur();
           setQuery('');
@@ -1076,6 +1099,8 @@ export function AtlasWorkspace({
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [
+    builderListOpen,
+    buildingJourney,
     closeJourneyPanel,
     closeOverlapChooser,
     experience,
@@ -1112,6 +1137,7 @@ export function AtlasWorkspace({
       data-editor-open={selectedEntry ? 'true' : 'false'}
       data-atlas-mode={mode}
       data-atlas-surface={experience.surface}
+      data-builder-list-open={builderListOpen ? 'true' : 'false'}
       data-journey-panel-open={
         mode === 'journeys' && journeyPanelOpen ? 'true' : 'false'
       }
@@ -1141,6 +1167,7 @@ export function AtlasWorkspace({
         onPlace={(coordinates) => void placeEntry(coordinates)}
         onViewChange={rememberView}
         mode={mapMode}
+        builderActive={buildingJourney}
         journeys={visibleJourneys}
         selectedJourneyId={journeyId}
         selectedJourneyStopId={selectedJourneyStopId}
@@ -1154,7 +1181,8 @@ export function AtlasWorkspace({
 
       <header
         className={styles.atlasHeader}
-        inert={selectedEntry ? true : undefined}
+        hidden={buildingJourney}
+        inert={selectedEntry || buildingJourney ? true : undefined}
       >
         <div className={styles.atlasIdentity}>
           <p className={styles.eyebrow}>
@@ -1396,9 +1424,10 @@ export function AtlasWorkspace({
 
       <div
         className={styles.toolDock}
+        hidden={buildingJourney}
         role="toolbar"
         aria-label={mode === 'journeys' ? 'Journey tools' : 'Atlas tools'}
-        inert={selectedEntry ? true : undefined}
+        inert={selectedEntry || buildingJourney ? true : undefined}
       >
         {mode === 'journeys' ? (
           <>
@@ -1621,11 +1650,29 @@ export function AtlasWorkspace({
         />
       ) : null}
 
+      {buildingJourney ? (
+        <>
+          <h1 className="sr-only">Build a journey in your Atlas</h1>
+          <div className={styles.journeyBuilderMapTools}>
+            <button
+              type="button"
+              onClick={() => setFitRequest((current) => current + 1)}
+              aria-label="Fit memories on map"
+            >
+              <ArrowsPointingOutIcon aria-hidden="true" />
+            </button>
+            <p>Select map pins to add memories.</p>
+          </div>
+        </>
+      ) : null}
+
       {mode === 'journeys' && journeyPanelOpen && buildingJourney ? (
         <AtlasJourneyBuilder
           entries={eligibleJourneyEntries}
           selectedEntryIds={builderSelectedEntryIds}
           suggestion={builderSuggestion}
+          listOpen={builderListOpen}
+          onListOpenChange={setBuilderListOpen}
           onToggle={(id) => {
             if (
               !builderSelectedEntryIds.includes(id) &&

@@ -104,6 +104,7 @@ type AtlasMapProps = {
   selectedJourneyStopId?: string | null;
   journeyFitRequest?: number;
   journeyPlaybackIndex?: number | null;
+  builderActive?: boolean;
   builderSelectedEntryIds?: string[];
   onJourneySelect?: (id: string) => void;
   onJourneyOverlapSelect?: (ids: string[]) => void;
@@ -117,6 +118,7 @@ const JOURNEYS_MIN_ZOOM = -2;
 const MAP_MAX_ZOOM = 18;
 const MERCATOR_MAX_LATITUDE = 85.0511287798066;
 const EMPTY_MAP_PADDING = { top: 0, right: 0, bottom: 0, left: 0 } as const;
+const BUILDER_PIN_HIT_RADIUS = 22;
 
 type PreparedJourneyMarkerFit = {
   journeyId: string;
@@ -128,8 +130,8 @@ type PreparedJourneyMarkerFit = {
 // Mercator normally zooms in until the world fills the entire canvas height.
 // A Journey bottom sheet covers most of a tall phone canvas, so that default
 // would override route-fit padding and hide stops behind the sheet. Permit a
-// letterboxed overview only in Journey mode, while retaining safe coordinates
-// and the same zoom limits. Places and globe use MapLibre's default constraints.
+// letterboxed overview for Journey viewing/building, while retaining safe
+// coordinates and zoom limits. Ordinary Places and globe use default constraints.
 const constrainJourneyMercatorCamera: TransformConstrainFunction = (
   center,
   zoom,
@@ -459,6 +461,223 @@ function fitEntries(map: MapLibreMap, entries: AtlasEntry[]) {
   }
 }
 
+function eligibleBuilderEntries(entries: AtlasEntry[]) {
+  return entries.filter(
+    (entry) =>
+      entry.recordState === 'saved' &&
+      entry.journeyState === 'visited' &&
+      Number.isFinite(entry.longitude) &&
+      Number.isFinite(entry.latitude),
+  );
+}
+
+function builderFitDataKey(entries: AtlasEntry[]) {
+  // Choosing or reordering memories must not interrupt map exploration. Only
+  // changes to eligible pin geometry require a new builder overview.
+  return JSON.stringify(
+    eligibleBuilderEntries(entries)
+      .map((entry) => [entry.id, entry.longitude, entry.latitude])
+      .sort(([first], [second]) =>
+        first < second ? -1 : first > second ? 1 : 0,
+      ),
+  );
+}
+
+function getBuilderAttributionLayout(map: MapLibreMap) {
+  const container = map.getContainer();
+  const canvasBounds = container.getBoundingClientRect();
+  const width = container.clientWidth;
+  const height = container.clientHeight;
+  let bottomPadding = 32;
+  const visibleBounds: number[][] = [];
+  container
+    .querySelectorAll<HTMLElement>('.maplibregl-ctrl-attrib')
+    .forEach((element) => {
+      const bounds = element.getBoundingClientRect();
+      const style = window.getComputedStyle(element);
+      if (
+        bounds.width <= 0 ||
+        bounds.height <= 0 ||
+        style.display === 'none' ||
+        style.visibility === 'hidden' ||
+        style.visibility === 'collapse' ||
+        style.opacity === '0' ||
+        bounds.bottom <= canvasBounds.top ||
+        bounds.top >= canvasBounds.top + height ||
+        bounds.right <= canvasBounds.left ||
+        bounds.left >= canvasBounds.left + width
+      )
+        return;
+
+      // Reserve the actual bottom-edge credit footprint, including its offset,
+      // plus the full pin/cluster target radius and a small visible gap.
+      bottomPadding = Math.max(
+        bottomPadding,
+        Math.ceil(
+          height -
+            Math.max(0, bounds.top - canvasBounds.top) +
+            BUILDER_PIN_HIT_RADIUS +
+            4,
+        ),
+      );
+      visibleBounds.push([
+        bounds.left - canvasBounds.left,
+        bounds.top - canvasBounds.top,
+        bounds.width,
+        bounds.height,
+      ]);
+    });
+  return { bottomPadding, key: JSON.stringify(visibleBounds) };
+}
+
+function fitBuilderEntries(
+  map: MapLibreMap,
+  entries: AtlasEntry[],
+  projection: ChapterRouteProjection,
+) {
+  try {
+    const canvas = prepareMapForBoundsFit(map);
+    if (!canvas) return;
+    // The builder reserves real map-frame space rather than covering the map.
+    // Keep a pin gutter plus clearance for the small top-left Fit control and
+    // instruction pill, safely clamped for very small canvases.
+    const horizontal = Math.min(32, Math.floor((canvas.width - 2) / 2));
+    const minimumBottom = Math.min(32, Math.floor((canvas.height - 2) / 2));
+    const bottom = Math.min(
+      getBuilderAttributionLayout(map).bottomPadding,
+      Math.max(minimumBottom, canvas.height - 2 - 80),
+    );
+    const padding = {
+      top: Math.min(80, canvas.height - 2 - bottom),
+      right: horizontal,
+      bottom,
+      left: horizontal,
+    };
+    const eligibleEntries = eligibleBuilderEntries(entries);
+    const duration = mapAnimationDuration(950);
+    if (eligibleEntries.length < 2) {
+      const entry = eligibleEntries[0];
+      map.easeTo({
+        center: entry ? [entry.longitude, entry.latitude] : [-18, 22],
+        zoom: entry ? 6 : 1.65,
+        bearing: 0,
+        pitch: 0,
+        padding,
+        duration,
+        essential: true,
+      });
+      return;
+    }
+
+    const coordinates = alignCoordinatesToMinimalLongitudeEnvelope(
+      eligibleEntries.map((entry) => [entry.longitude, entry.latitude]),
+    );
+    const bounds = new maplibregl.LngLatBounds();
+    coordinates.forEach((coordinate) => bounds.extend(coordinate));
+    map.setPadding(padding);
+    let maxZoom = 8;
+    if (projection === 'globe') {
+      const candidate = map.cameraForBounds(bounds, { padding: 0, maxZoom });
+      if (!candidate?.center) return;
+      const center = maplibregl.LngLat.convert(candidate.center);
+      maxZoom = Math.min(
+        maxZoom,
+        getAtlasJourneyGlobeFitZoomLimit(
+          coordinates,
+          canvas.width,
+          canvas.height,
+          padding,
+          [center.lng, center.lat],
+          map.getVerticalFieldOfView(),
+        ),
+      );
+    }
+    map.fitBounds(bounds, {
+      padding: 0,
+      maxZoom,
+      duration,
+      essential: true,
+    });
+  } catch (error) {
+    console.error('Atlas builder camera fit failed:', error);
+  }
+}
+
+function nearestBuilderPin(
+  map: MapLibreMap,
+  entries: AtlasEntry[],
+  point: MapMouseEvent['point'],
+) {
+  const radius = BUILDER_PIN_HIT_RADIUS;
+  const features = map.queryRenderedFeatures(
+    [
+      [point.x - radius, point.y - radius],
+      [point.x + radius, point.y + radius],
+    ],
+    { layers: [ATLAS_PIN_LAYER] },
+  );
+  const eligibleById = new Map(
+    eligibleBuilderEntries(entries).map((entry) => [entry.id, entry]),
+  );
+  let clickedWorldLongitude = map.getCenter().lng;
+  try {
+    const longitude = map.unproject?.(point)?.lng;
+    if (Number.isFinite(longitude)) clickedWorldLongitude = longitude;
+  } catch {
+    // An unsettled globe projection can lack a geographic point for this
+    // pixel. The live camera's world copy remains a safe fallback.
+  }
+  let nearestId: string | null = null;
+  let nearestDistanceSquared = radius * radius;
+  features.forEach((feature) => {
+    const id = feature.properties?.id;
+    if (typeof id !== 'string') return;
+    const entry = eligibleById.get(id);
+    if (!entry) return;
+    const renderedCoordinates =
+      feature.geometry?.type === 'Point' ? feature.geometry.coordinates : null;
+    // GeoJSON's rendered point can be latitude-capped even though a saved
+    // memory accepts the poles. Hit-test the painted point, not raw storage.
+    const [renderedLongitude, renderedLatitude] =
+      renderedCoordinates &&
+      Number.isFinite(renderedCoordinates[0]) &&
+      Number.isFinite(renderedCoordinates[1])
+        ? renderedCoordinates
+        : [
+            entry.longitude,
+            Math.min(
+              MERCATOR_MAX_LATITUDE,
+              Math.max(-MERCATOR_MAX_LATITUDE, entry.latitude),
+            ),
+          ];
+    const longitude =
+      renderedLongitude +
+      360 * Math.round((clickedWorldLongitude - renderedLongitude) / 360);
+    // Rendered pins can belong to a neighboring world copy. Compare public
+    // projections around the clicked world, not canonical longitude alone.
+    let distanceSquared = Infinity;
+    for (const worldOffset of [-360, 0, 360]) {
+      const projected = map.project([
+        longitude + worldOffset,
+        renderedLatitude,
+      ]);
+      const candidateDistanceSquared =
+        (projected.x - point.x) ** 2 + (projected.y - point.y) ** 2;
+      distanceSquared = Math.min(distanceSquared, candidateDistanceSquared);
+    }
+    if (
+      distanceSquared <= radius * radius &&
+      (distanceSquared < nearestDistanceSquared - 1e-9 ||
+        (Math.abs(distanceSquared - nearestDistanceSquared) <= 1e-9 &&
+          (nearestId === null || id < nearestId)))
+    ) {
+      nearestDistanceSquared = distanceSquared;
+      nearestId = id;
+    }
+  });
+  return nearestId;
+}
+
 export default function AtlasMap({
   entries,
   initialView,
@@ -476,6 +695,7 @@ export default function AtlasMap({
   selectedJourneyStopId = null,
   journeyFitRequest = 0,
   journeyPlaybackIndex = null,
+  builderActive = false,
   builderSelectedEntryIds = [],
   onJourneySelect,
   onJourneyOverlapSelect,
@@ -487,6 +707,7 @@ export default function AtlasMap({
   const entriesRef = useRef(entries);
   const journeysRef = useRef(journeys);
   const modeRef = useRef(mode);
+  const builderActiveRef = useRef(builderActive);
   const placementRef = useRef(placementMode);
   const onSelectRef = useRef(onSelect);
   const onPlaceRef = useRef(onPlace);
@@ -528,6 +749,10 @@ export default function AtlasMap({
   const [hoveredJourneyId, setHoveredJourneyId] = useState<string | null>(null);
   const [journeyMarkerFitVersion, setJourneyMarkerFitVersion] = useState(0);
   const mapDataKeyValue = useMemo(() => mapDataKey(entries), [entries]);
+  const builderFitDataKeyValue = useMemo(
+    () => builderFitDataKey(entries),
+    [entries],
+  );
   const journeyMapDataKeyValue = useMemo(
     () => journeyMapDataKey(journeys),
     [journeys],
@@ -566,6 +791,10 @@ export default function AtlasMap({
   useEffect(() => {
     modeRef.current = mode;
   }, [mode]);
+
+  useEffect(() => {
+    builderActiveRef.current = builderActive;
+  }, [builderActive]);
 
   useEffect(() => {
     selectedJourneyRef.current = selectedJourneyId;
@@ -628,17 +857,20 @@ export default function AtlasMap({
         // global route. MapLibre supports overview zooms down to -2; Places
         // retain their closer zoom floor when the mode changes.
         minZoom:
-          modeRef.current === 'journeys' ? JOURNEYS_MIN_ZOOM : PLACES_MIN_ZOOM,
+          modeRef.current === 'journeys' || builderActiveRef.current
+            ? JOURNEYS_MIN_ZOOM
+            : PLACES_MIN_ZOOM,
         maxZoom: MAP_MAX_ZOOM,
         transformConstrain:
-          modeRef.current === 'journeys' && compactRenderer
+          (modeRef.current === 'journeys' || builderActiveRef.current) &&
+          compactRenderer
             ? constrainJourneyMercatorCamera
             : undefined,
         maxPitch: 0,
         attributionControl: false,
         cooperativeGestures: true,
         boxZoom: true,
-        doubleClickZoom: true,
+        doubleClickZoom: !builderActiveRef.current,
         dragPan: true,
         dragRotate: false,
         keyboard: true,
@@ -673,6 +905,7 @@ export default function AtlasMap({
     let lastCanvasWidth = map.getContainer().clientWidth;
     let lastCanvasHeight = map.getContainer().clientHeight;
     let lastJourneyLayout = resolveJourneyLayout(map);
+    let lastAttributionLayout = getBuilderAttributionLayout(map).key;
     const scheduleResize = () => {
       if (resizeFrame !== null) cancelAnimationFrame(resizeFrame);
       resizeFrame = requestAnimationFrame(() => {
@@ -689,6 +922,22 @@ export default function AtlasMap({
         lastCanvasHeight = height;
         lastJourneyLayout = journeyLayout;
         map.resize();
+        const attributionLayout = getBuilderAttributionLayout(map).key;
+        const attributionLayoutChanged =
+          attributionLayout !== lastAttributionLayout;
+        lastAttributionLayout = attributionLayout;
+        if (
+          hasLoaded &&
+          (sizeChanged || attributionLayoutChanged) &&
+          builderActiveRef.current
+        ) {
+          fitBuilderEntries(
+            map,
+            entriesRef.current,
+            journeyRouteProjectionRef.current,
+          );
+          return;
+        }
         if (
           !hasLoaded ||
           (!sizeChanged && !journeyLayoutChanged) ||
@@ -722,6 +971,12 @@ export default function AtlasMap({
         ? null
         : new ResizeObserver(scheduleResize);
     resizeObserver?.observe(container);
+    map
+      .getContainer()
+      .querySelectorAll('.maplibregl-ctrl-attrib')
+      .forEach((element) => {
+        resizeObserver?.observe(element);
+      });
     const visualViewport = window.visualViewport;
     window.addEventListener('resize', scheduleResize);
     window.addEventListener('orientationchange', scheduleResize);
@@ -840,6 +1095,23 @@ export default function AtlasMap({
     };
 
     const handleMapClick = (event: MapMouseEvent) => {
+      if (modeRef.current === 'places' && builderActiveRef.current) {
+        if (!hasLoaded) return;
+        // A real cluster click retains its normal zoom behavior even when a
+        // nearby individual pin falls inside the builder's larger hit target.
+        if (
+          map.queryRenderedFeatures(event.point, {
+            layers: [ATLAS_CLUSTER_LAYER],
+          }).length
+        )
+          return;
+        const id = nearestBuilderPin(map, entriesRef.current, event.point);
+        if (id) {
+          setTooltip(null);
+          onSelectRef.current(id);
+        }
+        return;
+      }
       if (modeRef.current !== 'places' || !placementRef.current) return;
       onPlaceRef.current({
         latitude: event.lngLat.lat,
@@ -848,7 +1120,12 @@ export default function AtlasMap({
     };
 
     const handlePinClick = (event: MapLayerMouseEvent) => {
-      if (modeRef.current !== 'places' || placementRef.current) return;
+      if (
+        modeRef.current !== 'places' ||
+        placementRef.current ||
+        builderActiveRef.current
+      )
+        return;
       const id = event.features?.[0]?.properties?.id;
       if (typeof id === 'string') {
         setTooltip(null);
@@ -1109,16 +1386,26 @@ export default function AtlasMap({
   useEffect(() => {
     const map = mapRef.current;
     if (!map || !mapLoaded) return;
+    // A second tap on a chosen memory removes it instead of being consumed
+    // by double-tap zoom. Pinch and explicit cluster zoom remain available.
+    if (builderActive) map.doubleClickZoom.disable();
+    else map.doubleClickZoom.enable();
+  }, [builderActive, mapLoaded]);
+
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map || !mapLoaded) return;
 
     const showingJourneys = mode === 'journeys';
+    const showingOverview = showingJourneys || builderActive;
     if (!showingJourneys) map.setPadding(EMPTY_MAP_PADDING);
     map.setTransformConstrain(
-      showingJourneys && journeyRouteProjectionRef.current === 'mercator'
+      showingOverview && journeyRouteProjectionRef.current === 'mercator'
         ? constrainJourneyMercatorCamera
         : null,
     );
-    map.setMinZoom(showingJourneys ? JOURNEYS_MIN_ZOOM : PLACES_MIN_ZOOM);
-  }, [mapLoaded, mode]);
+    map.setMinZoom(showingOverview ? JOURNEYS_MIN_ZOOM : PLACES_MIN_ZOOM);
+  }, [builderActive, mapLoaded, mode]);
 
   useEffect(() => {
     const map = mapRef.current;
@@ -1201,7 +1488,13 @@ export default function AtlasMap({
 
   useEffect(() => {
     const map = mapRef.current;
-    if (!map || !mapLoaded || mode !== 'places' || !focusRequest.id) {
+    if (
+      !map ||
+      !mapLoaded ||
+      mode !== 'places' ||
+      builderActive ||
+      !focusRequest.id
+    ) {
       return;
     }
     const entry = entriesRef.current.find(
@@ -1224,13 +1517,30 @@ export default function AtlasMap({
     } catch (error) {
       console.error('Atlas map camera focus failed:', error);
     }
-  }, [focusRequest, mapLoaded, mode]);
+  }, [builderActive, focusRequest, mapLoaded, mode]);
 
   useEffect(() => {
     const map = mapRef.current;
-    if (!map || !mapLoaded || mode !== 'places' || fitRequest === 0) return;
+    if (
+      !map ||
+      !mapLoaded ||
+      mode !== 'places' ||
+      builderActive ||
+      fitRequest === 0
+    )
+      return;
     fitEntries(map, entriesRef.current);
-  }, [fitRequest, mapLoaded, mode]);
+  }, [builderActive, fitRequest, mapLoaded, mode]);
+
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map || !mapLoaded || !builderActive) return;
+    fitBuilderEntries(
+      map,
+      entriesRef.current,
+      journeyRouteProjectionRef.current,
+    );
+  }, [builderActive, builderFitDataKeyValue, fitRequest, mapLoaded]);
 
   useEffect(() => {
     const map = mapRef.current;
@@ -1453,7 +1763,15 @@ export default function AtlasMap({
       className={styles.mapFrame}
       data-map-state={mapError ? 'error' : mapLoaded ? 'ready' : 'loading'}
       data-atlas-mode={mode}
+      data-builder-active={builderActive ? 'true' : 'false'}
       data-placement={placementMode && mode === 'places' ? 'true' : 'false'}
+      role={builderActive ? 'region' : undefined}
+      aria-label={builderActive ? 'Journey builder map' : undefined}
+      aria-description={
+        builderActive
+          ? 'Select saved memory pins to add them to this journey. Select them again to remove them.'
+          : undefined
+      }
       inert={interactionLocked ? true : undefined}
       onPointerMove={handlePointerMove}
       onPointerLeave={(event) => {
@@ -1491,18 +1809,26 @@ export default function AtlasMap({
           ) : tooltipEntry ? (
             <>
               <span className={styles.mapTooltipKicker}>
-                {tooltipEntry.recordState === 'draft'
-                  ? 'Unfinished draft'
-                  : tooltipEntry.journeyState === 'visited'
-                    ? 'Remembered place'
-                    : 'Journey ahead'}
+                {builderActive
+                  ? builderSelectedEntryIds.includes(tooltipEntry.id)
+                    ? 'Selected for journey'
+                    : 'Add to journey'
+                  : tooltipEntry.recordState === 'draft'
+                    ? 'Unfinished draft'
+                    : tooltipEntry.journeyState === 'visited'
+                      ? 'Remembered place'
+                      : 'Journey ahead'}
               </span>
               <strong>{tooltipEntry.title || 'Untitled place'}</strong>
               <p>{getAtlasPlaceContextLabel(tooltipEntry)}</p>
               <small>
-                {tooltipEntry.recordState === 'draft'
-                  ? 'Open and finish memory'
-                  : `${formatAtlasDate(tooltipEntry)} · Open memory`}
+                {builderActive
+                  ? builderSelectedEntryIds.includes(tooltipEntry.id)
+                    ? 'Click to remove from journey'
+                    : 'Click to select for journey'
+                  : tooltipEntry.recordState === 'draft'
+                    ? 'Open and finish memory'
+                    : `${formatAtlasDate(tooltipEntry)} · Open memory`}
               </small>
             </>
           ) : visibleTooltip.kind === 'journey' && tooltipJourney ? (

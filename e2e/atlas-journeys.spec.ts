@@ -2,8 +2,13 @@ import { expect, test, type Page, type TestInfo } from '@playwright/test';
 
 import { E2E_FIXTURE } from '../scripts/seed-e2e.js';
 import {
+  expectBuilderMapTargetsClear,
+  toggleVisibleBuilderPin,
+} from './support/builder-map-input';
+import {
   expectActiveJourneyDotClearOfOverlays,
   expectJourneyPlaybackPreviewHasRoom,
+  expectMapFirstJourneyBuilder,
   expectVisibleJourneyDotsClearOfOverlays,
 } from './support/journey-audit';
 import { auditCurrentPage, monitorBrowserIssues } from './support/ui-audit';
@@ -86,11 +91,18 @@ async function auditJourneyState(
     monitor,
     {
       accessibility: shouldAuditAccessibility(testInfo),
+      expectedMapTeardown: page.url().includes('/dashboard/chapters/new'),
       readySelector: page.url().includes('/dashboard/chapters/new')
         ? undefined
         : '[data-map-state="ready"]',
     },
   );
+  if (await page.locator('[data-atlas-surface="builder"]').isVisible()) {
+    await expectBuilderMapTargetsClear(
+      page,
+      testInfo.outputPath(`${evidenceLabel(testInfo, state)}.png`),
+    );
+  }
 }
 
 async function expectJourneyDotContentCenteredInMarkers(page: Page) {
@@ -270,6 +282,17 @@ test('Journey Lens connects the Atlas, playback, and Chapter workshop', async ({
     .getByRole('button', { name: 'Create journey', exact: true })
     .click();
   await expect(
+    page.getByRole('button', { name: 'Show memories' }),
+  ).toHaveAttribute('aria-expanded', 'false');
+  await expectMapFirstJourneyBuilder(page);
+  await page.waitForTimeout(1100);
+  await auditJourneyState(page, testInfo, 'builder-map-first', monitor);
+  await toggleVisibleBuilderPin(
+    page,
+    testInfo.outputPath(`${evidenceLabel(testInfo, 'builder-map-first')}.png`),
+  );
+  await page.getByRole('button', { name: 'Show memories' }).click();
+  await expect(
     page.getByRole('heading', { level: 2, name: 'Choose the memories' }),
   ).toBeVisible();
 
@@ -278,7 +301,7 @@ test('Journey Lens connects the Atlas, playback, and Chapter workshop', async ({
   await availableMemories.filter({ hasText: memories[1].title }).click();
   await expect(page.getByText('2 selected', { exact: true })).toBeVisible();
 
-  const shapeChapter = page.getByRole('link', { name: 'Shape chapter' });
+  const shapeChapter = page.getByRole('link', { name: 'Continue' });
   const shapeChapterHref = await shapeChapter.getAttribute('href');
   expect(shapeChapterHref).not.toBeNull();
   const shapeChapterUrl = new URL(
@@ -291,8 +314,18 @@ test('Journey Lens connects the Atlas, playback, and Chapter workshop', async ({
     memories[0].id,
     memories[1].id,
   ]);
+  await expectMapFirstJourneyBuilder(page);
   await auditJourneyState(page, testInfo, 'builder', monitor);
+  await page.getByRole('button', { name: 'Hide memories' }).click();
+  await expect(page.getByText('2 selected', { exact: true })).toBeVisible();
+  await expectMapFirstJourneyBuilder(page);
+  await auditJourneyState(page, testInfo, 'builder-selected-map', monitor);
 
+  // Finish the existing debounced view save before leaving the Atlas so its
+  // navigation-canceled background POST is not mistaken for a UI failure.
+  await page.waitForTimeout(1700);
+  await page.waitForLoadState('networkidle');
+  await auditJourneyState(page, testInfo, 'builder-handoff-ready', monitor);
   await shapeChapter.click();
   await expect(page).toHaveURL((url) => {
     return (

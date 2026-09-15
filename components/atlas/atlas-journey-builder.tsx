@@ -2,7 +2,6 @@
 
 import {
   ArrowDownIcon,
-  ArrowLeftIcon,
   ArrowRightIcon,
   ArrowUpIcon,
   CheckIcon,
@@ -43,6 +42,8 @@ export function AtlasJourneyBuilder({
   entries,
   selectedEntryIds,
   suggestion = null,
+  listOpen,
+  onListOpenChange,
   onToggle,
   onMove,
   onCancel,
@@ -50,11 +51,14 @@ export function AtlasJourneyBuilder({
   entries: AtlasEntry[];
   selectedEntryIds: string[];
   suggestion?: AtlasJourneySuggestion | null;
+  listOpen: boolean;
+  onListOpenChange: (open: boolean) => void;
   onToggle: (id: string) => void;
   onMove: (id: string, direction: -1 | 1) => void;
   onCancel: () => void;
 }) {
-  const headingRef = useRef<HTMLHeadingElement>(null);
+  const toggleRef = useRef<HTMLButtonElement>(null);
+  const listRef = useRef<HTMLDivElement>(null);
   const [reorderAnnouncement, setReorderAnnouncement] = useState('');
   const entriesById = new Map(entries.map((entry) => [entry.id, entry]));
   const selectedEntries = selectedEntryIds.flatMap((id) => {
@@ -65,49 +69,48 @@ export function AtlasJourneyBuilder({
   const canContinue = selectedEntryIds.length >= MIN_JOURNEY_MEMORIES;
 
   useEffect(() => {
-    headingRef.current?.focus({ preventScroll: true });
+    toggleRef.current?.focus({ preventScroll: true });
   }, []);
+
+  useEffect(() => {
+    if (listOpen) listRef.current?.focus({ preventScroll: true });
+  }, [listOpen]);
 
   return (
     <section
-      className={`${styles.memoryTray} ${styles.journeyTray} ${styles.journeyBuilder}`}
+      className={styles.journeyBuilder}
       aria-labelledby="journey-builder-title"
     >
       <header>
-        <button
-          type="button"
-          className={styles.iconButton}
-          onClick={onCancel}
-          aria-label="Back to journeys"
-        >
-          <ArrowLeftIcon aria-hidden="true" />
-        </button>
         <div>
-          <p className={styles.eyebrow}>Build from the Atlas</p>
-          <h2 ref={headingRef} id="journey-builder-title" tabIndex={-1}>
+          <h2
+            id="journey-builder-title"
+            className={listOpen ? undefined : 'sr-only'}
+          >
             Choose the memories
           </h2>
+          {listOpen ? <p>Pick memories, then arrange your path.</p> : null}
         </div>
-        <button
-          type="button"
-          className={styles.iconButton}
-          onClick={onCancel}
-          aria-label="Cancel journey builder"
-        >
-          <XMarkIcon aria-hidden="true" />
-        </button>
       </header>
 
-      <div className={styles.journeyBuilderBody}>
-        <div className={styles.journeyBuilderStatus} role="status">
-          <strong>{selectedEntryIds.length} selected</strong>
-          <span>
-            Choose {MIN_JOURNEY_MEMORIES}–{MAX_JOURNEY_MEMORIES} saved memories.
-          </span>
+      <div
+        ref={listRef}
+        id="atlas-builder-memories"
+        className={styles.journeyBuilderBody}
+        role="region"
+        aria-label="Journey memories"
+        tabIndex={0}
+        hidden={!listOpen}
+      >
+        <div className={styles.journeyBuilderStatus}>
+          Choose {MIN_JOURNEY_MEMORIES}–{MAX_JOURNEY_MEMORIES} saved memories.
         </div>
 
         {selectedEntries.length ? (
-          <ol className={styles.journeyBuilderSequence}>
+          <ol
+            className={styles.journeyBuilderSequence}
+            aria-label="Selected memories"
+          >
             {selectedEntries.map((entry, index) => (
               <li key={entry.id}>
                 <span>{index + 1}</span>
@@ -153,12 +156,7 @@ export function AtlasJourneyBuilder({
               </li>
             ))}
           </ol>
-        ) : (
-          <div className={styles.journeyBuilderHint}>
-            <MapPinIcon aria-hidden="true" />
-            <p>Select pins on the map or choose memories below.</p>
-          </div>
-        )}
+        ) : null}
 
         <div className={styles.journeyBuilderAvailable}>
           <h3>Saved memories</h3>
@@ -193,14 +191,37 @@ export function AtlasJourneyBuilder({
       </div>
 
       <footer className={styles.journeyBuilderFooter}>
-        <button type="button" onClick={onCancel}>
-          Cancel
+        <button
+          type="button"
+          className={styles.journeyBuilderCancel}
+          onClick={onCancel}
+          aria-label="Cancel journey builder"
+        >
+          <XMarkIcon aria-hidden="true" />
+        </button>
+        <button
+          ref={toggleRef}
+          id="atlas-builder-toggle"
+          type="button"
+          className={styles.journeyBuilderToggle}
+          onClick={() => onListOpenChange(!listOpen)}
+          aria-label={listOpen ? 'Hide memories' : 'Show memories'}
+          aria-expanded={listOpen}
+          aria-controls="atlas-builder-memories"
+        >
+          <MapPinIcon aria-hidden="true" />
+          <span>
+            <strong role="status" aria-live="polite" aria-atomic="true">
+              {selectedEntryIds.length} selected
+            </strong>
+            <small>{listOpen ? 'Hide memories' : 'Memories'}</small>
+          </span>
         </button>
         {canContinue ? (
           <Link
             href={chapterBuilderHref(selectedEntryIds, 'atlas', suggestion)}
           >
-            Shape chapter <ArrowRightIcon aria-hidden="true" />
+            Continue <ArrowRightIcon aria-hidden="true" />
           </Link>
         ) : (
           <button type="button" disabled>

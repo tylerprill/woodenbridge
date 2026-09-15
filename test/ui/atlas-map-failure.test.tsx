@@ -11,11 +11,17 @@ import {
 } from '@testing-library/react';
 import type { ComponentProps } from 'react';
 
-import type { AtlasView } from '@/app/lib/atlas/definitions';
+import type { AtlasEntry, AtlasView } from '@/app/lib/atlas/definitions';
 import type { AtlasJourneySummary } from '@/app/lib/atlas/journeys/definitions';
 import { sanitizeOpenFreeMapStyle } from '@/app/lib/maps/openfreemap-style';
 import { ATLAS_JOURNEY_ROUTE_SOURCE } from '@/components/atlas/atlas-journey-layers';
 import AtlasMap from '@/components/atlas/atlas-map';
+import {
+  ATLAS_CLUSTER_LAYER,
+  ATLAS_PIN_LAYER,
+  ATLAS_SOURCE_ID,
+} from '@/components/atlas/atlas-layers';
+import { getAtlasJourneyGlobeFitZoomLimit } from '@/components/atlas/atlas-map-camera';
 
 const mockMapConstructor = jest.fn();
 const mockEventHandlers = new Map<string, (event?: unknown) => void>();
@@ -34,6 +40,11 @@ const mockMarkers: Array<{
   remove: jest.Mock;
   setLngLat: jest.Mock;
 }> = [];
+
+type RenderedPlaceFeature = GeoJSON.Feature<
+  GeoJSON.Point,
+  { id?: string; cluster_id?: number; point_count?: number }
+>;
 
 jest.mock(
   'maplibre-gl',
@@ -108,7 +119,10 @@ function createMapMock({
 }: { width?: number; height?: number } = {}) {
   const canvas = document.createElement('canvas');
   const container = document.createElement('div');
-  const sources = new Map<string, { setData: jest.Mock }>();
+  const sources = new Map<
+    string,
+    { setData: jest.Mock; getClusterExpansionZoom: jest.Mock }
+  >();
   Object.defineProperties(container, {
     clientHeight: { configurable: true, value: height },
     clientWidth: { configurable: true, value: width },
@@ -122,14 +136,22 @@ function createMapMock({
     padding = nextPadding;
   });
   const addSource = jest.fn((id: string) => {
-    sources.set(id, { setData: jest.fn() });
+    sources.set(id, {
+      setData: jest.fn(),
+      getClusterExpansionZoom: jest.fn(async () => 9),
+    });
   });
   const setProjection = jest.fn((nextProjection: { type: string }) => {
     projection = nextProjection;
   });
   return {
+    doubleClickZoom: { disable: jest.fn(), enable: jest.fn() },
     keyboard: { disableRotation: jest.fn() },
-    touchZoomRotate: { disableRotation: jest.fn() },
+    touchZoomRotate: {
+      disable: jest.fn(),
+      disableRotation: jest.fn(),
+      enable: jest.fn(),
+    },
     addControl: jest.fn(),
     addLayer: jest.fn(),
     addSource,
@@ -148,6 +170,22 @@ function createMapMock({
     getVerticalFieldOfView: jest.fn(() => 36.86989764584402),
     getZoom: jest.fn(() => 4),
     getPadding: jest.fn(() => padding),
+    project: jest.fn(
+      (coordinate: [number, number] | { lng: number; lat: number }) =>
+        Array.isArray(coordinate)
+          ? { x: coordinate[0], y: coordinate[1] }
+          : { x: coordinate.lng, y: coordinate.lat },
+    ),
+    queryRenderedFeatures: jest.fn(
+      (
+        _point: unknown,
+        _options: { layers: string[] },
+      ): RenderedPlaceFeature[] => [],
+    ),
+    unproject: jest.fn((_point: unknown) => ({
+      lng: Number.NaN,
+      lat: Number.NaN,
+    })),
     on: jest.fn((event: string, ...args: unknown[]) => {
       if (args.length === 1 && typeof args[0] === 'function') {
         mockEventHandlers.set(event, args[0] as (event?: unknown) => void);
@@ -238,6 +276,121 @@ function renderJourneyMap(
     ...overrides,
   };
   return { ...render(<AtlasMap {...props} />), props };
+}
+
+function createEntry(
+  id: string,
+  overrides: Partial<AtlasEntry> = {},
+): AtlasEntry {
+  return {
+    id,
+    title: `Memory ${id}`,
+    description: 'A saved travel memory.',
+    placeLabel: 'Detroit, Michigan',
+    placeName: 'Detroit',
+    placeLocality: 'Detroit',
+    placeRegion: 'Michigan',
+    placeCountry: 'United States',
+    placeCountryCode: 'US',
+    placeGeocoder: null,
+    placeGeocodedAt: null,
+    visitedOn: '2026-09-10',
+    recordState: 'saved',
+    journeyState: 'visited',
+    latitude: 42.3314,
+    longitude: -83.0458,
+    version: 1,
+    createdAt: '2026-09-10T12:00:00.000Z',
+    updatedAt: '2026-09-10T12:00:00.000Z',
+    media: [],
+    ...overrides,
+  };
+}
+
+function placeFeature(entry: AtlasEntry): RenderedPlaceFeature {
+  return {
+    type: 'Feature',
+    id: entry.id,
+    properties: { id: entry.id },
+    geometry: {
+      type: 'Point',
+      coordinates: [entry.longitude, entry.latitude],
+    },
+  };
+}
+
+function renderBuilderMap(
+  entries: AtlasEntry[],
+  overrides: Partial<ComponentProps<typeof AtlasMap>> = {},
+) {
+  const props = {
+    entries,
+    initialView,
+    interactionLocked: false,
+    selectedId: null,
+    placementMode: false,
+    focusRequest: { id: null, nonce: 0 },
+    fitRequest: 0,
+    onSelect: jest.fn(),
+    onPlace: jest.fn(),
+    onViewChange: jest.fn(),
+    mode: 'places' as const,
+    builderActive: true,
+    ...overrides,
+  };
+  return { ...render(<AtlasMap {...props} />), props };
+}
+
+function delegatedHandler(
+  map: ReturnType<typeof createMapMock>,
+  event: string,
+  layer: string,
+) {
+  const registration = map.on.mock.calls.find(
+    ([registeredEvent, registeredLayer]) =>
+      registeredEvent === event && registeredLayer === layer,
+  );
+  expect(registration).toBeDefined();
+  return registration?.[2] as (event: unknown) => void | Promise<void>;
+}
+
+function addAttributionControl(
+  map: ReturnType<typeof createMapMock>,
+  height = 24,
+  bottomGap = 6,
+) {
+  const container = map.getContainer();
+  const canvasBounds = new DOMRect(
+    50,
+    100,
+    container.clientWidth,
+    container.clientHeight,
+  );
+  const containerBounds = jest
+    .spyOn(container, 'getBoundingClientRect')
+    .mockReturnValue(canvasBounds);
+  const element = document.createElement('details');
+  element.className = 'maplibregl-ctrl maplibregl-ctrl-attrib';
+  element.textContent = '© OpenStreetMap © OpenFreeMap';
+  container.append(element);
+  const creditBounds = jest.spyOn(element, 'getBoundingClientRect');
+  const setCreditHeight = (nextHeight: number) =>
+    creditBounds.mockReturnValue(
+      new DOMRect(
+        canvasBounds.right - 260,
+        canvasBounds.bottom - bottomGap - nextHeight,
+        250,
+        nextHeight,
+      ),
+    );
+  setCreditHeight(height);
+  return {
+    element,
+    canvasBounds,
+    containerBounds,
+    creditBounds,
+    setCreditHeight,
+  };
 }
 
 describe('Atlas map failure recovery', () => {
@@ -1347,6 +1500,1092 @@ describe('Atlas map failure recovery', () => {
     act(() => mockEventHandlers.get('moveend')?.());
     await waitFor(() => expect(mockMarkers).toHaveLength(6));
     expect(document.activeElement).toBe(otherControl);
+  });
+
+  describe('Journey builder map selection', () => {
+    const entries = [
+      createEntry('entry-a', { longitude: -83, latitude: 42 }),
+      createEntry('entry-b', { longitude: 2, latitude: 49 }),
+    ];
+
+    describe('visible attribution clearance', () => {
+      type MockResizeObserver = {
+        disconnect: jest.Mock;
+        notify: () => void;
+        observe: jest.Mock;
+        unobserve: jest.Mock;
+      };
+      const observers: MockResizeObserver[] = [];
+      const originalResizeObserver = Object.getOwnPropertyDescriptor(
+        globalThis,
+        'ResizeObserver',
+      );
+
+      beforeEach(() => {
+        observers.length = 0;
+        Object.defineProperty(globalThis, 'ResizeObserver', {
+          configurable: true,
+          writable: true,
+          value: jest.fn((callback: ResizeObserverCallback) => {
+            const observer: MockResizeObserver = {
+              disconnect: jest.fn(),
+              notify: () => callback([], observer as unknown as ResizeObserver),
+              observe: jest.fn(),
+              unobserve: jest.fn(),
+            };
+            observers.push(observer);
+            return observer;
+          }),
+        });
+      });
+
+      afterEach(() => {
+        if (originalResizeObserver) {
+          Object.defineProperty(
+            globalThis,
+            'ResizeObserver',
+            originalResizeObserver,
+          );
+        } else {
+          Reflect.deleteProperty(globalThis, 'ResizeObserver');
+        }
+      });
+
+      it('retains the minimum bottom gutter when no visible credits exist', async () => {
+        const map = createMapMock();
+        mockMapConstructor.mockReturnValue(map);
+        renderBuilderMap(entries);
+        act(() => mockEventHandlers.get('load')?.());
+        await waitFor(() => expect(map.fitBounds).toHaveBeenCalled());
+        expect(map.getPadding()).toEqual({
+          top: 80,
+          right: 32,
+          bottom: 32,
+          left: 32,
+        });
+      });
+
+      it.each([
+        { height: 24, expectedBottom: 56 },
+        { height: 60, expectedBottom: 92 },
+      ])(
+        'clears $height-pixel credits, their bottom offset, and the full pin target',
+        async ({ height, expectedBottom }) => {
+          const map = createMapMock();
+          const attribution = addAttributionControl(map, height);
+          mockMapConstructor.mockReturnValue(map);
+          renderBuilderMap(entries);
+          act(() => mockEventHandlers.get('load')?.());
+          await waitFor(() => expect(map.fitBounds).toHaveBeenCalled());
+          expect(map.getPadding()).toEqual({
+            top: 80,
+            right: 32,
+            bottom: expectedBottom,
+            left: 32,
+          });
+          expect(observers.at(-1)?.observe).toHaveBeenCalledWith(
+            attribution.element,
+          );
+        },
+      );
+
+      it.each([
+        'zero width',
+        'zero height',
+        'display none',
+        'visibility hidden',
+        'visibility collapse',
+        'opacity zero',
+        'outside horizontally',
+        'outside vertically',
+      ])('does not reserve credits with %s', async (kind) => {
+        const map = createMapMock();
+        const attribution = addAttributionControl(map);
+        const creditBounds = attribution.element.getBoundingClientRect();
+        if (kind === 'zero width') {
+          attribution.creditBounds.mockReturnValue(
+            new DOMRect(creditBounds.x, creditBounds.y, 0, 24),
+          );
+        } else if (kind === 'zero height') {
+          attribution.creditBounds.mockReturnValue(
+            new DOMRect(creditBounds.x, creditBounds.y, 250, 0),
+          );
+        } else if (kind === 'display none') {
+          attribution.element.style.display = 'none';
+        } else if (kind === 'visibility hidden') {
+          attribution.element.style.visibility = 'hidden';
+        } else if (kind === 'visibility collapse') {
+          attribution.element.style.visibility = 'collapse';
+        } else if (kind === 'opacity zero') {
+          attribution.element.style.opacity = '0';
+        } else if (kind === 'outside horizontally') {
+          attribution.creditBounds.mockReturnValue(
+            new DOMRect(
+              attribution.canvasBounds.right + 1,
+              creditBounds.y,
+              250,
+              24,
+            ),
+          );
+        } else {
+          attribution.creditBounds.mockReturnValue(
+            new DOMRect(
+              creditBounds.x,
+              attribution.canvasBounds.bottom + 1,
+              250,
+              24,
+            ),
+          );
+        }
+        mockMapConstructor.mockReturnValue(map);
+        renderBuilderMap(entries);
+        act(() => mockEventHandlers.get('load')?.());
+        await waitFor(() => expect(map.fitBounds).toHaveBeenCalled());
+        expect(map.getPadding().bottom).toBe(32);
+      });
+
+      it.each([
+        {
+          width: 390,
+          height: 120,
+          expected: { top: 80, right: 32, bottom: 38, left: 32 },
+        },
+        {
+          width: 390,
+          height: 100,
+          expected: { top: 66, right: 32, bottom: 32, left: 32 },
+        },
+        {
+          width: 40,
+          height: 30,
+          expected: { top: 14, right: 19, bottom: 14, left: 19 },
+        },
+      ])(
+        'clamps expanded-credit padding safely in a $width×$height canvas',
+        async ({ width, height, expected }) => {
+          const map = createMapMock({ width, height });
+          addAttributionControl(map, 60);
+          mockMapConstructor.mockReturnValue(map);
+          renderBuilderMap(entries);
+          act(() => mockEventHandlers.get('load')?.());
+          await waitFor(() => expect(map.fitBounds).toHaveBeenCalled());
+          expect(map.getPadding()).toEqual(expected);
+          expect(expected.top + expected.bottom).toBeLessThanOrEqual(
+            height - 2,
+          );
+          expect(expected.left + expected.right).toBeLessThanOrEqual(width - 2);
+        },
+      );
+
+      it('refits expanded and collapsed credits once without a canvas resize, but ignores unchanged bounds and selection', async () => {
+        const map = createMapMock();
+        const attribution = addAttributionControl(map);
+        mockMapConstructor.mockReturnValue(map);
+        const { props, rerender } = renderBuilderMap(entries);
+        act(() => mockEventHandlers.get('load')?.());
+        await waitFor(() => expect(map.fitBounds).toHaveBeenCalledTimes(1));
+        const observer = observers.at(-1)!;
+        expect(observer.observe).toHaveBeenCalledWith(attribution.element);
+        expect(map.getPadding().bottom).toBe(56);
+        map.fitBounds.mockClear();
+
+        attribution.setCreditHeight(60);
+        act(() => {
+          observer.notify();
+          observer.notify();
+        });
+        await waitFor(() => expect(map.fitBounds).toHaveBeenCalledTimes(1));
+        expect(map.getPadding().bottom).toBe(92);
+        expect(map.getContainer().clientWidth).toBe(1000);
+        expect(map.getContainer().clientHeight).toBe(752);
+        map.fitBounds.mockClear();
+        map.resize.mockClear();
+
+        rerender(
+          <AtlasMap {...props} builderSelectedEntryIds={[entries[0].id]} />,
+        );
+        rerender(
+          <AtlasMap
+            {...props}
+            entries={[entries[1], entries[0]]}
+            builderSelectedEntryIds={[entries[0].id]}
+          />,
+        );
+        act(() => observer.notify());
+        await waitFor(() => expect(map.resize).toHaveBeenCalled());
+        expect(map.fitBounds).not.toHaveBeenCalled();
+
+        attribution.setCreditHeight(24);
+        act(() => observer.notify());
+        await waitFor(() => expect(map.fitBounds).toHaveBeenCalledTimes(1));
+        expect(map.getPadding().bottom).toBe(56);
+      });
+
+      it('does not refit when the canvas and credits move together without a relative-layout change', async () => {
+        const map = createMapMock();
+        const attribution = addAttributionControl(map);
+        mockMapConstructor.mockReturnValue(map);
+        renderBuilderMap(entries);
+        act(() => mockEventHandlers.get('load')?.());
+        await waitFor(() => expect(map.fitBounds).toHaveBeenCalledTimes(1));
+        const creditBounds = attribution.element.getBoundingClientRect();
+        attribution.containerBounds.mockReturnValue(
+          new DOMRect(50, 200, 1000, 752),
+        );
+        attribution.creditBounds.mockReturnValue(
+          new DOMRect(
+            creditBounds.x,
+            creditBounds.y + 100,
+            creditBounds.width,
+            creditBounds.height,
+          ),
+        );
+        map.fitBounds.mockClear();
+        map.resize.mockClear();
+        act(() => observers.at(-1)?.notify());
+        await waitFor(() => expect(map.resize).toHaveBeenCalled());
+        expect(map.fitBounds).not.toHaveBeenCalled();
+        expect(map.getPadding().bottom).toBe(56);
+      });
+
+      it('ignores attribution-only resize callbacks in ordinary Places mode', async () => {
+        const map = createMapMock();
+        const attribution = addAttributionControl(map);
+        mockMapConstructor.mockReturnValue(map);
+        renderBuilderMap(entries, { builderActive: false });
+        act(() => mockEventHandlers.get('load')?.());
+        attribution.setCreditHeight(60);
+        map.resize.mockClear();
+        act(() => observers.at(-1)?.notify());
+        await waitFor(() => expect(map.resize).toHaveBeenCalled());
+        expect(map.fitBounds).not.toHaveBeenCalled();
+        expect(map.getPadding()).toEqual({
+          top: 0,
+          right: 0,
+          bottom: 0,
+          left: 0,
+        });
+      });
+
+      it('disconnects the attribution observer and cancels pending resize work on unmount', () => {
+        jest.useFakeTimers();
+        const map = createMapMock();
+        addAttributionControl(map);
+        mockMapConstructor.mockReturnValue(map);
+        const { unmount } = renderBuilderMap(entries);
+        act(() => mockEventHandlers.get('load')?.());
+        act(() => jest.runOnlyPendingTimers());
+        map.fitBounds.mockClear();
+        map.resize.mockClear();
+        const observer = observers.at(-1)!;
+        act(() => observer.notify());
+        unmount();
+        act(() => jest.runOnlyPendingTimers());
+        expect(observer.disconnect).toHaveBeenCalledTimes(1);
+        expect(map.remove).toHaveBeenCalledTimes(1);
+        expect(map.resize).not.toHaveBeenCalled();
+        expect(map.fitBounds).not.toHaveBeenCalled();
+      });
+    });
+
+    it.each([false, true])(
+      'initializes double-tap zoom for builderActive=%s without changing pinch zoom',
+      (builderActive) => {
+        const map = createMapMock();
+        mockMapConstructor.mockReturnValue(map);
+        renderBuilderMap(entries, { builderActive });
+        expect(mockMapConstructor).toHaveBeenCalledWith(
+          expect.objectContaining({
+            doubleClickZoom: !builderActive,
+            touchZoomRotate: true,
+          }),
+        );
+        act(() => mockEventHandlers.get('load')?.());
+        if (builderActive) {
+          expect(map.doubleClickZoom.disable).toHaveBeenCalled();
+          expect(map.doubleClickZoom.enable).not.toHaveBeenCalled();
+        } else {
+          expect(map.doubleClickZoom.enable).toHaveBeenCalled();
+          expect(map.doubleClickZoom.disable).not.toHaveBeenCalled();
+        }
+        expect(map.touchZoomRotate.disable).not.toHaveBeenCalled();
+        expect(map.touchZoomRotate.enable).not.toHaveBeenCalled();
+        expect(map.touchZoomRotate.disableRotation).toHaveBeenCalledTimes(1);
+      },
+    );
+
+    it('disables double-tap zoom once on entry, keeps it disabled through selection, and restores it on exit', () => {
+      const map = createMapMock();
+      mockMapConstructor.mockReturnValue(map);
+      const { props, rerender } = renderBuilderMap(entries, {
+        builderActive: false,
+      });
+      act(() => mockEventHandlers.get('load')?.());
+      map.doubleClickZoom.disable.mockClear();
+      map.doubleClickZoom.enable.mockClear();
+      const rotationDisableCount =
+        map.touchZoomRotate.disableRotation.mock.calls.length;
+
+      rerender(<AtlasMap {...props} builderActive />);
+      expect(map.doubleClickZoom.disable).toHaveBeenCalledTimes(1);
+      expect(map.doubleClickZoom.enable).not.toHaveBeenCalled();
+
+      rerender(
+        <AtlasMap
+          {...props}
+          builderActive
+          builderSelectedEntryIds={[entries[0].id]}
+        />,
+      );
+      rerender(
+        <AtlasMap {...props} builderActive builderSelectedEntryIds={[]} />,
+      );
+      expect(map.doubleClickZoom.disable).toHaveBeenCalledTimes(1);
+      expect(map.doubleClickZoom.enable).not.toHaveBeenCalled();
+
+      rerender(<AtlasMap {...props} builderActive={false} />);
+      expect(map.doubleClickZoom.enable).toHaveBeenCalledTimes(1);
+      expect(map.doubleClickZoom.disable).toHaveBeenCalledTimes(1);
+      expect(map.touchZoomRotate.disable).not.toHaveBeenCalled();
+      expect(map.touchZoomRotate.enable).not.toHaveBeenCalled();
+      expect(map.touchZoomRotate.disableRotation).toHaveBeenCalledTimes(
+        rotationDisableCount,
+      );
+    });
+
+    it('fits eligible memories inside the actual canvas when entering and resizing the builder', async () => {
+      const map = createMapMock();
+      mockMapConstructor.mockReturnValue(map);
+      const { props, rerender } = renderBuilderMap(entries, {
+        builderActive: false,
+      });
+      act(() => mockEventHandlers.get('load')?.());
+      expect(map.fitBounds).not.toHaveBeenCalled();
+
+      rerender(<AtlasMap {...props} builderActive />);
+      await waitFor(() => expect(map.fitBounds).toHaveBeenCalledTimes(1));
+      expect(map.getPadding()).toEqual({
+        top: 80,
+        right: 32,
+        bottom: 32,
+        left: 32,
+      });
+      expect(map.fitBounds).toHaveBeenLastCalledWith(
+        expect.anything(),
+        expect.objectContaining({ padding: 0, maxZoom: 8, duration: 950 }),
+      );
+      expect(mockBoundsExtends.at(-1)?.mock.calls).toEqual([
+        [[-83, 42]],
+        [[2, 49]],
+      ]);
+
+      map.fitBounds.mockClear();
+      Object.defineProperties(map.getContainer(), {
+        clientWidth: { configurable: true, value: 640 },
+        clientHeight: { configurable: true, value: 480 },
+      });
+      fireEvent(window, new Event('resize'));
+      await waitFor(() => expect(map.fitBounds).toHaveBeenCalledTimes(1));
+      expect(map.getPadding()).toEqual({
+        top: 80,
+        right: 32,
+        bottom: 32,
+        left: 32,
+      });
+
+      map.fitBounds.mockClear();
+      map.resize.mockClear();
+      fireEvent(window, new Event('resize'));
+      await waitFor(() => expect(map.resize).toHaveBeenCalled());
+      expect(map.fitBounds).not.toHaveBeenCalled();
+    });
+
+    it('temporarily allows letterboxed world-scale fits without changing normal Places constraints', async () => {
+      const map = createMapMock();
+      mockMapConstructor.mockReturnValue(map);
+      const { props, rerender } = renderBuilderMap(entries);
+      expect(mockMapConstructor).toHaveBeenCalledWith(
+        expect.objectContaining({ minZoom: -2 }),
+      );
+      act(() => mockEventHandlers.get('load')?.());
+      await waitFor(() => expect(map.setMinZoom).toHaveBeenCalledWith(-2));
+      const constrainCamera = map.setTransformConstrain.mock.calls.at(
+        -1,
+      )?.[0] as
+        | ((center: { lng: number; lat: number }, zoom: number) => unknown)
+        | undefined;
+      expect(constrainCamera?.({ lng: 181, lat: 90 }, -10)).toEqual({
+        center: { lng: 181, lat: 85.0511287798066 },
+        zoom: -2,
+      });
+
+      rerender(<AtlasMap {...props} builderActive={false} />);
+      await waitFor(() => expect(map.setMinZoom).toHaveBeenLastCalledWith(1));
+      expect(map.setTransformConstrain).toHaveBeenLastCalledWith(null);
+      expect(map.getPadding()).toEqual({
+        top: 0,
+        right: 0,
+        bottom: 0,
+        left: 0,
+      });
+    });
+
+    it('ignores stale memory focus and drawer insets while the builder is active', async () => {
+      const map = createMapMock();
+      mockMapConstructor.mockReturnValue(map);
+      const { props, rerender } = renderBuilderMap(entries, {
+        selectedId: entries[0].id,
+        focusRequest: { id: entries[0].id, nonce: 4 },
+        fitRequest: 2,
+      });
+      act(() => mockEventHandlers.get('load')?.());
+      await waitFor(() => expect(map.fitBounds).toHaveBeenCalled());
+      expect(map.easeTo).not.toHaveBeenCalled();
+      expect(map.getPadding()).toEqual({
+        top: 80,
+        right: 32,
+        bottom: 32,
+        left: 32,
+      });
+      map.fitBounds.mockClear();
+
+      rerender(
+        <AtlasMap
+          {...props}
+          selectedId={entries[1].id}
+          focusRequest={{ id: entries[1].id, nonce: 5 }}
+          builderSelectedEntryIds={[entries[0].id]}
+        />,
+      );
+      expect(map.easeTo).not.toHaveBeenCalled();
+      expect(map.fitBounds).not.toHaveBeenCalled();
+    });
+
+    it('keeps builder selection feature state and clustering without moving the camera', async () => {
+      const map = createMapMock();
+      mockMapConstructor.mockReturnValue(map);
+      const { props, rerender } = renderBuilderMap(entries, {
+        builderSelectedEntryIds: [entries[0].id],
+      });
+      act(() => mockEventHandlers.get('load')?.());
+      await waitFor(() => expect(map.fitBounds).toHaveBeenCalled());
+      expect(map.addSource).toHaveBeenCalledWith(
+        ATLAS_SOURCE_ID,
+        expect.objectContaining({ cluster: true, clusterRadius: 58 }),
+      );
+      expect(map.setFeatureState).toHaveBeenCalledWith(
+        { source: ATLAS_SOURCE_ID, id: entries[0].id },
+        { builderSelected: true },
+      );
+      const source = map.getSource(ATLAS_SOURCE_ID);
+      source?.setData.mockClear();
+      map.fitBounds.mockClear();
+      map.easeTo.mockClear();
+      map.setFeatureState.mockClear();
+
+      rerender(
+        <AtlasMap {...props} builderSelectedEntryIds={[entries[1].id]} />,
+      );
+      expect(map.setFeatureState).toHaveBeenCalledWith(
+        { source: ATLAS_SOURCE_ID, id: entries[0].id },
+        { builderSelected: false },
+      );
+      expect(map.setFeatureState).toHaveBeenCalledWith(
+        { source: ATLAS_SOURCE_ID, id: entries[1].id },
+        { builderSelected: true },
+      );
+      expect(source?.setData).not.toHaveBeenCalled();
+      expect(map.fitBounds).not.toHaveBeenCalled();
+      expect(map.easeTo).not.toHaveBeenCalled();
+    });
+
+    it('refits changed eligible geometry but not reordering or metadata enrichment', async () => {
+      const map = createMapMock();
+      mockMapConstructor.mockReturnValue(map);
+      const { props, rerender } = renderBuilderMap(entries);
+      act(() => mockEventHandlers.get('load')?.());
+      await waitFor(() => expect(map.fitBounds).toHaveBeenCalled());
+      map.fitBounds.mockClear();
+
+      rerender(<AtlasMap {...props} entries={[entries[1], entries[0]]} />);
+      expect(map.fitBounds).not.toHaveBeenCalled();
+
+      const reorderedEntries = [
+        {
+          ...entries[1],
+          title: 'An enriched Paris memory',
+          description: 'New copy',
+        },
+        { ...entries[0], placeLabel: 'Detroit, United States' },
+      ];
+      rerender(<AtlasMap {...props} entries={reorderedEntries} />);
+      expect(map.fitBounds).not.toHaveBeenCalled();
+
+      const movedEntries = [
+        { ...reorderedEntries[0], longitude: 3 },
+        reorderedEntries[1],
+      ];
+      rerender(<AtlasMap {...props} entries={movedEntries} />);
+      await waitFor(() => expect(map.fitBounds).toHaveBeenCalledTimes(1));
+      expect(mockBoundsExtends.at(-1)?.mock.calls).toContainEqual([[3, 49]]);
+
+      map.fitBounds.mockClear();
+      rerender(<AtlasMap {...props} entries={movedEntries} fitRequest={1} />);
+      await waitFor(() => expect(map.fitBounds).toHaveBeenCalledTimes(1));
+    });
+
+    it('excludes unfinished, future, and nonfinite entries from the builder overview', async () => {
+      const map = createMapMock();
+      mockMapConstructor.mockReturnValue(map);
+      renderBuilderMap([
+        ...entries,
+        createEntry('draft', { recordState: 'draft', longitude: 130 }),
+        createEntry('future', {
+          journeyState: 'want_to_visit',
+          longitude: -130,
+        }),
+        createEntry('invalid', { latitude: Number.NaN }),
+      ]);
+      act(() => mockEventHandlers.get('load')?.());
+      await waitFor(() => expect(map.fitBounds).toHaveBeenCalled());
+      expect(mockBoundsExtends.at(-1)?.mock.calls).toEqual([
+        [[-83, 42]],
+        [[2, 49]],
+      ]);
+    });
+
+    it('fits date-line memories in their minimal point envelope rather than across the world', async () => {
+      const map = createMapMock();
+      mockMapConstructor.mockReturnValue(map);
+      renderBuilderMap([
+        createEntry('fiji', { longitude: 179, latitude: -17 }),
+        createEntry('samoa', { longitude: -179, latitude: -14 }),
+      ]);
+      act(() => mockEventHandlers.get('load')?.());
+      await waitFor(() => expect(map.fitBounds).toHaveBeenCalled());
+      const coordinates = mockBoundsExtends
+        .at(-1)!
+        .mock.calls.map(([coordinate]) => coordinate as [number, number]);
+      const longitudes = coordinates.map(([longitude]) => longitude);
+      expect(Math.max(...longitudes) - Math.min(...longitudes)).toBe(2);
+      expect(coordinates.map(([, latitude]) => latitude)).toEqual([-17, -14]);
+    });
+
+    it('caps a globe builder fit using the exposed canvas and point geometry', async () => {
+      const map = createMapMock();
+      map.setProjection({ type: 'globe' });
+      map.cameraForBounds.mockReturnValue({
+        center: [0, 70],
+        zoom: 4,
+        bearing: 0,
+      });
+      mockMapConstructor.mockReturnValue(map);
+      const globeEntries = [
+        createEntry('west', { longitude: -75, latitude: 40 }),
+        createEntry('east', { longitude: 75, latitude: 40 }),
+      ];
+      renderBuilderMap(globeEntries);
+      act(() => mockEventHandlers.get('load')?.());
+      await waitFor(() => expect(map.fitBounds).toHaveBeenCalled());
+      const expectedLimit = getAtlasJourneyGlobeFitZoomLimit(
+        globeEntries.map((entry) => [entry.longitude, entry.latitude]),
+        1000,
+        752,
+        { top: 80, right: 32, bottom: 32, left: 32 },
+        [0, 70],
+        map.getVerticalFieldOfView(),
+      );
+      expect(expectedLimit).not.toBeNull();
+      expect(map.fitBounds).toHaveBeenLastCalledWith(
+        expect.anything(),
+        expect.objectContaining({ maxZoom: expectedLimit }),
+      );
+      expect(map.setTransformConstrain).toHaveBeenLastCalledWith(null);
+    });
+
+    it.each([
+      { entries: [] as AtlasEntry[], center: [-18, 22], zoom: 1.65 },
+      { entries: [entries[0]], center: [-83, 42], zoom: 6 },
+    ])(
+      'uses a padded fallback for $entries.length builder memories',
+      async (example) => {
+        const map = createMapMock({ width: 40, height: 30 });
+        mockMapConstructor.mockReturnValue(map);
+        renderBuilderMap(example.entries);
+        act(() => mockEventHandlers.get('load')?.());
+        await waitFor(() => expect(map.easeTo).toHaveBeenCalled());
+        expect(map.easeTo).toHaveBeenLastCalledWith(
+          expect.objectContaining({
+            center: example.center,
+            zoom: example.zoom,
+            padding: { top: 14, right: 19, bottom: 14, left: 19 },
+          }),
+        );
+        expect(map.fitBounds).not.toHaveBeenCalled();
+      },
+    );
+
+    it('honors reduced motion for builder bounds fits', async () => {
+      const map = createMapMock();
+      mockMapConstructor.mockReturnValue(map);
+      jest.spyOn(window, 'matchMedia').mockImplementation((query) => ({
+        matches: query === '(prefers-reduced-motion: reduce)',
+        media: query,
+        onchange: null,
+        addListener: jest.fn(),
+        removeListener: jest.fn(),
+        addEventListener: jest.fn(),
+        removeEventListener: jest.fn(),
+        dispatchEvent: jest.fn(),
+      }));
+      renderBuilderMap(entries);
+      act(() => mockEventHandlers.get('load')?.());
+      await waitFor(() => expect(map.fitBounds).toHaveBeenCalled());
+      expect(map.fitBounds).toHaveBeenLastCalledWith(
+        expect.anything(),
+        expect.objectContaining({ duration: 0 }),
+      );
+    });
+
+    it('selects the nearest eligible pin within the buffered target exactly once', async () => {
+      const map = createMapMock();
+      const nearbyEntries = [
+        createEntry('farther', { longitude: 118, latitude: 40 }),
+        createEntry('nearest', { longitude: 108, latitude: 40 }),
+      ];
+      map.queryRenderedFeatures.mockImplementation((_point, { layers }) =>
+        layers.includes(ATLAS_CLUSTER_LAYER)
+          ? []
+          : nearbyEntries.map(placeFeature),
+      );
+      mockMapConstructor.mockReturnValue(map);
+      const onSelect = jest.fn();
+      renderBuilderMap(nearbyEntries, { onSelect });
+      act(() => mockEventHandlers.get('load')?.());
+      const event = {
+        point: { x: 100, y: 40 },
+        features: [placeFeature(nearbyEntries[1])],
+      };
+      act(() => delegatedHandler(map, 'mouseenter', ATLAS_PIN_LAYER)(event));
+      expect(screen.getByRole('tooltip')).toBeInTheDocument();
+      act(() => {
+        mockEventHandlers.get('click')?.(event);
+        delegatedHandler(map, 'click', ATLAS_PIN_LAYER)(event);
+      });
+      expect(map.queryRenderedFeatures).toHaveBeenCalledWith(event.point, {
+        layers: [ATLAS_CLUSTER_LAYER],
+      });
+      expect(map.queryRenderedFeatures).toHaveBeenCalledWith(
+        [
+          [78, 18],
+          [122, 62],
+        ],
+        { layers: [ATLAS_PIN_LAYER] },
+      );
+      expect(onSelect).toHaveBeenCalledTimes(1);
+      expect(onSelect).toHaveBeenCalledWith('nearest');
+      expect(screen.queryByRole('tooltip')).not.toBeInTheDocument();
+    });
+
+    it('resolves duplicate world copies relative to the live camera center', () => {
+      const map = createMapMock();
+      map.getCenter.mockReturnValue({ lng: 181, lat: 0 });
+      map.project.mockImplementation((coordinate) => {
+        const [longitude, latitude] = Array.isArray(coordinate)
+          ? coordinate
+          : [coordinate.lng, coordinate.lat];
+        return { x: longitude - 80, y: latitude };
+      });
+      const wrappedEntry = createEntry('wrapped', {
+        longitude: -179,
+        latitude: 40,
+      });
+      const duplicate = placeFeature(wrappedEntry);
+      duplicate.geometry.coordinates = [181, 40];
+      map.queryRenderedFeatures.mockImplementation((_point, { layers }) =>
+        layers.includes(ATLAS_CLUSTER_LAYER)
+          ? []
+          : [placeFeature(wrappedEntry), duplicate],
+      );
+      mockMapConstructor.mockReturnValue(map);
+      const onSelect = jest.fn();
+      renderBuilderMap([wrappedEntry], { onSelect });
+      act(() => mockEventHandlers.get('load')?.());
+      act(() => mockEventHandlers.get('click')?.({ point: { x: 100, y: 40 } }));
+      expect(onSelect).toHaveBeenCalledTimes(1);
+      expect(onSelect).toHaveBeenCalledWith('wrapped');
+      expect(map.project).toHaveBeenCalledWith([181, 40]);
+    });
+
+    it.each([901, -899])(
+      'selects a pin in the clicked %i-degree world copy far from the camera center',
+      (clickedLongitude) => {
+        const map = createMapMock();
+        map.unproject.mockReturnValue({ lng: clickedLongitude, lat: 40 });
+        map.project.mockImplementation((coordinate) => {
+          const [longitude, latitude] = Array.isArray(coordinate)
+            ? coordinate
+            : [coordinate.lng, coordinate.lat];
+          return { x: longitude - clickedLongitude + 100, y: latitude };
+        });
+        const entry = createEntry('far-world-copy', {
+          longitude: -179,
+          latitude: 40,
+        });
+        map.queryRenderedFeatures.mockImplementation((_point, { layers }) =>
+          layers.includes(ATLAS_CLUSTER_LAYER) ? [] : [placeFeature(entry)],
+        );
+        mockMapConstructor.mockReturnValue(map);
+        const onSelect = jest.fn();
+        renderBuilderMap([entry], { onSelect });
+        act(() => mockEventHandlers.get('load')?.());
+        const point = { x: 100, y: 40 };
+        act(() => mockEventHandlers.get('click')?.({ point }));
+        expect(map.unproject).toHaveBeenCalledWith(point);
+        expect(map.getCenter()).toEqual({ lng: 0, lat: 0 });
+        expect(map.project).toHaveBeenCalledWith([clickedLongitude, 40]);
+        expect(onSelect).toHaveBeenCalledTimes(1);
+        expect(onSelect).toHaveBeenCalledWith(entry.id);
+      },
+    );
+
+    it('falls back to the live camera world copy if click unprojection throws', () => {
+      const map = createMapMock();
+      map.getCenter.mockReturnValue({ lng: 181, lat: 0 });
+      map.unproject.mockImplementation(() => {
+        throw new Error('Transient click unprojection failure');
+      });
+      map.project.mockImplementation((coordinate) => {
+        const [longitude, latitude] = Array.isArray(coordinate)
+          ? coordinate
+          : [coordinate.lng, coordinate.lat];
+        return { x: longitude - 81, y: latitude };
+      });
+      const entry = createEntry('camera-fallback', {
+        longitude: -179,
+        latitude: 40,
+      });
+      map.queryRenderedFeatures.mockImplementation((_point, { layers }) =>
+        layers.includes(ATLAS_CLUSTER_LAYER) ? [] : [placeFeature(entry)],
+      );
+      mockMapConstructor.mockReturnValue(map);
+      const onSelect = jest.fn();
+      renderBuilderMap([entry], { onSelect });
+      act(() => mockEventHandlers.get('load')?.());
+      act(() => mockEventHandlers.get('click')?.({ point: { x: 100, y: 40 } }));
+      expect(map.project).toHaveBeenCalledWith([181, 40]);
+      expect(onSelect).toHaveBeenCalledTimes(1);
+      expect(onSelect).toHaveBeenCalledWith(entry.id);
+    });
+
+    it('considers a later rendered copy of an ID when its first copy misses the target', () => {
+      const map = createMapMock();
+      map.project.mockImplementation((coordinate) => {
+        const [longitude, latitude] = Array.isArray(coordinate)
+          ? coordinate
+          : [coordinate.lng, coordinate.lat];
+        return { x: longitude, y: 100 + (latitude - 40) * 50 };
+      });
+      const entry = createEntry('entry-a', { longitude: 100, latitude: 40 });
+      const competitor = createEntry('entry-b', {
+        longitude: 110,
+        latitude: 40,
+      });
+      const firstCopy = placeFeature(entry);
+      firstCopy.geometry.coordinates = [100, 50];
+      map.queryRenderedFeatures.mockImplementation((_point, { layers }) =>
+        layers.includes(ATLAS_CLUSTER_LAYER)
+          ? []
+          : [firstCopy, placeFeature(competitor), placeFeature(entry)],
+      );
+      mockMapConstructor.mockReturnValue(map);
+      const onSelect = jest.fn();
+      renderBuilderMap([entry, competitor], { onSelect });
+      act(() => mockEventHandlers.get('load')?.());
+      act(() =>
+        mockEventHandlers.get('click')?.({ point: { x: 100, y: 100 } }),
+      );
+      expect(onSelect).toHaveBeenCalledTimes(1);
+      expect(onSelect).toHaveBeenCalledWith(entry.id);
+    });
+
+    it.each([86, 90, -86, -90])(
+      'selects a painted polar pin saved at %i degrees across equivalent world copies',
+      (savedLatitude) => {
+        const map = createMapMock();
+        const paintedLatitude = Math.sign(savedLatitude) * 85.0511287798066;
+        map.getCenter.mockReturnValue({ lng: 181, lat: 0 });
+        map.project.mockImplementation((coordinate) => {
+          const [longitude, latitude] = Array.isArray(coordinate)
+            ? coordinate
+            : [coordinate.lng, coordinate.lat];
+          // A realistic high-zoom separation: even 86 degrees is more than
+          // 22px from the Mercator cap; the painted pin stays on the canvas.
+          return {
+            x: longitude - 81,
+            y: 100 + (latitude - paintedLatitude) * 50,
+          };
+        });
+        const entry = createEntry('polar', {
+          longitude: -179,
+          latitude: savedLatitude,
+        });
+        const paintedFeature = placeFeature(entry);
+        paintedFeature.geometry.coordinates = [181, paintedLatitude];
+        const duplicate = placeFeature(entry);
+        duplicate.geometry.coordinates = [-179, paintedLatitude];
+        map.queryRenderedFeatures.mockImplementation((_point, { layers }) =>
+          layers.includes(ATLAS_CLUSTER_LAYER)
+            ? []
+            : [paintedFeature, duplicate],
+        );
+        mockMapConstructor.mockReturnValue(map);
+        const onSelect = jest.fn();
+        renderBuilderMap([entry], { onSelect });
+        act(() => mockEventHandlers.get('load')?.());
+        act(() =>
+          mockEventHandlers.get('click')?.({ point: { x: 100, y: 100 } }),
+        );
+        expect(onSelect).toHaveBeenCalledTimes(1);
+        expect(onSelect).toHaveBeenCalledWith(entry.id);
+        expect(map.project).toHaveBeenCalledWith([181, paintedLatitude]);
+        expect(
+          map.project.mock.calls.every(
+            ([coordinate]) =>
+              (Array.isArray(coordinate) ? coordinate[1] : coordinate.lat) ===
+              paintedLatitude,
+          ),
+        ).toBe(true);
+      },
+    );
+
+    it.each(
+      [86, 90, -86, -90].flatMap((savedLatitude) =>
+        [
+          { kind: 'missing geometry', geometry: undefined },
+          {
+            kind: 'nonpoint geometry',
+            geometry: {
+              type: 'LineString',
+              coordinates: [[-179, savedLatitude]],
+            },
+          },
+          {
+            kind: 'nonfinite latitude',
+            geometry: { type: 'Point', coordinates: [-179, Number.NaN] },
+          },
+          {
+            kind: 'nonfinite longitude',
+            geometry: {
+              type: 'Point',
+              coordinates: [Number.POSITIVE_INFINITY, savedLatitude],
+            },
+          },
+        ].map((example) => ({ ...example, savedLatitude })),
+      ),
+    )(
+      'clamps the saved $savedLatitude-degree pin fallback for $kind',
+      ({ savedLatitude, geometry }) => {
+        const map = createMapMock();
+        const paintedLatitude = Math.sign(savedLatitude) * 85.0511287798066;
+        map.getCenter.mockReturnValue({ lng: 181, lat: 0 });
+        map.project.mockImplementation((coordinate) => {
+          const [longitude, latitude] = Array.isArray(coordinate)
+            ? coordinate
+            : [coordinate.lng, coordinate.lat];
+          return {
+            x: longitude - 81,
+            y: 100 + (latitude - paintedLatitude) * 50,
+          };
+        });
+        const entry = createEntry('polar-fallback', {
+          longitude: -179,
+          latitude: savedLatitude,
+        });
+        // Deliberately model an unusable public geometry, including malformed
+        // data, to exercise the saved-coordinate fallback defensively.
+        const feature = {
+          ...placeFeature(entry),
+          geometry,
+        } as unknown as RenderedPlaceFeature;
+        map.queryRenderedFeatures.mockImplementation((_point, { layers }) =>
+          layers.includes(ATLAS_CLUSTER_LAYER) ? [] : [feature],
+        );
+        mockMapConstructor.mockReturnValue(map);
+        const onSelect = jest.fn();
+        renderBuilderMap([entry], { onSelect });
+        act(() => mockEventHandlers.get('load')?.());
+        act(() =>
+          mockEventHandlers.get('click')?.({ point: { x: 100, y: 100 } }),
+        );
+        expect(onSelect).toHaveBeenCalledTimes(1);
+        expect(onSelect).toHaveBeenCalledWith(entry.id);
+        expect(map.project).toHaveBeenCalledWith([181, paintedLatitude]);
+      },
+    );
+
+    it('uses stable ID order to break equally close pin ties', () => {
+      const map = createMapMock();
+      const tiedEntries = [
+        createEntry('entry-b', { longitude: 110, latitude: 40 }),
+        createEntry('entry-a', { longitude: 90, latitude: 40 }),
+      ];
+      map.queryRenderedFeatures.mockImplementation((_point, { layers }) =>
+        layers.includes(ATLAS_CLUSTER_LAYER)
+          ? []
+          : tiedEntries.map(placeFeature),
+      );
+      mockMapConstructor.mockReturnValue(map);
+      const onSelect = jest.fn();
+      renderBuilderMap(tiedEntries, { onSelect });
+      act(() => mockEventHandlers.get('load')?.());
+      act(() => mockEventHandlers.get('click')?.({ point: { x: 100, y: 40 } }));
+      expect(onSelect).toHaveBeenCalledTimes(1);
+      expect(onSelect).toHaveBeenCalledWith('entry-a');
+    });
+
+    it('rejects stale, ineligible, and square-corner buffered hits outside the circular target', () => {
+      const map = createMapMock();
+      const rejectedEntries = [
+        createEntry('draft', {
+          recordState: 'draft',
+          longitude: 100,
+          latitude: 40,
+        }),
+        createEntry('future', {
+          journeyState: 'want_to_visit',
+          longitude: 100,
+          latitude: 40,
+        }),
+        createEntry('corner', { longitude: 120, latitude: 60 }),
+      ];
+      const staleEntry = createEntry('stale', { longitude: 100, latitude: 40 });
+      map.queryRenderedFeatures.mockImplementation((_point, { layers }) =>
+        layers.includes(ATLAS_CLUSTER_LAYER)
+          ? []
+          : [placeFeature(staleEntry), ...rejectedEntries.map(placeFeature)],
+      );
+      mockMapConstructor.mockReturnValue(map);
+      const onSelect = jest.fn();
+      renderBuilderMap(rejectedEntries, { onSelect });
+      act(() => mockEventHandlers.get('load')?.());
+      act(() => mockEventHandlers.get('click')?.({ point: { x: 100, y: 40 } }));
+      expect(onSelect).not.toHaveBeenCalled();
+    });
+
+    it.each([
+      { distance: 22, selected: true },
+      { distance: 22.01, selected: false },
+    ])('uses an inclusive 22px circular target at $distance px', (example) => {
+      const map = createMapMock();
+      const entry = createEntry('edge', {
+        longitude: 100 + example.distance,
+        latitude: 40,
+      });
+      map.queryRenderedFeatures.mockImplementation((_point, { layers }) =>
+        layers.includes(ATLAS_CLUSTER_LAYER) ? [] : [placeFeature(entry)],
+      );
+      mockMapConstructor.mockReturnValue(map);
+      const onSelect = jest.fn();
+      renderBuilderMap([entry], { onSelect });
+      act(() => mockEventHandlers.get('load')?.());
+      act(() => mockEventHandlers.get('click')?.({ point: { x: 100, y: 40 } }));
+      expect(onSelect).toHaveBeenCalledTimes(example.selected ? 1 : 0);
+    });
+
+    it('lets an exact cluster click expand before considering buffered pins', async () => {
+      const map = createMapMock();
+      const cluster: RenderedPlaceFeature = {
+        type: 'Feature',
+        properties: { cluster_id: 7, point_count: 2 },
+        geometry: { type: 'Point', coordinates: [100, 40] },
+      };
+      map.queryRenderedFeatures.mockReturnValue([cluster]);
+      mockMapConstructor.mockReturnValue(map);
+      const onSelect = jest.fn();
+      renderBuilderMap(entries, { onSelect });
+      act(() => mockEventHandlers.get('load')?.());
+      map.easeTo.mockClear();
+      const event = { point: { x: 100, y: 40 }, features: [cluster] };
+      act(() => mockEventHandlers.get('click')?.(event));
+      expect(map.queryRenderedFeatures).toHaveBeenCalledTimes(1);
+      expect(onSelect).not.toHaveBeenCalled();
+      await act(async () =>
+        delegatedHandler(map, 'click', ATLAS_CLUSTER_LAYER)(event),
+      );
+      expect(
+        map.getSource(ATLAS_SOURCE_ID)?.getClusterExpansionZoom,
+      ).toHaveBeenCalledWith(7);
+      expect(map.easeTo).toHaveBeenLastCalledWith(
+        expect.objectContaining({ center: [100, 40], zoom: 9, duration: 700 }),
+      );
+      expect(onSelect).not.toHaveBeenCalled();
+    });
+
+    it('describes adding and removing memories instead of opening the drawer', () => {
+      const map = createMapMock();
+      mockMapConstructor.mockReturnValue(map);
+      const { props, rerender } = renderBuilderMap(entries);
+      act(() => mockEventHandlers.get('load')?.());
+      const event = {
+        point: { x: 100, y: 40 },
+        features: [placeFeature(entries[0])],
+      };
+      act(() => delegatedHandler(map, 'mouseenter', ATLAS_PIN_LAYER)(event));
+      expect(screen.getByRole('tooltip')).toHaveTextContent('Add to journey');
+      expect(screen.getByRole('tooltip')).toHaveTextContent(
+        'Click to select for journey',
+      );
+      expect(screen.getByRole('tooltip')).not.toHaveTextContent('Open memory');
+      const mapRegion = screen.getByRole('region', {
+        name: /journey.*map|map.*journey/i,
+      });
+      expect(mapRegion).toHaveAccessibleDescription(/select|add/i);
+
+      rerender(
+        <AtlasMap {...props} builderSelectedEntryIds={[entries[0].id]} />,
+      );
+      expect(screen.getByRole('tooltip')).toHaveTextContent(
+        'Selected for journey',
+      );
+      expect(screen.getByRole('tooltip')).toHaveTextContent(
+        'Click to remove from journey',
+      );
+    });
+
+    it('keeps ordinary Places pin clicks, tooltip copy, zoom floor, and resize behavior unchanged', async () => {
+      const map = createMapMock();
+      mockMapConstructor.mockReturnValue(map);
+      const onSelect = jest.fn();
+      renderBuilderMap(entries, { builderActive: false, onSelect });
+      expect(mockMapConstructor).toHaveBeenCalledWith(
+        expect.objectContaining({ minZoom: 1 }),
+      );
+      act(() => mockEventHandlers.get('load')?.());
+      const event = {
+        point: { x: 100, y: 40 },
+        features: [placeFeature(entries[0])],
+      };
+      act(() => delegatedHandler(map, 'mouseenter', ATLAS_PIN_LAYER)(event));
+      expect(screen.getByRole('tooltip')).toHaveTextContent('Remembered place');
+      expect(screen.getByRole('tooltip')).toHaveTextContent('Open memory');
+      expect(screen.queryByRole('region')).not.toBeInTheDocument();
+      act(() => mockEventHandlers.get('click')?.(event));
+      expect(onSelect).not.toHaveBeenCalled();
+      expect(map.queryRenderedFeatures).not.toHaveBeenCalled();
+      act(() => delegatedHandler(map, 'click', ATLAS_PIN_LAYER)(event));
+      expect(onSelect).toHaveBeenCalledTimes(1);
+      expect(onSelect).toHaveBeenCalledWith(entries[0].id);
+
+      Object.defineProperty(map.getContainer(), 'clientWidth', {
+        configurable: true,
+        value: 640,
+      });
+      map.resize.mockClear();
+      fireEvent(window, new Event('resize'));
+      await waitFor(() => expect(map.resize).toHaveBeenCalled());
+      expect(map.fitBounds).not.toHaveBeenCalled();
+    });
   });
 
   it('times out a stalled load and recreates the map on retry', () => {

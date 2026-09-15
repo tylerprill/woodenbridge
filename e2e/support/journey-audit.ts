@@ -1,5 +1,73 @@
 import { expect, type Page } from '@playwright/test';
 
+/** Builder controls reserve space rather than obscuring the selectable map. */
+export async function expectMapFirstJourneyBuilder(page: Page) {
+  await expect(page.locator('[data-atlas-surface="builder"]')).toBeVisible();
+  await expect
+    .poll(
+      () =>
+        page.evaluate(() => {
+          const map = document.querySelector('.maplibregl-map');
+          const builder = document.querySelector(
+            'section[aria-labelledby="journey-builder-title"]',
+          );
+          if (!map || !builder) return ['Builder or map is missing'];
+          const canvas = map.getBoundingClientRect();
+          const panel = builder.getBoundingClientRect();
+          const errors: string[] = [];
+          if (canvas.width < 100 || canvas.height < 100) {
+            errors.push('Builder leaves no usable map area');
+          }
+          if (
+            canvas.left < panel.right - 1 &&
+            canvas.right > panel.left + 1 &&
+            canvas.top < panel.bottom - 1 &&
+            canvas.bottom > panel.top + 1
+          ) {
+            errors.push('Builder controls cover the map canvas');
+          }
+          const attribution = document.querySelector('.maplibregl-ctrl-attrib');
+          if (attribution) {
+            const credits = attribution.getBoundingClientRect();
+            if (
+              credits.left < canvas.left - 1 ||
+              credits.right > canvas.right + 1 ||
+              credits.top < canvas.top - 1 ||
+              credits.bottom > canvas.bottom + 1
+            ) {
+              errors.push('Map credits extend outside the visible canvas');
+            }
+          }
+          return errors;
+        }),
+      { message: 'Journey builder leaves its map visible and unobstructed' },
+    )
+    .toEqual([]);
+  await expect(
+    page.getByRole('button', { name: 'Cancel journey builder' }),
+  ).toBeInViewport({ ratio: 1 });
+  await expect(page.locator('#atlas-builder-toggle')).toBeInViewport({
+    ratio: 1,
+  });
+  const memories = page.getByRole('region', { name: 'Journey memories' });
+  if (await memories.isVisible()) {
+    await expect
+      .poll(async () => (await memories.boundingBox())?.height ?? 0)
+      .toBeGreaterThanOrEqual(44);
+  }
+  const continueLink = page.getByRole('link', {
+    name: 'Continue',
+    exact: true,
+  });
+  const advance = (await continueLink.count())
+    ? continueLink
+    : page.getByRole('button', { name: /^Choose \d+ more$/ });
+  await expect(advance).toBeInViewport({ ratio: 1 });
+  await expect
+    .poll(async () => (await advance.boundingBox())?.height ?? 0)
+    .toBeGreaterThanOrEqual(44);
+}
+
 /** A scrollable details preview must not collapse beneath the fixed controls. */
 export async function expectJourneyPlaybackPreviewHasRoom(page: Page) {
   const details = page
