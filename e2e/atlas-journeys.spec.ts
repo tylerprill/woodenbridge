@@ -1,6 +1,7 @@
 import { expect, test, type Page, type TestInfo } from '@playwright/test';
 
 import { E2E_FIXTURE } from '../scripts/seed-e2e.js';
+import { expectActiveJourneyDotClearOfOverlays } from './support/journey-audit';
 import { auditCurrentPage, monitorBrowserIssues } from './support/ui-audit';
 
 const primaryJourney = {
@@ -203,6 +204,7 @@ test('Journey Lens connects the Atlas, playback, and Chapter workshop', async ({
   await expect(
     page.getByRole('heading', { level: 3, name: memories[1].title }),
   ).toBeVisible();
+  await expectActiveJourneyDotClearOfOverlays(page);
 
   await page.getByRole('button', { name: 'Next stop' }).click();
   await expect(page.getByText('Stop 3 of 4', { exact: true })).toBeVisible();
@@ -220,12 +222,14 @@ test('Journey Lens connects the Atlas, playback, and Chapter workshop', async ({
       name: new RegExp(`^Stop 3 of 4: ${memories[2].title}`, 'i'),
     }),
   ).toHaveAttribute('aria-current', 'step');
+  await expectActiveJourneyDotClearOfOverlays(page);
 
   await page.getByRole('button', { name: 'Play journey' }).click();
   await expect(
     page.getByRole('button', { name: 'Pause journey' }),
   ).toBeVisible();
   await page.getByRole('button', { name: 'Pause journey' }).click();
+  await expectActiveJourneyDotClearOfOverlays(page);
   await auditJourneyState(page, testInfo, 'playback', monitor);
 
   await page.getByRole('button', { name: 'Exit playback' }).click();

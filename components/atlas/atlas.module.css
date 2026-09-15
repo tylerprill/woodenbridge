@@ -3306,6 +3306,25 @@
     min-height: 0;
   }
 
+  /* Match the compact-sheet policy: a name-sized lens card must not cover
+     the active route dot beside the Journey rail in short landscape. */
+  .workspace[data-journey-panel-open='true'] .atlasHeader {
+    visibility: hidden;
+    opacity: 0;
+    pointer-events: none;
+  }
+
+  .workspace[data-journey-panel-open='true'] .atlasHeader h1 {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip: rect(0 0 0 0);
+    clip-path: inset(50%);
+    visibility: visible;
+    white-space: nowrap;
+  }
+
   .workspace[data-atlas-mode='places'] .toolDock {
     top: auto;
     bottom: 0.55rem;
