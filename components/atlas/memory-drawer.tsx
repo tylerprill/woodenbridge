@@ -81,7 +81,7 @@ export function MemoryDrawer({
   const [archiveArmed, setArchiveArmed] = useState(false);
   const [discardArmed, setDiscardArmed] = useState(false);
   const [placeTouched, setPlaceTouched] = useState(false);
-  const drawerRef = useRef<HTMLElement>(null);
+  const drawerRef = useRef<HTMLDivElement>(null);
   const titleRef = useRef<HTMLTextAreaElement>(null);
   const headingRef = useRef<HTMLHeadingElement>(null);
   const versionRef = useRef(entry.version);
@@ -124,7 +124,7 @@ export function MemoryDrawer({
     if (!title) return;
 
     title.style.height = 'auto';
-    title.style.height = `${Math.min(title.scrollHeight, 92)}px`;
+    title.style.height = `${Math.min(Math.max(title.scrollHeight, 44), 92)}px`;
   }, [form.title]);
 
   useEffect(() => {
@@ -250,7 +250,7 @@ export function MemoryDrawer({
   };
 
   return (
-    <aside
+    <div
       ref={drawerRef}
       className={styles.memoryDrawer}
       role="dialog"
@@ -529,6 +529,6 @@ export function MemoryDrawer({
           </button>
         </div>
       </footer>
-    </aside>
+    </div>
   );
 }

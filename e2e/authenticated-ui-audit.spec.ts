@@ -2,6 +2,7 @@ import path from 'node:path';
 
 import { expect, test, type Page, type TestInfo } from '@playwright/test';
 
+import { E2E_FIXTURE } from '../scripts/seed-e2e.js';
 import {
   auditCurrentPage,
   monitorBrowserIssues,
@@ -123,6 +124,19 @@ test('authenticated routes and primary interactions pass the UI audit', async ({
       expectedHeading: 'Your collection.',
     },
     {
+      name: 'on-this-day',
+      path: '/dashboard/on-this-day',
+      expectedHeading: 'On this day',
+      readySelector: '[data-rediscovery-state="ready"]',
+    },
+    {
+      name: 'on-this-day-anniversary',
+      path: '/dashboard/on-this-day?date=2026-09-15',
+      expectedHeading: 'On this day',
+      expectedSelector: `[data-rediscovery-mode="anniversary"] a[href="/dashboard/card/${E2E_FIXTURE.entryIds[1]}"]`,
+      readySelector: '[data-rediscovery-state="ready"]',
+    },
+    {
       name: 'chapters',
       path: '/dashboard/chapters',
       expectedHeading: 'My Journeys.',
@@ -200,6 +214,81 @@ test('authenticated routes and primary interactions pass the UI audit', async ({
   if (!isMobileProject(testInfo)) {
     await page.setViewportSize({ width: 320, height: 568 });
   }
+  await page.goto('/dashboard/on-this-day');
+  await expect(page.locator('[data-rediscovery-state="ready"]')).toBeVisible();
+  await page.getByLabel('Choose a date', { exact: true }).fill('2026-09-15');
+  await page
+    .getByRole('button', { name: 'Find memories', exact: true })
+    .click();
+  await expect(page).toHaveURL((url) => {
+    return (
+      url.pathname === '/dashboard/on-this-day' &&
+      url.searchParams.get('date') === '2026-09-15'
+    );
+  });
+  await expect(
+    page.locator('[data-rediscovery-state="ready"]'),
+  ).toHaveAttribute('data-rediscovery-mode', 'anniversary');
+  await expect(
+    page.getByRole('heading', {
+      name: 'Bikes beneath the Belle Isle trees',
+      exact: true,
+    }),
+  ).toBeVisible();
+  await expect(
+    page
+      .locator(`a[href="/dashboard/card/${E2E_FIXTURE.entryIds[1]}"]`)
+      .first(),
+  ).toBeVisible();
+  await page.getByRole('link', { name: 'Previous day', exact: true }).click();
+  await expect(page).toHaveURL((url) => {
+    return (
+      url.pathname === '/dashboard/on-this-day' &&
+      url.searchParams.get('date') === '2026-09-14'
+    );
+  });
+  await expect(
+    page.locator('[data-rediscovery-state="ready"]'),
+  ).toHaveAttribute('data-rediscovery-mode', 'anniversary');
+  await expect(
+    page.getByRole('heading', {
+      name: 'Morning along the Detroit RiverWalk',
+      exact: true,
+    }),
+  ).toBeVisible();
+  await expect(
+    page
+      .locator(`a[href="/dashboard/card/${E2E_FIXTURE.entryIds[0]}"]`)
+      .first(),
+  ).toBeVisible();
+  await auditCurrentPage(
+    page,
+    testInfo,
+    `on-this-day-date-selection-${isMobileProject(testInfo) ? 'native' : 'small-phone'}-${testInfo.project.name}`,
+    monitor,
+    {
+      accessibility:
+        testInfo.project.name === 'chromium' ||
+        testInfo.project.name === 'mobile-chromium',
+    },
+  );
+  await page.getByRole('link', { name: 'Next day', exact: true }).click();
+  await expect(page).toHaveURL((url) => {
+    return (
+      url.pathname === '/dashboard/on-this-day' &&
+      url.searchParams.get('date') === '2026-09-15'
+    );
+  });
+  await expect(
+    page.locator('[data-rediscovery-state="ready"]'),
+  ).toHaveAttribute('data-rediscovery-mode', 'anniversary');
+  await expect(
+    page.getByRole('heading', {
+      name: 'Bikes beneath the Belle Isle trees',
+      exact: true,
+    }),
+  ).toBeVisible();
+
   await page.goto('/dashboard');
   await page.getByRole('button', { name: 'Open memory list' }).click();
   await expect(

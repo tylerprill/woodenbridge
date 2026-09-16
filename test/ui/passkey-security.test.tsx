@@ -2,7 +2,7 @@
  * @jest-environment jsdom
  */
 
-import { act, render, screen, within } from '@testing-library/react';
+import { act, render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { useRouter } from 'next/navigation';
 import { startAuthentication, startRegistration } from 'simplewebauthn-browser';
@@ -338,9 +338,11 @@ describe('passkey security experience', () => {
     expect(codeField).toHaveValue('');
     expect(passwordField).toHaveValue('');
     expect(await screen.findByText('Replacement window ready.')).toBeVisible();
-    expect(
-      screen.getByRole('button', { name: 'Create replacement passkey' }),
-    ).toBeEnabled();
+    await waitFor(() =>
+      expect(
+        screen.getByRole('button', { name: 'Create replacement passkey' }),
+      ).toBeEnabled(),
+    );
     expect(
       screen.getByRole('button', { name: 'Verify with a passkey' }),
     ).toBeEnabled();
@@ -377,6 +379,9 @@ describe('passkey security experience', () => {
         totalCodes: 10,
       },
     });
+    const operationControl = screen.getByRole('button', {
+      name: 'Protected actions unlocked',
+    });
 
     await user.click(screen.getByRole('button', { name: 'Replace codes' }));
     const confirmation = screen.getByRole('dialog', {
@@ -402,6 +407,10 @@ describe('passkey security experience', () => {
     expect(
       within(saveDialog).getByText('FA-1111-2222-3333-4444-5555-6666'),
     ).toBeVisible();
+
+    await waitFor(() =>
+      expect(operationControl).toHaveAttribute('aria-busy', 'false'),
+    );
 
     await user.click(
       within(saveDialog).getByRole('button', {
