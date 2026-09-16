@@ -125,6 +125,27 @@
   gap: clamp(1rem, 2.5vw, 1.5rem);
 }
 
+.uniformMemoryGrid {
+  grid-auto-rows: 1fr;
+  align-items: stretch;
+}
+
+.uniformMemoryGrid .memoryCard {
+  display: flex;
+  height: 100%;
+  flex-direction: column;
+}
+
+.uniformMemoryGrid .memoryLink {
+  display: flex;
+  flex: 1 1 auto;
+  flex-direction: column;
+}
+
+.uniformMemoryGrid .memoryCopy {
+  flex: 1 1 auto;
+}
+
 .memoryCard {
   min-width: 0;
   overflow: hidden;

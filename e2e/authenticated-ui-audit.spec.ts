@@ -137,6 +137,13 @@ test('authenticated routes and primary interactions pass the UI audit', async ({
       readySelector: '[data-rediscovery-state="ready"]',
     },
     {
+      name: 'on-this-day-recent',
+      path: '/dashboard/on-this-day?date=2026-01-02',
+      expectedHeading: 'On this day',
+      expectedSelector: '[data-memory-grid="recent"] article:nth-child(2)',
+      readySelector: '[data-rediscovery-mode="recent"]',
+    },
+    {
       name: 'chapters',
       path: '/dashboard/chapters',
       expectedHeading: 'My Journeys.',
@@ -208,6 +215,18 @@ test('authenticated routes and primary interactions pass the UI audit', async ({
           readySelector: route.readySelector,
         },
       );
+      if (route.name === 'on-this-day-recent') {
+        const heights = await page
+          .locator('[data-memory-grid="recent"] > article')
+          .evaluateAll((cards) =>
+            cards.map((card) => card.getBoundingClientRect().height),
+          );
+        expect(heights.length).toBeGreaterThanOrEqual(2);
+        expect(Math.min(...heights)).toBeGreaterThan(0);
+        expect(Math.max(...heights) - Math.min(...heights)).toBeLessThanOrEqual(
+          1,
+        );
+      }
     }
   }
 

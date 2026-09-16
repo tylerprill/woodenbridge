@@ -152,13 +152,16 @@ describe('On this day', () => {
     expect(container.textContent).not.toMatch(/years? ago/);
   });
 
-  it('clearly labels recent fallback as visits rather than anniversary matches', () => {
-    render(
+  it('clearly labels recent fallback and marks its cards for uniform sizing', () => {
+    const { container } = render(
       <OnThisDay
         data={data({
           mode: 'recent',
           pageSize: 6,
-          memories: [memory('Kyoto', { visitedOn: '2026-09-10' })],
+          memories: [
+            memory('Kyoto', { visitedOn: '2026-09-10' }),
+            memory('Nara', { description: '', visitedOn: '2026-09-09' }),
+          ],
         })}
         controls={null}
       />,
@@ -175,6 +178,10 @@ describe('On this day', () => {
     ).toBeInTheDocument();
     expect(screen.getByText('Sep 10, 2026')).toBeInTheDocument();
     expect(screen.queryByText(/years? earlier$/)).not.toBeInTheDocument();
+    expect(container.querySelector('[data-memory-grid="recent"]')).toHaveClass(
+      'memoryGrid',
+      'uniformMemoryGrid',
+    );
   });
 
   it('invites uploading and opening Atlas when there are no memories', () => {
