@@ -46,6 +46,7 @@ export function ChapterShareControl({
       <Link
         href={`/dashboard/chapters/${chapterId}/edit?step=arrange#chapter-sharing-heading`}
         className={styles.chapterPrivateAction}
+        aria-label="Share journey"
       >
         <LinkIcon aria-hidden="true" />
         Share
@@ -100,8 +101,8 @@ export function ChapterShareControl({
         onClick={shareChapter}
         disabled={feedback === 'sharing'}
         aria-busy={feedback === 'sharing'}
-        aria-label="Share chapter"
-        title="Share chapter"
+        aria-label="Share journey"
+        title="Share journey"
       >
         {feedback === 'shared' || feedback === 'copied' ? (
           <CheckIcon aria-hidden="true" />
@@ -124,16 +125,16 @@ export function ChapterShareControl({
         >
           <span>
             {feedback === 'shared'
-              ? 'Chapter shared.'
+              ? 'Journey shared.'
               : feedback === 'copied'
-                ? 'Unlisted chapter link copied.'
+                ? 'Unlisted journey link copied.'
                 : 'Copy was blocked.'}
           </span>
           {feedback === 'error' ? (
             <button
               type="button"
               onClick={() =>
-                window.prompt('Copy this chapter link:', chapterUrl())
+                window.prompt('Copy this journey link:', chapterUrl())
               }
             >
               Show link

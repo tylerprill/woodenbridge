@@ -602,7 +602,7 @@ async function reachChapterStep(page: Page, memories: MemoryDetails[]) {
     await fillMemoryDetails(page, memory);
     await page
       .getByRole('button', {
-        name: index < memories.length - 1 ? 'Next memory' : 'Shape the chapter',
+        name: index < memories.length - 1 ? 'Next memory' : 'Shape the journey',
       })
       .click();
   }
@@ -746,10 +746,10 @@ test('imports a private photo chapter, recovers a lost response, and cancels a s
   await reachChapterStep(page, [riverwalkMemory, kyotoMemory]);
   await page
     .getByRole('button', {
-      name: `Use ${kyotoMemory.title} as chapter cover`,
+      name: `Use ${kyotoMemory.title} as journey cover`,
     })
     .click();
-  await page.getByRole('textbox', { name: 'Chapter title' }).fill(chapterTitle);
+  await page.getByRole('textbox', { name: 'Journey title' }).fill(chapterTitle);
   await page
     .getByRole('textbox', { name: /^Introduction/ })
     .fill(chapterIntroduction);
@@ -758,7 +758,7 @@ test('imports a private photo chapter, recovers a lost response, and cancels a s
   });
 
   const createChapter = page.getByRole('button', {
-    name: 'Create 2 memories and 1 chapter',
+    name: 'Create 2 memories and 1 journey',
   });
   await createChapter.click();
   const uploadAlert = page.getByRole('alert');
@@ -775,7 +775,7 @@ test('imports a private photo chapter, recovers a lost response, and cancels a s
     }),
   ).toBeVisible({ timeout: 120_000 });
   await expect(
-    page.getByRole('heading', { name: 'Your chapter is ready.' }),
+    page.getByRole('heading', { name: 'Your journey is ready.' }),
   ).toBeVisible();
   const persistedChapter = await loadPersistedChapter();
   expect(persistedChapter).toMatchObject({
@@ -797,7 +797,7 @@ test('imports a private photo chapter, recovers a lost response, and cancels a s
   });
 
   const openChapter = page.getByRole('link', {
-    name: 'Read chapter',
+    name: 'Read journey',
     exact: true,
   });
   const chapterHref = await openChapter.getAttribute('href');
@@ -808,15 +808,14 @@ test('imports a private photo chapter, recovers a lost response, and cancels a s
     page.getByRole('heading', { level: 1, name: chapterTitle }),
   ).toBeVisible();
   await expect(
-    page.getByRole('region', { name: 'Chapter introduction' }),
+    page.getByRole('region', { name: 'Journey introduction' }),
   ).toContainText(chapterIntroduction);
-  await expect(page.getByRole('link', { name: 'Share' })).toHaveAttribute(
-    'href',
-    /\/edit\?step=arrange#chapter-sharing-heading$/,
-  );
+  await expect(
+    page.getByRole('link', { name: 'Share journey' }),
+  ).toHaveAttribute('href', /\/edit\?step=arrange#chapter-sharing-heading$/);
 
   const chapterMemories = page.getByRole('list', {
-    name: 'Chapter memories in journey order',
+    name: 'Journey memories in route order',
   });
   await expect(
     chapterMemories.getByRole('heading', {

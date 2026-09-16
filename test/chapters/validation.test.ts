@@ -61,6 +61,14 @@ describe('chapter validation', () => {
     );
 
     expect(parsed.success).toBe(false);
+    if (parsed.success) throw new Error('Too few memories were accepted.');
+    expect(parsed.error.issues).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          message: 'Choose at least 2 memories for this journey.',
+        }),
+      ]),
+    );
   });
 
   it('rejects duplicate memories', () => {
@@ -74,6 +82,14 @@ describe('chapter validation', () => {
     );
 
     expect(parsed.success).toBe(false);
+    if (parsed.success) throw new Error('Duplicate memories were accepted.');
+    expect(parsed.error.issues).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          message: 'Each memory can appear only once in a journey.',
+        }),
+      ]),
+    );
   });
 
   it('caps the chapter size', () => {
@@ -89,6 +105,30 @@ describe('chapter validation', () => {
     );
 
     expect(parsed.success).toBe(false);
+    if (parsed.success) throw new Error('Too many memories were accepted.');
+    expect(parsed.error.issues).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          message: 'A journey can hold up to 50 memories.',
+        }),
+      ]),
+    );
+  });
+
+  it('asks for a journey title without changing the stored field name', () => {
+    const parsed = atlasChapterInputSchema.safeParse(
+      chapterInput({ title: '' }),
+    );
+    expect(parsed.success).toBe(false);
+    if (parsed.success) throw new Error('An empty title was accepted.');
+    expect(parsed.error.issues).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          path: ['title'],
+          message: 'Give this journey a title.',
+        }),
+      ]),
+    );
   });
 
   it('requires a positive optimistic-lock version for updates', () => {

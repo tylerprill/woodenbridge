@@ -1215,7 +1215,7 @@ export async function finalizeAtlasImportBatchAction(
         ok: false,
         error: 'conflict',
         message:
-          'This import has a different saved chapter choice. Reopen it and try again.',
+          'This import has a different saved journey choice. Reopen it and try again.',
       };
     }
     if (batch.status === 'completed') {
@@ -1240,7 +1240,7 @@ export async function finalizeAtlasImportBatchAction(
           ok: false,
           error: 'conflict',
           message:
-            'This import has a different saved chapter cover. Reopen it and try again.',
+            'This import has a different saved journey cover. Reopen it and try again.',
         };
       }
       const completed = await loadCompletedFinalization(
@@ -1321,7 +1321,7 @@ export async function finalizeAtlasImportBatchAction(
         ok: false,
         error: 'conflict',
         message:
-          'This import has a different saved chapter cover. Reopen it and try again.',
+          'This import has a different saved journey cover. Reopen it and try again.',
       };
     }
 
@@ -1333,7 +1333,7 @@ export async function finalizeAtlasImportBatchAction(
         return {
           ok: false,
           error: 'invalid',
-          message: 'Name the chapter before creating it.',
+          message: 'Name the journey before creating it.',
         };
       }
       const chapter = await client.query<{ id: string; share_id: string }>(

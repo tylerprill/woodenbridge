@@ -96,11 +96,40 @@ const chapter: SharedAtlasChapter = {
 };
 
 describe('shared Chapter reader', () => {
+  it('uses Journey labels without rewriting the author’s chapter wording', () => {
+    const authoredTitle = 'Chapter one: the journey begins';
+    const authoredIntroduction = 'A chapter I never want to forget.';
+    render(
+      <ChapterReader
+        chapter={{
+          ...chapter,
+          title: authoredTitle,
+          introduction: authoredIntroduction,
+        }}
+        mode="shared"
+      />,
+    );
+
+    expect(
+      screen.getByRole('heading', { name: authoredTitle }),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole('region', { name: 'Journey introduction' }),
+    ).toHaveTextContent(authoredIntroduction);
+    expect(
+      screen.getByText('A shared Field Atlas journey'),
+    ).toBeInTheDocument();
+    expect(screen.getByText('The journey')).toBeInTheDocument();
+    expect(
+      screen.getByRole('navigation', { name: 'Journey actions' }),
+    ).toBeInTheDocument();
+  });
+
   it('presents an editorial public journey without exposing private keepsakes', () => {
     render(<ChapterReader chapter={chapter} mode="shared" />);
 
     expect(
-      screen.getByRole('button', { name: 'Share chapter' }),
+      screen.getByRole('button', { name: 'Share journey' }),
     ).toBeInTheDocument();
     expect(
       screen.getByRole('link', { name: 'Start your atlas' }),
@@ -115,7 +144,7 @@ describe('shared Chapter reader', () => {
       screen.getByLabelText('From Petra, Jordan to Kyoto, Japan'),
     ).toHaveTextContent('Kyoto, Japan');
     expect(
-      screen.getByRole('region', { name: 'Chapter introduction' }),
+      screen.getByRole('region', { name: 'Journey introduction' }),
     ).toHaveTextContent('Ten places across the world');
     expect(
       screen.getByRole('heading', { name: 'The route, remembered.' }),
@@ -127,7 +156,7 @@ describe('shared Chapter reader', () => {
     expect(document.querySelector('#chapter-memories')).not.toBeNull();
     expect(screen.getByTestId('chapter-map')).toBeInTheDocument();
     const journey = screen.getByRole('list', {
-      name: 'Chapter memories in journey order',
+      name: 'Journey memories in route order',
     });
     expect(journey).toBeInTheDocument();
     expect(screen.getAllByRole('listitem')).toHaveLength(2);
@@ -149,11 +178,11 @@ describe('shared Chapter reader', () => {
   it('keeps the owner opening concise and hands focus to its field note', async () => {
     render(<ChapterReader chapter={chapter} mode="owner" />);
 
-    expect(screen.getByRole('link', { name: 'My Chapters' })).toHaveAttribute(
+    expect(screen.getByRole('link', { name: 'My Journeys' })).toHaveAttribute(
       'href',
       '/dashboard/chapters',
     );
-    expect(screen.getByRole('link', { name: 'Edit chapter' })).toHaveAttribute(
+    expect(screen.getByRole('link', { name: 'Edit journey' })).toHaveAttribute(
       'href',
       '/dashboard/chapters/chapter-1/edit',
     );
@@ -161,24 +190,25 @@ describe('shared Chapter reader', () => {
       'href',
       '/dashboard?view=journeys&journey=chapter-1',
     );
+    expect(screen.getByRole('link', { name: 'Read journey' })).toHaveAttribute(
+      'href',
+      '#chapter-story',
+    );
     expect(
-      screen.getByRole('link', { name: 'Read your chapter' }),
-    ).toHaveAttribute('href', '#chapter-story');
-    expect(
-      screen.getByRole('region', { name: 'Chapter introduction' }),
+      screen.getByRole('region', { name: 'Journey introduction' }),
     ).toHaveTextContent('Ten places across the world');
     const ownerHero = screen
       .getByRole('heading', { name: 'Wonders without borders', level: 1 })
       .closest('header');
     expect(ownerHero).not.toHaveTextContent('Ten places across the world');
 
-    fireEvent.click(screen.getByRole('link', { name: 'Read your chapter' }));
+    fireEvent.click(screen.getByRole('link', { name: 'Read journey' }));
     await waitFor(() =>
       expect(screen.getByText('The field note')).toHaveFocus(),
     );
     expect(
       screen.getByRole('list', {
-        name: 'Chapter memories in journey order',
+        name: 'Journey memories in route order',
       }),
     ).toBeInTheDocument();
     expect(
@@ -198,7 +228,7 @@ describe('shared Chapter reader', () => {
       screen.getByRole('link', { name: 'Begin the journey' }),
     ).toHaveAttribute('href', '#chapter-route');
     expect(
-      screen.queryByRole('region', { name: 'Chapter introduction' }),
+      screen.queryByRole('region', { name: 'Journey introduction' }),
     ).not.toBeInTheDocument();
   });
 

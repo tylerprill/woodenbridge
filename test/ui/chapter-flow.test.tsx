@@ -66,6 +66,83 @@ describe('chapter creation and sharing UI', () => {
     jest.mocked(createAtlasChapterAction).mockReset();
   });
 
+  it('uses Journey naming in the workshop and private sharing controls', () => {
+    const { container, unmount } = render(
+      <ChapterEditor chapter={null} availableEntries={memories} />,
+    );
+
+    expect(
+      screen.getByRole('heading', { name: 'Begin a new journey.' }),
+    ).toBeInTheDocument();
+    expect(screen.getByText('Journey workshop')).toBeInTheDocument();
+    expect(screen.getByLabelText('Journey title')).toBeInTheDocument();
+    expect(screen.getByLabelText('Journey introduction')).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: 'My Journeys' })).toHaveAttribute(
+      'href',
+      '/dashboard/chapters',
+    );
+    expect(container.textContent).not.toMatch(/\bchapters?\b/i);
+    unmount();
+
+    render(
+      <ChapterShareControl
+        chapterId="chapter-1"
+        chapterTitle="Chapter one of our travels"
+        shareId="share-1"
+        visibility="private"
+      />,
+    );
+    expect(screen.getByRole('link', { name: 'Share journey' })).toHaveAttribute(
+      'href',
+      '/dashboard/chapters/chapter-1/edit?step=arrange#chapter-sharing-heading',
+    );
+  });
+
+  it('keeps memory and transition rows as semantic list items in a ten-stop route', async () => {
+    const user = userEvent.setup();
+    const tenMemories = Array.from({ length: 10 }, (_, index) => ({
+      ...memories[index % memories.length],
+      id: `memory-${index + 1}`,
+      title: `Stop ${index + 1}`,
+    }));
+    render(
+      <ChapterEditor
+        chapter={null}
+        availableEntries={tenMemories}
+        initialMemoryIds={tenMemories.map((memory) => memory.id)}
+        initialTitle="Ten stops together"
+        initialStep="arrange"
+      />,
+    );
+
+    const route = screen.getByRole('list');
+    expect(route.tagName).toBe('OL');
+    expect(route.children).toHaveLength(19);
+    for (const row of Array.from(route.children)) {
+      expect(row.tagName).toBe('LI');
+      expect(row).not.toHaveAttribute('role', 'presentation');
+      expect(row).not.toHaveAttribute('role', 'none');
+    }
+    expect(screen.getAllByRole('listitem')).toHaveLength(19);
+
+    await user.click(
+      screen.getAllByRole('button', {
+        name: 'Add words between these stops',
+      })[0],
+    );
+    expect(
+      screen.getByRole('textbox', { name: /^Words between Stop 1 and Stop 2/ }),
+    ).toBeInTheDocument();
+    expect(screen.getAllByRole('listitem')).toHaveLength(19);
+
+    await user.click(
+      screen.getByRole('button', { name: 'Move Stop 2 earlier' }),
+    );
+    expect(route.children[0]).toHaveTextContent('Stop 2');
+    expect(route.children[2]).toHaveTextContent('Stop 1');
+    expect(screen.getAllByRole('listitem')).toHaveLength(19);
+  });
+
   it('creates a private chapter from two selected memories', async () => {
     const user = userEvent.setup();
     jest.mocked(createAtlasChapterAction).mockResolvedValue({
@@ -76,7 +153,7 @@ describe('chapter creation and sharing UI', () => {
     render(<ChapterEditor chapter={null} availableEntries={memories} />);
 
     await user.type(
-      screen.getByLabelText('Chapter title'),
+      screen.getByLabelText('Journey title'),
       'Wonders without borders',
     );
     await user.click(screen.getByRole('button', { name: 'Add Petra at dawn' }));
@@ -84,7 +161,7 @@ describe('chapter creation and sharing UI', () => {
       screen.getByRole('button', { name: 'Add Kyoto lanterns' }),
     );
     await user.click(screen.getByRole('button', { name: /Arrange & share/i }));
-    await user.click(screen.getByRole('button', { name: 'Create chapter' }));
+    await user.click(screen.getByRole('button', { name: 'Create journey' }));
 
     await waitFor(() =>
       expect(createAtlasChapterAction).toHaveBeenCalledWith(
@@ -126,9 +203,9 @@ describe('chapter creation and sharing UI', () => {
     expect(screen.getByText(/memories selected/)).toHaveTextContent(
       /02\s*memories selected/,
     );
-    await user.type(screen.getByLabelText('Chapter title'), 'Across the map');
+    await user.type(screen.getByLabelText('Journey title'), 'Across the map');
     await user.click(screen.getByRole('button', { name: /Arrange & share/i }));
-    await user.click(screen.getByRole('button', { name: 'Create chapter' }));
+    await user.click(screen.getByRole('button', { name: 'Create journey' }));
 
     await waitFor(() =>
       expect(createAtlasChapterAction).toHaveBeenCalledWith(
@@ -166,7 +243,7 @@ describe('chapter creation and sharing UI', () => {
       />,
     );
 
-    await user.click(screen.getByRole('button', { name: 'Share chapter' }));
+    await user.click(screen.getByRole('button', { name: 'Share journey' }));
 
     await waitFor(() =>
       expect(writeText).toHaveBeenCalledWith(
@@ -174,7 +251,7 @@ describe('chapter creation and sharing UI', () => {
       ),
     );
     expect(screen.getByRole('status')).toHaveTextContent(
-      'Unlisted chapter link copied.',
+      'Unlisted journey link copied.',
     );
   });
 
@@ -200,7 +277,7 @@ describe('chapter creation and sharing UI', () => {
       />,
     );
 
-    await user.click(screen.getByRole('button', { name: 'Share chapter' }));
+    await user.click(screen.getByRole('button', { name: 'Share journey' }));
 
     await waitFor(() =>
       expect(share).toHaveBeenCalledWith({
@@ -209,6 +286,6 @@ describe('chapter creation and sharing UI', () => {
       }),
     );
     expect(canShare).toHaveBeenCalled();
-    expect(screen.getByRole('status')).toHaveTextContent('Chapter shared.');
+    expect(screen.getByRole('status')).toHaveTextContent('Journey shared.');
   });
 });

@@ -247,7 +247,7 @@ export function ChapterEditor({
       }
       if (
         !window.confirm(
-          'Leave this chapter? Your unsaved changes will be lost.',
+          'Leave this journey? Your unsaved changes will be lost.',
         )
       ) {
         event.preventDefault();
@@ -300,7 +300,7 @@ export function ChapterEditor({
     setErrorType(null);
     if (selectedIds.includes(entryId)) return;
     if (selectedIds.length >= CHAPTER_MAX_MEMORIES) {
-      setError(`A chapter can hold up to ${CHAPTER_MAX_MEMORIES} memories.`);
+      setError(`A journey can hold up to ${CHAPTER_MAX_MEMORIES} memories.`);
       setErrorType('invalid');
       return;
     }
@@ -360,7 +360,7 @@ export function ChapterEditor({
 
     if (selectedIds.length < CHAPTER_MIN_MEMORIES) {
       setError(
-        `Choose at least ${CHAPTER_MIN_MEMORIES} memories for this chapter.`,
+        `Choose at least ${CHAPTER_MIN_MEMORIES} memories for this journey.`,
       );
       setErrorType('invalid');
       return;
@@ -435,7 +435,7 @@ export function ChapterEditor({
         );
       } catch {
         setError(
-          'We could not reach Field Atlas. Your chapter has not been deleted.',
+          'We could not reach Field Atlas. Your journey has not been deleted.',
         );
         setErrorType('failed');
         setConfirmingDelete(false);
@@ -447,7 +447,7 @@ export function ChapterEditor({
     errorType === 'conflict'
       ? 'A newer version is already saved.'
       : errorType === 'not-found'
-        ? 'This chapter is no longer available.'
+        ? 'This journey is no longer available.'
         : errorType === 'invalid'
           ? 'One detail needs attention.'
           : 'Your work is still here.';
@@ -469,11 +469,11 @@ export function ChapterEditor({
             {returnsToAtlas
               ? 'Back to Atlas'
               : chapter
-                ? 'Back to chapter'
-                : 'My Chapters'}
+                ? 'Back to journey'
+                : 'My Journeys'}
           </Link>
-          <p className="section-kicker">Chapter workshop</p>
-          <h1>{chapter ? 'Shape your chapter.' : 'Begin a new chapter.'}</h1>
+          <p className="section-kicker">Journey workshop</p>
+          <h1>{chapter ? 'Shape your journey.' : 'Begin a new journey.'}</h1>
           <p>
             Choose the memories, set their order, and give the journey a voice.
           </p>
@@ -489,7 +489,7 @@ export function ChapterEditor({
         data-editor-step={editorStep}
         onSubmit={handleSubmit}
       >
-        <nav className={styles.editorSteps} aria-label="Chapter maker steps">
+        <nav className={styles.editorSteps} aria-label="Journey maker steps">
           <button
             type="button"
             data-active={editorStep === 'details' ? 'true' : undefined}
@@ -499,7 +499,7 @@ export function ChapterEditor({
             <span>01</span>
             <span>
               <strong>Story &amp; places</strong>
-              <small>Name the chapter and gather its memories.</small>
+              <small>Name the journey and gather its memories.</small>
             </span>
             {editorStep === 'arrange' ? <CheckIcon aria-hidden="true" /> : null}
           </button>
@@ -539,10 +539,10 @@ export function ChapterEditor({
             </div>
 
             <label className={styles.editorField}>
-              <span>Chapter title</span>
+              <span>Journey title</span>
               <input
                 name="title"
-                aria-label="Chapter title"
+                aria-label="Journey title"
                 value={title}
                 onChange={(event) => setTitle(event.target.value)}
                 maxLength={CHAPTER_TITLE_MAX_LENGTH}
@@ -560,7 +560,7 @@ export function ChapterEditor({
               </span>
               <textarea
                 name="introduction"
-                aria-label="Chapter introduction"
+                aria-label="Journey introduction"
                 value={introduction}
                 onChange={(event) => setIntroduction(event.target.value)}
                 maxLength={CHAPTER_INTRODUCTION_MAX_LENGTH}
@@ -686,7 +686,7 @@ export function ChapterEditor({
             ) : (
               <div className={styles.editorEmpty}>
                 <MapPinIcon aria-hidden="true" />
-                <h3>Your chapter needs memories first.</h3>
+                <h3>Your journey needs memories first.</h3>
                 <p>
                   Save at least two places in your atlas, then return here to
                   connect them.
@@ -723,7 +723,7 @@ export function ChapterEditor({
                 <LockClosedIcon aria-hidden="true" />
                 <span>
                   <strong>Private</strong>
-                  <small>Only you can open this chapter.</small>
+                  <small>Only you can open this journey.</small>
                 </span>
                 {visibility === 'private' ? (
                   <CheckIcon aria-hidden="true" />
@@ -807,14 +807,14 @@ export function ChapterEditor({
                 </label>
                 {chapter ? (
                   <p>
-                    Saving a newly shared chapter creates a fresh private link.
+                    Saving a newly shared journey creates a fresh private link.
                     Returning it to private immediately revokes that link.
                   </p>
                 ) : null}
               </div>
             ) : (
               <p className={styles.chapterPrivacyNote}>
-                Chapters begin private. Sharing never changes the privacy of the
+                Journeys begin private. Sharing never changes the privacy of the
                 original memories.
               </p>
             )}
@@ -853,7 +853,7 @@ export function ChapterEditor({
                     >
                       {returnsToAtlas
                         ? 'Return to Atlas'
-                        : 'Return to My Chapters'}
+                        : 'Return to My Journeys'}
                     </Link>
                   ) : null}
                 </div>
@@ -878,7 +878,7 @@ export function ChapterEditor({
                     className={styles.chapterSaveSpinner}
                     aria-hidden="true"
                   />
-                  Saving chapter…
+                  Saving journey…
                 </>
               ) : chapter && !isDirty ? (
                 <>
@@ -888,14 +888,14 @@ export function ChapterEditor({
               ) : chapter ? (
                 'Save changes'
               ) : (
-                'Create chapter'
+                'Create journey'
               )}
             </button>
             <p className={styles.chapterSaveHint} aria-live="polite">
               {isPending
-                ? 'Keeping this page open while your chapter is saved.'
+                ? 'Keeping this page open while your journey is saved.'
                 : chapter && !isDirty
-                  ? 'Your chapter is up to date.'
+                  ? 'Your journey is up to date.'
                   : 'Your original atlas memories remain independent and unchanged.'}
             </p>
 
@@ -903,7 +903,7 @@ export function ChapterEditor({
               <div className={styles.chapterDelete}>
                 {confirmingDelete ? (
                   <p>
-                    Delete this chapter? Its memories will stay in your atlas.
+                    Delete this journey? Its memories will stay in your atlas.
                   </p>
                 ) : null}
                 <button
@@ -912,7 +912,7 @@ export function ChapterEditor({
                   disabled={isPending}
                 >
                   <TrashIcon aria-hidden="true" />
-                  {confirmingDelete ? 'Yes, delete chapter' : 'Delete chapter'}
+                  {confirmingDelete ? 'Yes, delete journey' : 'Delete journey'}
                 </button>
                 {confirmingDelete ? (
                   <button
@@ -957,10 +957,7 @@ export function ChapterEditor({
                 return (
                   <Fragment key={entry.id}>
                     {index > 0 ? (
-                      <li
-                        className={styles.transitionEditor}
-                        role="presentation"
-                      >
+                      <li className={styles.transitionEditor}>
                         {transitionIsOpen ? (
                           <label>
                             <span>
@@ -1044,8 +1041,8 @@ export function ChapterEditor({
                             !entry.coverMediaId
                               ? `${memoryName(entry)} has no photo to use as a cover`
                               : isCover && !isExplicitCover
-                                ? `${memoryName(entry)} is the automatic chapter cover`
-                                : `${isExplicitCover ? 'Return to the automatic cover instead of' : 'Use'} ${memoryName(entry)} as the chapter cover`
+                                ? `${memoryName(entry)} is the automatic journey cover`
+                                : `${isExplicitCover ? 'Return to the automatic cover instead of' : 'Use'} ${memoryName(entry)} as the journey cover`
                           }
                         >
                           <PhotoIcon aria-hidden="true" />

@@ -117,6 +117,63 @@ describe('Atlas bulk import validation', () => {
     expect(result.success).toBe(false);
   });
 
+  it('uses journey terminology in import validation while preserving payload fields', () => {
+    const secondItem = {
+      ...baseItem,
+      clientItemId: 'd88932bb-661a-4fb3-8123-e0742d577293',
+      sourceHash: 'b'.repeat(64),
+    };
+    const tooFew = createAtlasImportBatchSchema.safeParse({
+      ...batch(),
+      coverClientItemId: baseItem.clientItemId,
+    });
+    expect(tooFew.success).toBe(false);
+    if (tooFew.success) throw new Error('An invalid journey was accepted.');
+    expect(tooFew.error.issues).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          path: ['items'],
+          message: 'Choose at least two photographs to create a journey.',
+        }),
+        expect.objectContaining({
+          path: ['chapterTitle'],
+          message: 'Name the journey before creating it.',
+        }),
+      ]),
+    );
+
+    const wrongCover = createAtlasImportBatchSchema.safeParse({
+      ...batch([baseItem, secondItem]),
+      chapterTitle: 'A journey in motion',
+      coverClientItemId: '3265f50a-6ab8-4db5-a84e-ec59d04e0d3d',
+    });
+    expect(wrongCover.success).toBe(false);
+    if (wrongCover.success) throw new Error('An invalid cover was accepted.');
+    expect(wrongCover.error.issues).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          path: ['coverClientItemId'],
+          message: 'Choose a journey cover from this photo import.',
+        }),
+      ]),
+    );
+
+    const missingCover = createAtlasImportBatchSchema.safeParse({
+      ...batch([baseItem, secondItem]),
+      chapterTitle: 'A journey in motion',
+    });
+    expect(missingCover.success).toBe(false);
+    if (missingCover.success) throw new Error('A missing cover was accepted.');
+    expect(missingCover.error.issues).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          path: ['coverClientItemId'],
+          message: 'Choose a journey cover before creating the journey.',
+        }),
+      ]),
+    );
+  });
+
   it('requires preparation values to be entirely absent or entirely present', () => {
     const result = createAtlasImportBatchSchema.safeParse(
       batch([{ ...baseItem, sourceWidth: 4032 }]),

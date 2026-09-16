@@ -3,7 +3,7 @@ export const SITE_NAME = 'Field Atlas';
 export const SITE_TITLE = 'Field Atlas | Personal Travel Map & Photo Journal';
 
 export const SITE_DESCRIPTION =
-  'Upload a trip, recognize its places and dates, and turn your photos into private mapped memories or a travel chapter with Field Atlas.';
+  'Upload a trip, recognize its places and dates, and turn your photos into private mapped memories or a journey with Field Atlas.';
 
 export function getSiteManifestHref(
   deploymentEnvironment = process.env.VERCEL_ENV,

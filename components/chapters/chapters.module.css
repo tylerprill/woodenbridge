@@ -3270,10 +3270,29 @@
   }
 }
 
-@media (max-width: 760px), (max-height: 480px) {
+@media (max-width: 760px), (max-height: 480px), (any-pointer: coarse) {
   .editorField :is(input, textarea),
-  .memorySearch input {
+  .memorySearch input,
+  .transitionEditor textarea {
     font-size: 1rem;
+  }
+
+  .sequenceRemove,
+  .sequenceActions button,
+  .sequenceActions button:first-child,
+  .transitionEditor > button,
+  .transitionEditor label > button,
+  .chapterDelete button {
+    min-width: 44px;
+    min-height: 44px;
+    flex-shrink: 0;
+    justify-content: center;
+  }
+
+  .transitionEditor > button,
+  .transitionEditor label > button,
+  .chapterDelete button {
+    padding: 0.5rem 0.65rem;
   }
 }
 

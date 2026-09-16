@@ -521,7 +521,7 @@ describe('bulk photo import workspace', () => {
     await titleCurrentStory(user, 'Clouds over the pass');
 
     expect(
-      screen.queryByRole('button', { name: /Shape the chapter/i }),
+      screen.queryByRole('button', { name: /Shape the journey/i }),
     ).not.toBeInTheDocument();
     await user.click(screen.getByRole('button', { name: 'Create memory' }));
 
@@ -651,7 +651,7 @@ describe('bulk photo import workspace', () => {
     );
 
     expect(
-      await screen.findByRole('textbox', { name: /^Chapter title/ }),
+      await screen.findByRole('textbox', { name: /^Journey title/ }),
     ).toBeVisible();
   });
 
@@ -777,17 +777,17 @@ describe('bulk photo import workspace', () => {
     await titleCurrentStory(user, 'First light');
     await user.click(screen.getByRole('button', { name: 'Next memory' }));
     await titleCurrentStory(user, 'The path home');
-    await user.click(screen.getByRole('button', { name: 'Shape the chapter' }));
+    await user.click(screen.getByRole('button', { name: 'Shape the journey' }));
 
     expect(
-      await screen.findByRole('textbox', { name: /^Chapter title/ }),
+      await screen.findByRole('textbox', { name: /^Journey title/ }),
     ).toBeVisible();
     expect(
       screen.getByRole('button', { name: 'Create memories only' }),
     ).toBeVisible();
     expect(
       screen.getByRole('button', {
-        name: 'Create 2 memories and 1 chapter',
+        name: 'Create 2 memories and 1 journey',
       }),
     ).toBeDisabled();
     await user.click(
@@ -826,19 +826,19 @@ describe('bulk photo import workspace', () => {
     await titleCurrentStory(user, 'First light');
     await user.click(screen.getByRole('button', { name: 'Next memory' }));
     await titleCurrentStory(user, 'Lanterns after rain');
-    await user.click(screen.getByRole('button', { name: 'Shape the chapter' }));
+    await user.click(screen.getByRole('button', { name: 'Shape the journey' }));
     await user.click(
       await screen.findByRole('button', {
-        name: 'Use Lanterns after rain as chapter cover',
+        name: 'Use Lanterns after rain as journey cover',
       }),
     );
     await user.type(
-      screen.getByRole('textbox', { name: /^Chapter title/ }),
+      screen.getByRole('textbox', { name: /^Journey title/ }),
       'A road through light',
     );
     await user.click(
       screen.getByRole('button', {
-        name: 'Create 2 memories and 1 chapter',
+        name: 'Create 2 memories and 1 journey',
       }),
     );
 
@@ -908,7 +908,7 @@ describe('bulk photo import workspace', () => {
     await titleCurrentStory(user, 'First light');
     await user.click(screen.getByRole('button', { name: 'Next memory' }));
     await titleCurrentStory(user, 'The road home');
-    await user.click(screen.getByRole('button', { name: 'Shape the chapter' }));
+    await user.click(screen.getByRole('button', { name: 'Shape the journey' }));
     const memoriesOnly = await screen.findByRole('button', {
       name: 'Create memories only',
     });
@@ -920,7 +920,7 @@ describe('bulk photo import workspace', () => {
     expect(memoriesOnly).toBeEnabled();
     expect(
       screen.queryByRole('button', {
-        name: 'Create 2 memories and 1 chapter',
+        name: 'Create 2 memories and 1 journey',
       }),
     ).not.toBeInTheDocument();
     await user.click(memoriesOnly);
@@ -950,13 +950,13 @@ describe('bulk photo import workspace', () => {
     await titleCurrentStory(user, 'First light');
     await user.click(screen.getByRole('button', { name: 'Next memory' }));
     await titleCurrentStory(user, 'The road home');
-    await user.click(screen.getByRole('button', { name: 'Shape the chapter' }));
+    await user.click(screen.getByRole('button', { name: 'Shape the journey' }));
     await user.type(
-      await screen.findByRole('textbox', { name: /^Chapter title/ }),
+      await screen.findByRole('textbox', { name: /^Journey title/ }),
       'Two roads north',
     );
     const createChapter = screen.getByRole('button', {
-      name: 'Create 2 memories and 1 chapter',
+      name: 'Create 2 memories and 1 journey',
     });
 
     await user.click(createChapter);
@@ -1042,6 +1042,46 @@ describe('bulk photo import workspace', () => {
     );
     expect(screen.getByLabelText('Choose photos')).toBeVisible();
     expect(mockRefresh).toHaveBeenCalled();
+  });
+
+  it('labels a ready memories-only recovery without implying a saved journey', async () => {
+    const user = userEvent.setup();
+    jest.mocked(finalizeAtlasImportBatchAction).mockResolvedValue({
+      ok: true,
+      data: {
+        batchId: 'batch-recovered',
+        version: 5,
+        entryIds: ['entry-1', 'entry-2'],
+        chapterId: null,
+        shareId: null,
+      },
+    });
+    render(
+      <PhotoImportWorkspace
+        recoveredBatch={{
+          ...recoveredBatch('ready'),
+          chapterTitle: '',
+          chapterIntroduction: '',
+          coverClientItemId: null,
+        }}
+      />,
+    );
+
+    expect(screen.queryByText('Journey cover')).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole('button', { name: 'Finish journey' }),
+    ).not.toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: 'Finish memories' }));
+
+    await waitFor(() =>
+      expect(finalizeAtlasImportBatchAction).toHaveBeenCalledWith({
+        batchId: 'batch-recovered',
+        version: 4,
+        createChapter: false,
+        coverMediaId: null,
+      }),
+    );
+    expect(mockPush).toHaveBeenCalledWith('/dashboard');
   });
 
   it('exposes progress, removal, and leave confirmation with named accessible controls', async () => {

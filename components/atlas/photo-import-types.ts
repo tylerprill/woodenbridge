@@ -29,7 +29,7 @@ export const IMPORT_STEPS = [
   ['choose', 'Upload photos'],
   ['review', 'Review journey'],
   ['stories', 'Optional details'],
-  ['chapter', 'Shape chapter'],
+  ['chapter', 'Shape journey'],
 ] as const;
 
 export const IMPORT_DEFAULT_VIEW: AtlasView = {

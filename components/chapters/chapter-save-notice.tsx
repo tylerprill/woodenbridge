@@ -50,9 +50,9 @@ export function ChapterSaveNotice({
       </span>
       <div>
         <strong>
-          {kind === 'created' ? 'Chapter created.' : 'Changes saved.'}
+          {kind === 'created' ? 'Journey created.' : 'Changes saved.'}
         </strong>
-        <p>Your latest chapter is safely in your atlas.</p>
+        <p>Your latest journey is safely in your atlas.</p>
       </div>
       <button
         type="button"

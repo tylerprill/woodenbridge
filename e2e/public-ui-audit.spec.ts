@@ -332,7 +332,7 @@ test('shared chapter reveals its route map and every memory', async ({
   await showMap.click();
 
   const mapRegion = page.getByRole('region', {
-    name: `Map of ${memoryCount} ordered chapter memories`,
+    name: `Map of ${memoryCount} ordered journey memories`,
   });
   await expect(mapRegion).toBeVisible({ timeout: 20_000 });
   await expect(

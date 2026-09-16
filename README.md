@@ -11,7 +11,7 @@ every journey.
 - An interactive map for pinning visited places and future journeys.
 - Structured place recognition with editable city, region, and country labels.
 - Multi-photo memories, optimized thumbnails, and designed keepsake cards.
-- My Chapters with ordered routes and revocable unlisted sharing links.
+- My Journeys with ordered routes and revocable unlisted sharing links.
 - Hierarchical user, administrator, and protected-owner access.
 - Database-backed revocable sessions and phishing-resistant passkey step-up for
   owner and administrator actions.
@@ -60,7 +60,7 @@ documented in the
 2. Create an account and verify your email address.
 3. Sign in to open your personal atlas.
 4. Drop a pin and explicitly save a title, place, date, field note, and photos.
-5. Revisit keepsakes in My Places or arrange them into a shareable chapter.
+5. Revisit keepsakes in My Places or arrange them into a shareable journey.
 
 ## Browser UI audits
 
@@ -71,7 +71,7 @@ require a test login or seeded private records:
 npm run test:e2e
 ```
 
-Set `E2E_SHARED_CHAPTER_ID` to include the public shared-chapter viewport and
+Set `E2E_SHARED_CHAPTER_ID` to include the public shared-journey viewport and
 map interaction audits. Without it, those fixture-dependent checks are omitted
 or explicitly skipped.
 
@@ -111,7 +111,7 @@ npm run test:e2e:authenticated
 
 Use the same environment with `npm run test:e2e:full` to include the public
 suite. Set `E2E_SHARED_CHAPTER_ID` when that run should also audit a shared
-chapter. The local style keeps the required authenticated gate independent of
+journey. The local style keeps the required authenticated gate independent of
 third-party tile availability; production continues to use the configured map
 provider. The authenticated suite also uses a filesystem media store confined
 to the operating system's temporary directory. Its full-import canary sends

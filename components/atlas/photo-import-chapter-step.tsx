@@ -46,13 +46,13 @@ export function PhotoImportChapterStep({
 }) {
   const createChapterLabel = busy
     ? 'Creating journey…'
-    : `Create ${items.length} memories and 1 chapter`;
+    : `Create ${items.length} memories and 1 journey`;
 
   return (
     <div className={styles.chapterLayout}>
       <section
         className={styles.chapterCover}
-        aria-label="Choose chapter cover"
+        aria-label="Choose journey cover"
       >
         {items.map((item, index) => (
           <button
@@ -63,7 +63,7 @@ export function PhotoImportChapterStep({
             }
             onClick={() => onCover(item.clientItemId)}
             disabled={locked}
-            aria-label={`Use ${item.title || item.placeLabel} as chapter cover`}
+            aria-label={`Use ${item.title || item.placeLabel} as journey cover`}
           >
             <ImportPhotoPreview item={item} priority={index === 0} />
             {coverClientItemId === item.clientItemId ? (
@@ -81,14 +81,14 @@ export function PhotoImportChapterStep({
         <div className={styles.sectionHeading}>
           <div>
             <p className="section-kicker">Bring it together</p>
-            <h2 id="chapter-form-title">Give this journey a chapter.</h2>
+            <h2 id="chapter-form-title">Give your journey a name.</h2>
           </div>
           <span className={styles.privateBadge}>
             <LockClosedIcon aria-hidden="true" /> Private
           </span>
         </div>
         <div className={styles.editorField}>
-          <label htmlFor="import-chapter-title">Chapter title</label>
+          <label htmlFor="import-chapter-title">Journey title</label>
           <input
             id="import-chapter-title"
             value={chapterTitle}
@@ -118,7 +118,7 @@ export function PhotoImportChapterStep({
         <div className={styles.chapterPrivacy}>
           <LockClosedIcon aria-hidden="true" />
           <p>
-            <strong>This chapter begins private.</strong>
+            <strong>This journey begins private.</strong>
             You can choose an unlisted sharing link after reviewing it.
           </p>
         </div>
@@ -205,7 +205,7 @@ export function PhotoImportChapterStep({
                 {createChapterLabel}
               </span>
               <span className={styles.shortActionLabel}>
-                {busy ? 'Creating…' : 'Chapter'}
+                {busy ? 'Creating…' : 'Journey'}
               </span>
               <ArrowRightIcon aria-hidden="true" />
             </button>

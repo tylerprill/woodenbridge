@@ -276,7 +276,7 @@ export function PhotoImportStoriesStep({
               storyIndex < items.length - 1
                 ? 'Next memory'
                 : includeChapter
-                  ? 'Shape the chapter'
+                  ? 'Shape the journey'
                   : 'Create memory'
             }
             onClick={onContinue}
@@ -286,14 +286,14 @@ export function PhotoImportStoriesStep({
               {storyIndex < items.length - 1
                 ? 'Next memory'
                 : includeChapter
-                  ? 'Shape the chapter'
+                  ? 'Shape the journey'
                   : 'Create memory'}
             </span>
             <span className={styles.shortActionLabel}>
               {storyIndex < items.length - 1
                 ? 'Next'
                 : includeChapter
-                  ? 'Chapter'
+                  ? 'Journey'
                   : 'Create'}
             </span>
             <ArrowRightIcon aria-hidden="true" />

@@ -11,7 +11,7 @@ export const dynamic = 'force-dynamic';
 const getSharedChapter = cache(getSharedAtlasChapter);
 
 function chapterDescription(introduction: string, memoryCount: number) {
-  const fallback = `A Field Atlas chapter with ${memoryCount} memories.`;
+  const fallback = `A Field Atlas journey with ${memoryCount} memories.`;
   const description = introduction.trim() || fallback;
 
   if (description.length <= 180) return description;
@@ -28,7 +28,7 @@ export async function generateMetadata({
 }): Promise<Metadata> {
   const { shareId } = await params;
   const chapter = await getSharedChapter(shareId);
-  if (!chapter) return { title: 'Shared chapter | Field Atlas' };
+  if (!chapter) return { title: 'Shared journey | Field Atlas' };
 
   const description = chapterDescription(
     chapter.introduction,

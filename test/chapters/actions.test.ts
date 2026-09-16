@@ -326,7 +326,12 @@ describe('Atlas Chapter creation idempotency', () => {
       title: 'A different chapter',
     });
 
-    expect(result).toMatchObject({ ok: false, error: 'conflict' });
+    expect(result).toMatchObject({
+      ok: false,
+      error: 'conflict',
+      message:
+        'That save request was already used for a different journey. Refresh and try again.',
+    });
     expect(
       __testMocks.clientQuery.mock.calls.some(([query]) =>
         normalizeQuery(query).startsWith('INSERT'),

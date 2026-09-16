@@ -123,7 +123,7 @@ export function ImportHeading({
 }) {
   return (
     <>
-      <p className="section-kicker">Photo journey</p>
+      <p className="section-kicker">Photo upload</p>
       <h1 ref={headingRef} tabIndex={-1}>
         {step === 'choose' && 'Turn your camera roll into an atlas.'}
         {step === 'review' && 'See where the journey took shape.'}
@@ -143,7 +143,7 @@ export function ImportHeading({
           'Keep the memories in their captured order, choose a cover, and name what connects them.'}
         {step === 'complete' &&
           (completionHasChapter
-            ? 'Your private chapter is ready whenever you want to walk the route again.'
+            ? 'Your private journey is ready whenever you want to walk the route again.'
             : 'Your private Atlas is ready whenever you want to return.')}
       </p>
     </>

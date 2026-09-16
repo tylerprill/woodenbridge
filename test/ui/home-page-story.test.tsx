@@ -44,6 +44,18 @@ describe('landing page product story', () => {
       }),
     ).toBeInTheDocument();
     expect(screen.getByText('10 places recognized')).toBeInTheDocument();
+    expect(screen.getByText('1 private journey')).toBeInTheDocument();
+    expect(
+      screen.getByRole('heading', {
+        name: 'Keep memories or shape a journey.',
+      }),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole('heading', {
+        name: 'Your next journey is already in your camera roll.',
+      }),
+    ).toBeInTheDocument();
+    expect(document.body).not.toHaveTextContent(/\bchapters?\b/i);
     expect(
       screen.getByText('2 brought forward for review'),
     ).toBeInTheDocument();

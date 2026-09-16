@@ -26,7 +26,7 @@ export type AtlasJourneyStop = {
 };
 
 export type AtlasJourneySummary = {
-  /** The persisted Chapter id. Journey is only its Atlas presentation. */
+  /** Uses the existing atlas_chapters id; Journey is the unified public name. */
   id: string;
   title: string;
   version: number;

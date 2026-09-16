@@ -373,7 +373,7 @@ export function ChapterMap({ entries }: { entries: ChapterMapMemory[] }) {
         ref={containerRef}
         className={styles.chapterMap}
         role="region"
-        aria-label={`Map of ${entries.length} ordered chapter memories`}
+        aria-label={`Map of ${entries.length} ordered journey memories`}
       />
       {mapFailed ? (
         <div

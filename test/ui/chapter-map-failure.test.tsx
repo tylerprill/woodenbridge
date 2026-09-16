@@ -122,7 +122,7 @@ describe('chapter map failure recovery', () => {
     );
     expect(screen.getByRole('button', { name: 'Try again' })).toBeEnabled();
     expect(
-      screen.getByRole('region', { name: 'Map of 1 ordered chapter memories' }),
+      screen.getByRole('region', { name: 'Map of 1 ordered journey memories' }),
     ).toBeInTheDocument();
     expect(stalledMap.remove).not.toHaveBeenCalled();
     unmount();

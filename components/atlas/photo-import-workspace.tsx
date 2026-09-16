@@ -1209,13 +1209,13 @@ export function PhotoImportWorkspace({
     if (activeBatch && activeBatch.createChapter !== createChapter) {
       setMessage(
         activeBatch.createChapter
-          ? 'This private draft is already shaped as a chapter. Finish the chapter to keep the uploaded work.'
+          ? 'This private draft is already shaped as a journey. Finish the journey to keep the uploaded work.'
           : 'This private draft is already shaped as memories only. Finish the memories to keep the uploaded work.',
       );
       return;
     }
     if (createChapter && !chapterTitle.trim()) {
-      setMessage('Give this chapter a title before creating it.');
+      setMessage('Give this journey a title before creating it.');
       document.getElementById('import-chapter-title')?.focus();
       return;
     }
@@ -1302,7 +1302,7 @@ export function PhotoImportWorkspace({
       }
 
       setProgress(100);
-      setMessage(createChapter ? 'Shaping the chapter…' : 'Creating memories…');
+      setMessage(createChapter ? 'Shaping the journey…' : 'Creating memories…');
       const persistedCoverClientItemId = batch.createChapter
         ? batch.coverClientItemId
         : null;
@@ -1398,7 +1398,11 @@ export function PhotoImportWorkspace({
   const finishRecoveredImport = async () => {
     if (!openRecovery || openRecovery.status !== 'ready' || busy) return;
     setBusy(true);
-    setMessage('Finishing the recovered private journey…');
+    setMessage(
+      openRecovery.coverClientItemId !== null
+        ? 'Finishing the recovered private journey…'
+        : 'Finishing the recovered private memories…',
+    );
     try {
       const createChapter = openRecovery.coverClientItemId !== null;
       const persistedCover = createChapter
@@ -1408,7 +1412,7 @@ export function PhotoImportWorkspace({
         : null;
       if (createChapter && !persistedCover) {
         throw new Error(
-          'The selected chapter cover could not be recovered. Clear this draft and try again.',
+          'The selected journey cover could not be recovered. Clear this draft and try again.',
         );
       }
       const finalized = unwrapAction<AtlasImportFinalization>(
@@ -1429,7 +1433,9 @@ export function PhotoImportWorkspace({
       setMessage(
         error instanceof Error
           ? error.message
-          : 'The recovered journey could not be finished.',
+          : openRecovery.coverClientItemId !== null
+            ? 'The recovered journey could not be finished.'
+            : 'The recovered memories could not be finished.',
       );
       setBusy(false);
     }
@@ -1514,7 +1520,7 @@ export function PhotoImportWorkspace({
             <div className={styles.recoveryCoverIntent}>
               <CheckCircleIcon aria-hidden="true" />
               <span>
-                <small>Chapter cover</small>
+                <small>Journey cover</small>
                 <strong>
                   {recoveredCover.title ||
                     recoveredCover.placeLabel ||
@@ -1531,7 +1537,9 @@ export function PhotoImportWorkspace({
                 onClick={() => void finishRecoveredImport()}
                 disabled={busy}
               >
-                Finish journey
+                {openRecovery.coverClientItemId !== null
+                  ? 'Finish journey'
+                  : 'Finish memories'}
               </button>
             ) : null}
             <button

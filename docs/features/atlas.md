@@ -18,7 +18,7 @@ flowchart LR
   A[Drop a pin] --> B[Atlas recognizes the place]
   B --> C[Capture a title, photo, date, and field note]
   C --> D[Create a place-aware keepsake card]
-  D --> E[Revisit the memory on the map or in a chapter]
+  D --> E[Revisit the memory on the map or in a journey]
   E --> F[Share selectively or keep it private]
   F --> E
 ```
@@ -36,10 +36,10 @@ The first Atlas release already provides the essential surface:
 - optimistic pin placement with explicit, recoverable memory saves;
 - structured city, region, and country context from reverse geocoding;
 - photo-backed keepsake cards with collection thumbnails; and
-- My Chapters with ordered routes and revocable, unlisted sharing.
+- My Journeys with ordered routes and revocable, unlisted sharing.
 
 The current product loop is fully implemented from pin placement through
-keepsakes and chapters. The next leap is a stronger return loop, durable field
+keepsakes and journeys. The next leap is a stronger return loop, durable field
 capture, and more intentional sharing controls without weakening the private
 default.
 
@@ -84,15 +84,15 @@ title, summary, or palette, but it must not invent facts about a location.
 Cards should work in the collection, journal, map tooltip, and as a downloadable
 or shareable artifact. A card is the clearest expression of the product's value.
 
-### Priority 3 — My Chapters
+### Priority 3 — My Journeys
 
-Individual memories should be groupable into named chapters such as “Kyoto,
-October 2026” or “Road trip through Michigan.” My Chapters gives each journey
+Individual memories should be groupable into named journeys such as “Kyoto,
+October 2026” or “Road trip through Michigan.” My Journeys gives each journey
 an ordered reading experience, a mapped route, derived dates, cover imagery,
 and a short introduction while leaving the original atlas memories intact. This
 gives the map a narrative layer without turning Atlas into an itinerary planner.
 
-The production chapter experience now includes:
+The production journey experience now includes:
 
 - an accessible workshop for selecting up to fifty memories;
 - explicit-button reordering that works consistently across pointer, touch, and
@@ -100,23 +100,28 @@ The production chapter experience now includes:
 - a user-selected photographic cover with a sensible automatic fallback;
 - optional authored prose between individual memories;
 - an ordered, curved route and an editorial desktop/mobile reading experience;
-- a cinematic public reader with native sharing, chapter-specific social
+- a cinematic public reader with native sharing, journey-specific social
   previews, and a clear path into a new Field Atlas account;
-- private-by-default chapters and unlisted read-only links;
+- private-by-default journeys and unlisted read-only links;
 - revocable sharing links that rotate when sharing is re-enabled;
 - optional maps and approximate shared coordinates by default, with coordinates
-  omitted entirely from public chapter data when a map is disabled;
-- ownership-checked private originals, with public chapters restricted to
+  omitted entirely from public journey data when a map is disabled;
+- ownership-checked private originals, with public journeys restricted to
   metadata-stripped JPEG or WebP derivatives so EXIF data cannot bypass map
   privacy; bulk imports use JPEG for reliable canvas export on iOS browsers;
   and
 - lazy thumbnails, bounded editor rendering, and off-screen content containment
-  for responsive long chapters.
+  for responsive long journeys.
 
-Chapter quality is measured as a complete path rather than a single screen:
+Journey quality is measured as a complete path rather than a single screen:
 creation, reordering, cover selection, reading, sharing, revocation, re-sharing,
 and narrow-mobile use must all remain coherent. Original atlas memories stay
-independent, private, and editable regardless of a chapter's sharing state.
+independent, private, and editable regardless of a journey's sharing state.
+
+Journey is the consistent user-facing name in both the Atlas and collection.
+Existing `/dashboard/chapters` and `/shared/chapters` URLs, database tables,
+internal types, and legacy test environment variable names are retained for
+compatibility; they do not represent a separate public feature.
 
 ### Priority 4 — The return loop
 
@@ -133,7 +138,7 @@ The goal is to make Atlas a place people revisit, not a form they complete once.
 ### Priority 5 — Intentional sharing
 
 Everything remains private by default. Users can selectively share one memory,
-a chapter, or a collection through a read-only view or downloadable card.
+a journey, or a collection through a read-only view or downloadable card.
 Sharing should support approximate locations, hidden coordinates, expiring links,
 and the ability to remove the map entirely.
 
@@ -154,10 +159,10 @@ place context while preserving the user's own label:
 | Recognized place | name, locality, region, country, country code    |
 | Memory           | title, note, visited/planned date, journey state |
 | Presentation     | cover media, card variant, palette               |
-| Story            | chapter, order, route metadata                   |
+| Story            | journey, order, route metadata                   |
 | Privacy          | private, approximate-share, shared               |
 
-Structured data makes search, cards, chapters, accessibility, and future
+Structured data makes search, cards, journeys, accessibility, and future
 recommendations more reliable.
 
 ## Product principles
@@ -167,7 +172,7 @@ recommendations more reliable.
 2. **Capture must be effortless in the field.** One hand, few decisions, clear
    progress, and graceful offline behavior.
 3. **The map should reveal meaning, not just density.** Use camera movement,
-   chapters, routes, and place context intentionally.
+   journeys, routes, and place context intentionally.
 4. **Privacy is part of the experience.** Exact coordinates and photographs are
    personal by default.
 5. **AI should assist memory, never fabricate it.** User approval remains the

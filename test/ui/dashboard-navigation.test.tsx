@@ -42,8 +42,11 @@ describe('dashboard navigation', () => {
       within(atlas).getByRole('link', { name: 'My places' }),
     ).toHaveAttribute('href', '/dashboard/places');
     expect(
-      within(atlas).getByRole('link', { name: 'My Chapters' }),
+      within(atlas).getByRole('link', { name: 'My Journeys' }),
     ).toHaveAttribute('href', '/dashboard/chapters');
+    expect(
+      within(atlas).queryByRole('link', { name: /chapters/i }),
+    ).not.toBeInTheDocument();
     expect(
       screen.queryByRole('group', { name: 'Account' }),
     ).not.toBeInTheDocument();
@@ -71,6 +74,10 @@ describe('dashboard navigation', () => {
   );
 
   it.each([
+    {
+      linkName: 'My Journeys',
+      pathname: '/dashboard/chapters/6a67afcf-768f-4fe4-8c62-41b58a19840d/edit',
+    },
     {
       linkName: 'Security',
       pathname: '/dashboard/security/passkeys',
