@@ -30,7 +30,7 @@ type ValidatedJourneySuggestion = Pick<
   'algorithmVersion' | 'key' | 'source'
 >;
 
-function failed(message = 'We could not save that chapter. Please try again.') {
+function failed(message = 'We could not save that journey. Please try again.') {
   return { ok: false, error: 'failed', message } as const;
 }
 
@@ -254,7 +254,7 @@ export async function createAtlasChapterAction(
       ok: false,
       error: 'invalid',
       message:
-        parsed.error.issues[0]?.message ?? 'Check the chapter and try again.',
+        parsed.error.issues[0]?.message ?? 'Check the journey and try again.',
     };
   }
 
@@ -288,7 +288,7 @@ export async function createAtlasChapterAction(
             ok: false,
             error: 'conflict',
             message:
-              'That save request was already used for a different chapter. Refresh and try again.',
+              'That save request was already used for a different journey. Refresh and try again.',
           };
         }
         await client.query('COMMIT');
@@ -323,7 +323,7 @@ export async function createAtlasChapterAction(
       return {
         ok: false,
         error: 'invalid',
-        message: 'Choose a cover from the memories in this chapter.',
+        message: 'Choose a cover from the memories in this journey.',
       };
     }
 
@@ -374,7 +374,7 @@ export async function createAtlasChapterAction(
           ok: false,
           error: 'conflict',
           message:
-            'That save request was already used for a different chapter. Refresh and try again.',
+            'That save request was already used for a different journey. Refresh and try again.',
         };
       }
       await client.query('COMMIT');
@@ -426,7 +426,7 @@ export async function updateAtlasChapterAction(
       ok: false,
       error: 'invalid',
       message:
-        parsed.error.issues[0]?.message ?? 'Check the chapter and try again.',
+        parsed.error.issues[0]?.message ?? 'Check the journey and try again.',
     };
   }
 
@@ -452,7 +452,7 @@ export async function updateAtlasChapterAction(
       return {
         ok: false,
         error: 'not-found',
-        message: 'That chapter no longer exists.',
+        message: 'That journey no longer exists.',
       };
     }
 
@@ -461,7 +461,7 @@ export async function updateAtlasChapterAction(
       return {
         ok: false,
         error: 'conflict',
-        message: 'This chapter changed elsewhere. Refresh it and try again.',
+        message: 'This journey changed elsewhere. Refresh it and try again.',
       };
     }
 
@@ -486,7 +486,7 @@ export async function updateAtlasChapterAction(
       return {
         ok: false,
         error: 'invalid',
-        message: 'Choose a cover from the memories in this chapter.',
+        message: 'Choose a cover from the memories in this journey.',
       };
     }
 
@@ -550,7 +550,7 @@ export async function deleteAtlasChapterAction(
   const parsed = atlasChapterIdSchema.safeParse(chapterId);
 
   if (!parsed.success) {
-    return { ok: false, error: 'invalid', message: 'Invalid chapter.' };
+    return { ok: false, error: 'invalid', message: 'Invalid journey.' };
   }
 
   try {
@@ -569,7 +569,7 @@ export async function deleteAtlasChapterAction(
         return {
           ok: false,
           error: 'not-found',
-          message: 'That chapter no longer exists.',
+          message: 'That journey no longer exists.',
         };
       }
 
@@ -580,6 +580,6 @@ export async function deleteAtlasChapterAction(
     }
   } catch (error) {
     console.error('Atlas chapter deletion failed:', error);
-    return failed('We could not delete that chapter. Please try again.');
+    return failed('We could not delete that journey. Please try again.');
   }
 }

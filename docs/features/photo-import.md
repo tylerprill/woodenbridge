@@ -1,7 +1,7 @@
 # Photo journeys
 
 Photo journeys turn a camera-roll selection into private Atlas memories and,
-when two or more memories are selected, a private Chapter. The source of a
+when two or more memories are selected, a private Journey. The source of a
 photo's location is embedded EXIF **GPS coordinates**. Upload IP addresses are
 never used as location evidence.
 
@@ -23,11 +23,11 @@ flow; placing a memory manually remains a secondary option.
 3. **Optional details** — Field Atlas suggests a title from the detected place,
    date, or filename. Travelers can edit the title, place label, date, and field
    note, or skip the remaining optional details.
-4. **Shape the Chapter** — choose private Chapter copy and a cover, or create
-   memories without a Chapter.
+4. **Shape the journey** — choose private Journey copy and a cover, or create
+   memories without a Journey.
 
 The final action names its effect (for example, “Create 6 memories and 1
-chapter”). Nothing becomes a visible Atlas memory before that confirmation.
+journey”). Nothing becomes a visible Atlas memory before that confirmation.
 
 Adding photographs to an existing memory follows the same source formats,
 25 MB limit, browser normalization, metadata removal, private upload path, and
@@ -48,7 +48,7 @@ clear success/error messaging as the journey uploader.
 - HEIC/HEIF files are decoded lazily and converted in the browser. The stored
   master JPEG and WebP thumbnail are canvas-transcoded derivatives without
   EXIF, XMP, or camera metadata. The raw HEIC is not stored.
-- Shared Chapters continue to expose only metadata-stripped image derivatives;
+- Shared Journeys continue to expose only metadata-stripped image derivatives;
   disabling a shared map removes coordinates from the public payload.
 
 ## Accuracy states
@@ -79,8 +79,8 @@ ownership checks, per-memory limits, and account storage quota.
 Each client request ID is bound to a SHA-256 fingerprint of its complete,
 normalized payload. A lost-response retry with identical details reopens the
 original batch; reusing that ID after changing a title, place, date,
-confirmation, order, or Chapter cover is rejected rather than silently
-returning stale drafts. Chapter intent and the selected cover's client item ID
+confirmation, order, or Journey cover is rejected rather than silently
+returning stale drafts. Journey intent and the selected cover's client item ID
 are stored on the batch, so recovery never substitutes the first photograph.
 
 Finalization locks the batch and verifies that every requested item:
@@ -91,10 +91,10 @@ Finalization locks the batch and verifies that every requested item:
 - has not already been finalized elsewhere.
 
 Only then does one database transaction publish all memories, optionally
-create one private Chapter in chronological order, and mark the batch complete.
+create one private Journey in chronological order, and mark the batch complete.
 A retry returns the same result rather than creating duplicates. An upload or
 finalization failure leaves the private batch recoverable and creates no
-half-Chapter.
+half-Journey.
 
 Cancellation first makes the batch ineligible for new upload tokens. Cleanup
 then removes the exact private Blob pairs, media/upload-intent rows, and hidden
@@ -102,7 +102,7 @@ drafts. Failed Blob deletion retains the cleanup record for a later retry.
 
 ## Limits and operations
 
-- 50 photographs per batch (matching the Chapter memory limit)
+- 50 photographs per batch (matching the Journey memory limit)
 - 25 megapixels per decoded image. This includes current 24 MP camera-roll
   photographs while keeping client-side decode memory bounded on mobile.
 - GPS timestamps are UTC and are never presented as the photographer's local

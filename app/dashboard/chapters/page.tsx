@@ -29,7 +29,7 @@ export default async function ChaptersPage({
       <header className={styles.chaptersHeader}>
         <div>
           <p className="section-kicker">Stories from your atlas</p>
-          <h1>My Chapters.</h1>
+          <h1>My Journeys.</h1>
           <p>Connect the places that belong to the same story.</p>
         </div>
         <div className={styles.chaptersHeaderActions}>
@@ -37,7 +37,7 @@ export default async function ChaptersPage({
             <BookOpenIcon aria-hidden="true" />
             <span>
               <strong>{String(data.total).padStart(2, '0')}</strong>
-              {data.total === 1 ? 'chapter' : 'chapters'}
+              {data.total === 1 ? 'journey' : 'journeys'}
             </span>
           </p>
           <Link
@@ -45,13 +45,13 @@ export default async function ChaptersPage({
             className={styles.newChapterButton}
           >
             <PlusIcon aria-hidden="true" />
-            New chapter
+            New journey
           </Link>
         </div>
       </header>
 
       {data.chapters.length ? (
-        <section className={styles.chapterGrid} aria-label="Your chapters">
+        <section className={styles.chapterGrid} aria-label="Your journeys">
           {data.chapters.map((chapter, index) => (
             <ChapterCard
               key={chapter.id}
@@ -75,17 +75,17 @@ export default async function ChaptersPage({
           <h2 id="empty-chapters-title">Bring a journey into focus.</h2>
           <p>
             Select memories from your atlas, arrange the route, and preserve
-            them together as one chapter.
+            them together as one journey.
           </p>
           <Link href="/dashboard/chapters/new">
             <PlusIcon aria-hidden="true" />
-            Create your first chapter
+            Create your first journey
           </Link>
         </section>
       )}
 
       {data.chapters.length && data.totalPages > 1 ? (
-        <nav className="collection-pagination" aria-label="Chapter pages">
+        <nav className="collection-pagination" aria-label="Journey pages">
           {data.page > 1 ? (
             <Link href={chaptersHref(data.page - 1)}>Previous</Link>
           ) : (

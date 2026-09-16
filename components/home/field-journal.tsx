@@ -23,7 +23,7 @@ const principles = [
     icon: BookOpenIcon,
     metric: 'One final choice',
     title: 'Finish in the right shape.',
-    copy: 'Keep individual memories or gather the trip into a chapter—without rebuilding either.',
+    copy: 'Keep individual memories or gather the trip into a journey—without rebuilding either.',
   },
 ];
 
@@ -78,7 +78,7 @@ export function FieldJournal({ isLoggedIn = false }: { isLoggedIn?: boolean }) {
         </div>
         <p className="section-kicker">Private by default · 03</p>
         <h2 id="collection-title">
-          Your next chapter is already in your camera roll.
+          Your next journey is already in your camera roll.
         </h2>
         <p>
           Start with the photos you already have. Every imported memory begins

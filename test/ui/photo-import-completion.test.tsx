@@ -20,7 +20,7 @@ const initialView = {
 };
 
 describe('photo import completion actions', () => {
-  it('opens a completed Chapter directly in Journey Lens', () => {
+  it('opens a completed journey directly in Journey Lens', () => {
     render(
       <PhotoImportCompletionStep
         completion={{
@@ -36,19 +36,23 @@ describe('photo import completion actions', () => {
       />,
     );
 
+    expect(screen.getByText('Journey preserved')).toBeVisible();
+    expect(
+      screen.getByRole('heading', { name: 'Your journey is ready.' }),
+    ).toBeVisible();
     expect(
       screen.getByRole('link', { name: 'View journey on Atlas' }),
     ).toHaveAttribute(
       'href',
       '/dashboard?view=journeys&journey=00000000-0000-4000-8000-000000000010',
     );
-    expect(screen.getByRole('link', { name: 'Read chapter' })).toHaveAttribute(
+    expect(screen.getByRole('link', { name: 'Read journey' })).toHaveAttribute(
       'href',
       '/dashboard/chapters/00000000-0000-4000-8000-000000000010',
     );
   });
 
-  it('offers a prefilled Chapter when several memories were kept without one', () => {
+  it('offers a prefilled journey when several memories were kept without one', () => {
     render(
       <PhotoImportCompletionStep
         completion={{
@@ -64,6 +68,11 @@ describe('photo import completion actions', () => {
       />,
     );
 
+    expect(screen.getByText('Memories preserved')).toBeVisible();
+    expect(screen.queryByText('Journey preserved')).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole('link', { name: 'Read journey' }),
+    ).not.toBeInTheDocument();
     const suggestion = screen.getByRole('link', {
       name: 'Turn these memories into a journey',
     });
@@ -92,6 +101,8 @@ describe('photo import completion actions', () => {
       />,
     );
 
+    expect(screen.getByText('Memory preserved')).toBeVisible();
+    expect(screen.queryByText('Journey preserved')).not.toBeInTheDocument();
     expect(
       screen.getByRole('link', { name: 'View on the Atlas' }),
     ).toHaveAttribute(

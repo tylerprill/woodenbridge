@@ -74,10 +74,10 @@ export function ChapterReader({
       className={styles.chapterDetail}
       data-reader-mode={mode}
     >
-      <nav className={styles.chapterDetailNav} aria-label="Chapter actions">
+      <nav className={styles.chapterDetailNav} aria-label="Journey actions">
         <Link href={mode === 'owner' ? '/dashboard/chapters' : '/'}>
           <ArrowLeftIcon aria-hidden="true" />
-          {mode === 'owner' ? 'My Chapters' : 'Field Atlas'}
+          {mode === 'owner' ? 'My Journeys' : 'Field Atlas'}
         </Link>
         {mode === 'owner' ? (
           <div className={styles.chapterDetailActions}>
@@ -95,7 +95,7 @@ export function ChapterReader({
             />
             <Link href={`/dashboard/chapters/${chapter.id}/edit`}>
               <PencilIcon aria-hidden="true" />
-              Edit chapter
+              Edit journey
             </Link>
           </div>
         ) : (
@@ -150,8 +150,8 @@ export function ChapterReader({
         >
           <p className="section-kicker">
             {mode === 'shared'
-              ? 'A shared Field Atlas chapter'
-              : 'A chapter from your atlas'}
+              ? 'A shared Field Atlas journey'
+              : 'A journey from your atlas'}
           </p>
           <h1>{chapter.title}</h1>
           <div className={styles.chapterHeroMeta}>
@@ -185,9 +185,7 @@ export function ChapterReader({
           <ChapterJumpLink
             className={styles.chapterHeroBegin}
             href={chapterStart}
-            label={
-              mode === 'shared' ? 'Begin the journey' : 'Read your chapter'
-            }
+            label={mode === 'shared' ? 'Begin the journey' : 'Read journey'}
           />
         </div>
       </header>
@@ -196,7 +194,7 @@ export function ChapterReader({
         <section
           id="chapter-story"
           className={styles.chapterPrologue}
-          aria-label="Chapter introduction"
+          aria-label="Journey introduction"
           tabIndex={-1}
         >
           <div>
@@ -253,7 +251,7 @@ export function ChapterReader({
       >
         <div className={styles.chapterSectionHeading}>
           <div>
-            <p className="section-kicker">The chapter</p>
+            <p className="section-kicker">The journey</p>
             <h2
               id="chapter-memories-heading"
               className={styles.chapterFocusTarget}
@@ -267,7 +265,7 @@ export function ChapterReader({
         </div>
         <ol
           className={styles.chapterTimeline}
-          aria-label="Chapter memories in journey order"
+          aria-label="Journey memories in route order"
         >
           {chapter.entries.map((entry, index) => (
             <li className={styles.chapterStopGroup} key={entry.id}>

@@ -206,7 +206,7 @@ export function PhotoImportChooseStep({
             <strong>Private by default.</strong>
             Photos stay on this device during review. Exact GPS is disclosed to
             the configured geocoder only to find a place, then stored privately
-            in your account. Shared chapters never reveal precise pins unless
+            in your account. Shared journeys never reveal precise pins unless
             you explicitly enable map precision.
           </p>
         </div>

@@ -51,10 +51,16 @@ export function PhotoImportCompletionStep({
         </div>
       </div>
       <section>
-        <p className="section-kicker">Journey preserved</p>
+        <p className="section-kicker">
+          {chapterId
+            ? 'Journey preserved'
+            : entryIds.length === 1
+              ? 'Memory preserved'
+              : 'Memories preserved'}
+        </p>
         <h2>
           {chapterId
-            ? 'Your chapter is ready.'
+            ? 'Your journey is ready.'
             : entryIds.length === 1
               ? 'Your atlas has a new memory.'
               : 'Your atlas has new memories.'}
@@ -82,7 +88,7 @@ export function PhotoImportCompletionStep({
           ) : null}
           {chapterId ? (
             <Link href={`/dashboard/chapters/${encodeURIComponent(chapterId)}`}>
-              Read chapter
+              Read journey
             </Link>
           ) : firstEntryId ? (
             <Link

@@ -141,7 +141,7 @@ async function expectJourneyDotContentCenteredInMarkers(page: Page) {
   }
 }
 
-test('Journey Lens connects the Atlas, playback, and Chapter workshop', async ({
+test('Journey Lens connects the Atlas, playback, and Journey workshop', async ({
   page,
 }, testInfo) => {
   test.setTimeout(180_000);
@@ -334,7 +334,7 @@ test('Journey Lens connects the Atlas, playback, and Chapter workshop', async ({
     );
   });
   await expect(
-    page.getByRole('heading', { level: 1, name: 'Begin a new chapter.' }),
+    page.getByRole('heading', { level: 1, name: 'Begin a new journey.' }),
   ).toBeVisible();
   await expect(
     page.getByRole('button', {

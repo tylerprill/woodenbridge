@@ -29,18 +29,18 @@ const chapterMemoriesSchema = z
   )
   .min(
     CHAPTER_MIN_MEMORIES,
-    `Choose at least ${CHAPTER_MIN_MEMORIES} memories for this chapter.`,
+    `Choose at least ${CHAPTER_MIN_MEMORIES} memories for this journey.`,
   )
   .max(
     CHAPTER_MAX_MEMORIES,
-    `A chapter can hold up to ${CHAPTER_MAX_MEMORIES} memories.`,
+    `A journey can hold up to ${CHAPTER_MAX_MEMORIES} memories.`,
   )
   .refine(
     (memories) =>
       new Set(memories.map((memory) => memory.entryId)).size ===
       memories.length,
     {
-      message: 'Each memory can appear only once in a chapter.',
+      message: 'Each memory can appear only once in a journey.',
     },
   );
 
@@ -48,7 +48,7 @@ const atlasChapterInputFields = {
   title: z
     .string()
     .trim()
-    .min(1, 'Give this chapter a title.')
+    .min(1, 'Give this journey a title.')
     .max(
       CHAPTER_TITLE_MAX_LENGTH,
       `Keep the title under ${CHAPTER_TITLE_MAX_LENGTH} characters.`,

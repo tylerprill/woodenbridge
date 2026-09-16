@@ -158,7 +158,7 @@ export function AtlasJourneyPlayback({
               Exit playback
             </button>
             <Link href={`/dashboard/chapters/${journey.id}`}>
-              <BookOpenIcon aria-hidden="true" /> Read full chapter
+              <BookOpenIcon aria-hidden="true" /> Read full journey
             </Link>
           </div>
         </>

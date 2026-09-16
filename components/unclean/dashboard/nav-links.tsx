@@ -19,7 +19,7 @@ const atlasLinks = [
   { name: 'Atlas', href: '/dashboard', icon: GlobeAltIcon },
   { name: 'Upload photos', href: '/dashboard/import', icon: PhotoIcon },
   { name: 'My places', href: '/dashboard/places', icon: BookmarkIcon },
-  { name: 'My Chapters', href: '/dashboard/chapters', icon: BookOpenIcon },
+  { name: 'My Journeys', href: '/dashboard/chapters', icon: BookOpenIcon },
 ];
 
 type NavigationLink = (typeof atlasLinks)[number];

@@ -613,6 +613,14 @@ export function AtlasWorkspace({
   );
 
   const showJourneyOverview = useCallback(() => {
+    // The overview is applied locally now; its delayed route payload must not
+    // overwrite a newer interaction such as starting the journey builder.
+    lastLocationStateKeyRef.current = JSON.stringify([
+      'journeys',
+      null,
+      null,
+      null,
+    ]);
     dispatchExperience({ type: 'show-overview' });
     setJourneyPanelOpen(true);
     setOverlapJourneyIds([]);

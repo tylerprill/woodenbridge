@@ -278,7 +278,7 @@ export function AtlasJourneyTray({
             <PlayIcon aria-hidden="true" /> Relive
           </button>
           <Link href={`/dashboard/chapters/${selectedJourney.id}`}>
-            <BookOpenIcon aria-hidden="true" /> Read chapter
+            <BookOpenIcon aria-hidden="true" /> Read journey
           </Link>
           <Link
             href={`/dashboard/chapters/${selectedJourney.id}/edit?source=atlas`}

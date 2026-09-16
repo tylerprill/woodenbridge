@@ -601,7 +601,12 @@ describe('Atlas import server actions', () => {
         createChapter: true,
         coverMediaId: mediaId,
       }),
-    ).resolves.toMatchObject({ ok: false, error: 'conflict' });
+    ).resolves.toMatchObject({
+      ok: false,
+      error: 'conflict',
+      message:
+        'This import has a different saved journey cover. Reopen it and try again.',
+    });
     expect(
       __testMocks.clientQuery.mock.calls.some(([query]) =>
         normalizeQuery(query).includes('INSERT INTO atlas_chapters'),

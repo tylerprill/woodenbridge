@@ -252,28 +252,28 @@ export const createAtlasImportBatchSchema = z
         if (items.length < 2) {
           context.addIssue({
             code: z.ZodIssueCode.custom,
-            message: 'Choose at least two photographs to create a chapter.',
+            message: 'Choose at least two photographs to create a journey.',
             path: ['items'],
           });
         }
         if (!chapterTitle) {
           context.addIssue({
             code: z.ZodIssueCode.custom,
-            message: 'Name the chapter before creating it.',
+            message: 'Name the journey before creating it.',
             path: ['chapterTitle'],
           });
         }
         if (!items.some((item) => item.clientItemId === coverClientItemId)) {
           context.addIssue({
             code: z.ZodIssueCode.custom,
-            message: 'Choose a chapter cover from this photo import.',
+            message: 'Choose a journey cover from this photo import.',
             path: ['coverClientItemId'],
           });
         }
       } else if (chapterTitle || chapterIntroduction) {
         context.addIssue({
           code: z.ZodIssueCode.custom,
-          message: 'Choose a chapter cover before creating the chapter.',
+          message: 'Choose a journey cover before creating the journey.',
           path: ['coverClientItemId'],
         });
       }

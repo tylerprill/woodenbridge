@@ -221,7 +221,7 @@ describe('photo journey import UI', () => {
   it('uses three progress steps when a single photo skips chapter creation', () => {
     render(<ImportProgress step="stories" includeChapter={false} />);
     expect(screen.getAllByRole('listitem')).toHaveLength(3);
-    expect(screen.queryByText('Shape chapter')).not.toBeInTheDocument();
+    expect(screen.queryByText('Shape journey')).not.toBeInTheDocument();
     expect(screen.getByText('Optional details').closest('li')).toHaveAttribute(
       'aria-current',
       'step',

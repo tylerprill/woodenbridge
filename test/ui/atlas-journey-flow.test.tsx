@@ -2,7 +2,7 @@
  * @jest-environment jsdom
  */
 
-import { render, screen, waitFor, within } from '@testing-library/react';
+import { act, render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 
 import type { AtlasData } from '@/app/lib/atlas/definitions';
@@ -386,6 +386,97 @@ describe('Atlas Journey Lens', () => {
       screen.getByRole('region', { name: 'Journey memories' }),
     ).toBeVisible();
     expect(list).not.toHaveAttribute('hidden');
+  });
+
+  it('preserves newer builder intent when the overview navigation props arrive late', async () => {
+    const user = userEvent.setup();
+    const props = {
+      displayName: 'Explorer',
+      initialData,
+      initialMode: 'journeys' as const,
+    };
+    const { container, rerender } = render(
+      <AtlasWorkspace {...props} initialJourneyId={JOURNEY_ID} />,
+    );
+
+    await user.click(
+      await screen.findByRole('button', { name: 'Back to journeys' }),
+    );
+    await user.click(
+      within(screen.getByRole('toolbar', { name: 'Journey tools' })).getByRole(
+        'button',
+        { name: 'Create journey' },
+      ),
+    );
+    await user.click(
+      screen.getByRole('button', { name: 'Select second map memory' }),
+    );
+    await user.click(
+      screen.getByRole('button', { name: 'Select first map memory' }),
+    );
+    await user.click(screen.getByRole('button', { name: 'Show memories' }));
+
+    // Emulate the previously requested overview's delayed RSC payload.
+    await act(async () => {
+      rerender(<AtlasWorkspace {...props} initialJourneyId={null} />);
+    });
+
+    await waitFor(() =>
+      expect(container.querySelector('.atlas-workspace-root')).toHaveAttribute(
+        'data-atlas-surface',
+        'builder',
+      ),
+    );
+    expect(container.querySelector('.atlas-workspace-root')).toHaveAttribute(
+      'data-builder-list-open',
+      'true',
+    );
+    expect(
+      screen.getByRole('region', { name: 'Journey memories' }),
+    ).toBeVisible();
+    expect(screen.getByText('2 selected')).toBeVisible();
+    expect(screen.getByTestId('selected-map-memories')).toHaveTextContent(
+      `${SECOND_MEMORY_ID},${FIRST_MEMORY_ID}`,
+    );
+    const destination = new URL(
+      screen.getByRole('link', { name: 'Continue' }).getAttribute('href') ?? '',
+      'https://field-atlas.test',
+    );
+    expect(destination.searchParams.getAll('memory')).toEqual([
+      SECOND_MEMORY_ID,
+      FIRST_MEMORY_ID,
+    ]);
+
+    // A genuine browser navigation still replaces the newer local surface.
+    rerender(<AtlasWorkspace {...props} initialJourneyId={JOURNEY_ID} />);
+    await waitFor(() =>
+      expect(container.querySelector('.atlas-workspace-root')).toHaveAttribute(
+        'data-atlas-surface',
+        'detail',
+      ),
+    );
+    expect(
+      await screen.findByRole('button', { name: 'Back to journeys' }),
+    ).toBeVisible();
+
+    rerender(
+      <AtlasWorkspace
+        {...props}
+        initialMode="places"
+        initialJourneyId={null}
+      />,
+    );
+    await waitFor(() =>
+      expect(container.querySelector('.atlas-workspace-root')).toHaveAttribute(
+        'data-atlas-mode',
+        'places',
+      ),
+    );
+    expect(container.querySelector('.atlas-workspace-root')).toHaveAttribute(
+      'data-atlas-surface',
+      'overview',
+    );
+    expect(screen.queryByText('2 selected')).not.toBeInTheDocument();
   });
 
   it('keeps map selection and Continue available while the memory list is collapsed', async () => {

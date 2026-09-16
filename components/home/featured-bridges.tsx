@@ -31,10 +31,10 @@ const features = [
   },
   {
     index: '03',
-    name: 'Keep memories or shape a chapter.',
+    name: 'Keep memories or shape a journey.',
     label: 'Finish your way',
     description:
-      'Add only the titles and field notes that matter, then save private memories or gather the trip into one chapter.',
+      'Add only the titles and field notes that matter, then save private memories or gather the trip into one journey.',
     detail: 'Everything remains editable',
     kind: 'finish' as const,
   },
@@ -107,7 +107,7 @@ function FeaturePreview({ kind, index }: { kind: PreviewKind; index: string }) {
             <span data-tone="trail" />
           </div>
           <div className="chapter-preview-copy">
-            <small>Private chapter</small>
+            <small>Private journey</small>
             <strong>Coastal weekend</strong>
             <span>
               <CalendarDaysIcon /> May 18–21 · 12 memories
@@ -116,7 +116,7 @@ function FeaturePreview({ kind, index }: { kind: PreviewKind; index: string }) {
           <div className="chapter-preview-meta">
             <LockClosedIcon />
             <span>
-              <strong>1 private chapter</strong>
+              <strong>1 private journey</strong>
               <small>Only you can see it</small>
             </span>
             <BookOpenIcon />

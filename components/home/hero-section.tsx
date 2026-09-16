@@ -39,7 +39,7 @@ export function HeroSection({ isLoggedIn = false }: { isLoggedIn?: boolean }) {
         <p className="hero-intro">
           Upload a whole trip at once. Field Atlas finds places and dates, flags
           only what needs review, and turns your photos into private memories or
-          a chapter.
+          a journey.
         </p>
 
         <div className="hero-actions">

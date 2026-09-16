@@ -125,24 +125,30 @@ test('authenticated routes and primary interactions pass the UI audit', async ({
     {
       name: 'chapters',
       path: '/dashboard/chapters',
-      expectedHeading: 'My Chapters.',
+      expectedHeading: 'My Journeys.',
     },
     {
       name: 'chapter',
       path: `/dashboard/chapters/${encodeURIComponent(e2eChapterId)}`,
-      expectedSelector: '[aria-label="Chapter actions"]',
+      expectedSelector: '[aria-label="Journey actions"]',
       readyButton: 'Show route map',
       readySelector: 'button[aria-label^="Stop 1:"]',
     },
     {
       name: 'chapter-edit',
       path: `/dashboard/chapters/${encodeURIComponent(e2eChapterId)}/edit`,
-      expectedHeading: 'Shape your chapter.',
+      expectedHeading: 'Shape your journey.',
     },
     {
       name: 'chapter-new',
       path: '/dashboard/chapters/new',
-      expectedHeading: 'Begin a new chapter.',
+      expectedHeading: 'Begin a new journey.',
+    },
+    {
+      name: 'journey-arrange',
+      path: `/dashboard/chapters/${encodeURIComponent(e2eChapterId)}/edit?step=arrange`,
+      expectedHeading: 'Shape your journey.',
+      expectedSelector: '[data-editor-step="arrange"]',
     },
     {
       name: 'memory-card',
