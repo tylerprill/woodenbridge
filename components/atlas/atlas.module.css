@@ -2026,6 +2026,19 @@
     justify-content: center;
   }
 
+  .workspace[data-editor-open='true'] .toast {
+    /* The drawer already confirms placement. Keep the live announcement for
+       assistive technology without covering fields or the primary action. */
+    width: 1px;
+    height: 1px;
+    padding: 0;
+    margin: -1px;
+    overflow: hidden;
+    clip: rect(0 0 0 0);
+    clip-path: inset(50%);
+    white-space: nowrap;
+  }
+
   .privacyNote {
     display: none;
   }
@@ -2131,6 +2144,12 @@
   .archiveButton,
   .saveButton {
     width: auto;
+  }
+
+  .inputField input,
+  .descriptionField textarea {
+    /* Keep short mobile-landscape editors readable and prevent focus zoom. */
+    font-size: 1rem;
   }
 }
 
@@ -2401,7 +2420,7 @@
   text-transform: uppercase;
 }
 
-.journeyListActions button,
+.journeyListActions :is(button, a),
 .journeyEmptyActions :is(button, a) {
   display: inline-flex;
   min-height: 2.45rem;
@@ -2417,7 +2436,7 @@
   text-decoration: none;
 }
 
-.journeyListActions button svg {
+.journeyListActions :is(button, a) svg {
   width: 0.76rem;
 }
 
@@ -3344,7 +3363,7 @@
   .atlasModeSwitch button,
   .journeyBuilderFooter :is(button, a),
   .journeyEmptyActions :is(button, a),
-  .journeyListActions button,
+  .journeyListActions :is(button, a),
   .journeyPlaybackControls button,
   .journeyPlaybackFooter :is(button, a),
   .journeySuggestions article button,
@@ -3492,6 +3511,50 @@
   .workspace {
     --atlas-journey-layout: landscape;
     min-height: 0;
+  }
+
+  /* The empty-state card already names the Atlas. In short landscape, remove
+     the duplicate identity card and keep the two first actions fully usable. */
+  .workspace[data-atlas-empty='true'] .atlasIdentity {
+    display: none;
+  }
+
+  .workspace[data-atlas-empty='true'] .emptyState {
+    top: 0.55rem;
+    left: 0.55rem;
+    width: min(32rem, calc(100% - 5rem));
+    padding: 0.8rem 1rem 0.9rem;
+    border-radius: 1.1rem;
+    transform: none;
+  }
+
+  .workspace[data-atlas-empty='true'] .emptyStateMark {
+    display: none;
+  }
+
+  .workspace[data-atlas-empty='true'] .emptyState h2 {
+    max-width: none;
+    margin-top: 0.2rem;
+    font-size: 1.7rem;
+    line-height: 1;
+  }
+
+  .workspace[data-atlas-empty='true'] .emptyState > p:not(.eyebrow) {
+    max-width: 48ch;
+    margin-top: 0.4rem;
+    font-size: 0.72rem;
+    line-height: 1.35;
+  }
+
+  .workspace[data-atlas-empty='true'] .emptyStateActions {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    margin-top: 0.65rem;
+  }
+
+  .workspace[data-atlas-empty='true'] .emptyStateActions :is(a, button) {
+    min-height: 2.75rem;
+    justify-content: center;
   }
 
   /* Match the compact-sheet policy: a name-sized lens card must not cover

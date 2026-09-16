@@ -19,6 +19,7 @@ import type {
   AtlasJourneySummary,
 } from '@/app/lib/atlas/journeys/definitions';
 import { formatChapterDateRange } from '@/app/lib/chapters/format';
+import { CHAPTER_MIN_MEMORIES } from '@/app/lib/chapters/validation';
 import styles from './atlas.module.css';
 
 type JourneyLoadState = 'idle' | 'loading' | 'ready' | 'error';
@@ -54,6 +55,7 @@ function JourneySummaryCopy({ journey }: { journey: AtlasJourneySummary }) {
 export function AtlasJourneyTray({
   journeys,
   suggestions,
+  availableMemoryCount,
   selectedJourney,
   selectedStopId,
   loadState,
@@ -70,6 +72,7 @@ export function AtlasJourneyTray({
 }: {
   journeys: AtlasJourneySummary[];
   suggestions: AtlasJourneySuggestion[];
+  availableMemoryCount: number;
   selectedJourney: AtlasJourneySummary | null;
   selectedStopId: string | null;
   loadState: JourneyLoadState;
@@ -229,9 +232,15 @@ export function AtlasJourneyTray({
                     ? `${journeys.length} ${journeys.length === 1 ? 'journey' : 'journeys'}`
                     : 'No journeys yet'}
                 </p>
-                <button type="button" onClick={() => onStartBuilder()}>
-                  <PlusIcon aria-hidden="true" /> Create journey
-                </button>
+                {availableMemoryCount >= CHAPTER_MIN_MEMORIES ? (
+                  <button type="button" onClick={() => onStartBuilder()}>
+                    <PlusIcon aria-hidden="true" /> Create journey
+                  </button>
+                ) : (
+                  <Link href="/dashboard/import">
+                    <PlusIcon aria-hidden="true" /> Add memories
+                  </Link>
+                )}
               </div>
               {journeys.length ? (
                 <div className={styles.journeyList}>
@@ -252,15 +261,27 @@ export function AtlasJourneyTray({
               ) : (
                 <div className={styles.emptyTray}>
                   <span aria-hidden="true" />
-                  <strong>Turn memories into a journey.</strong>
+                  <strong>
+                    {availableMemoryCount >= CHAPTER_MIN_MEMORIES
+                      ? 'Turn memories into a journey.'
+                      : availableMemoryCount === 1
+                        ? 'One more memory will make a journey.'
+                        : 'Your first journey starts with memories.'}
+                  </strong>
                   <p>
-                    Choose at least two saved memories and shape their story.
+                    {availableMemoryCount >= CHAPTER_MIN_MEMORIES
+                      ? 'Choose at least two saved memories and shape their story.'
+                      : 'Upload photographs or place memories on the map, then return here to connect at least two.'}
                   </p>
                   <div className={styles.journeyEmptyActions}>
-                    <button type="button" onClick={() => onStartBuilder()}>
-                      Create a journey
-                    </button>
-                    <Link href="/dashboard/import">Upload photos</Link>
+                    {availableMemoryCount >= CHAPTER_MIN_MEMORIES ? (
+                      <button type="button" onClick={() => onStartBuilder()}>
+                        Create a journey
+                      </button>
+                    ) : (
+                      <Link href="/dashboard/import">Upload photos</Link>
+                    )}
+                    <Link href="/dashboard">Place a memory</Link>
                   </div>
                 </div>
               )}

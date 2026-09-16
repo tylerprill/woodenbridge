@@ -12,6 +12,7 @@ import Link from 'next/link';
 import {
   useCallback,
   useEffect,
+  useId,
   useLayoutEffect,
   useRef,
   useState,
@@ -24,6 +25,7 @@ import {
 import type {
   AtlasEntry,
   AtlasEntryUpdateInput,
+  AtlasMedia,
   JourneyState,
 } from '@/app/lib/atlas/definitions';
 import {
@@ -43,6 +45,7 @@ type MemoryDrawerProps = {
   onClose: () => void;
   onDirtyChange: (dirty: boolean) => void;
   onUpdate: (entry: AtlasEntry) => void;
+  onMediaChange: (entryId: string, media: AtlasMedia[]) => void;
   onArchive: (id: string) => void;
   mediaLoading: boolean;
   placeResolving: boolean;
@@ -68,6 +71,7 @@ export function MemoryDrawer({
   onClose,
   onDirtyChange,
   onUpdate,
+  onMediaChange,
   onArchive,
   mediaLoading,
   placeResolving,
@@ -80,6 +84,7 @@ export function MemoryDrawer({
   const [message, setMessage] = useState('');
   const [archiveArmed, setArchiveArmed] = useState(false);
   const [discardArmed, setDiscardArmed] = useState(false);
+  const [mediaBusy, setMediaBusy] = useState(false);
   const [placeTouched, setPlaceTouched] = useState(false);
   const drawerRef = useRef<HTMLDivElement>(null);
   const titleRef = useRef<HTMLTextAreaElement>(null);
@@ -88,13 +93,13 @@ export function MemoryDrawer({
   const mediaRef = useRef(entry.media);
   const savingRef = useRef(false);
   const editRevisionRef = useRef(0);
+  const navigationGuardId = useId();
+  const didLeaveRef = useRef(false);
 
-  useEffect(() => {
-    requestAnimationFrame(() =>
-      entry.recordState === 'draft'
-        ? titleRef.current?.focus()
-        : headingRef.current?.focus(),
-    );
+  useLayoutEffect(() => {
+    const initialTarget =
+      entry.recordState === 'draft' ? titleRef.current : headingRef.current;
+    initialTarget?.focus();
   }, [entry.recordState]);
 
   useEffect(() => {
@@ -135,6 +140,41 @@ export function MemoryDrawer({
     onDirtyChange(dirty);
   }, [dirty, onDirtyChange]);
 
+  const markLeaving = useCallback(() => {
+    didLeaveRef.current = true;
+    window.__FIELD_ATLAS_NAVIGATION_GUARD__?.clear(navigationGuardId);
+  }, [navigationGuardId]);
+
+  useEffect(() => {
+    if (!dirty && !mediaBusy && saveState !== 'saving') {
+      window.__FIELD_ATLAS_NAVIGATION_GUARD__?.clear(navigationGuardId);
+      return;
+    }
+
+    const leaveMessage = mediaBusy
+      ? 'Leave this memory while photo changes are still saving? They may not finish.'
+      : saveState === 'saving'
+        ? 'Leave this memory while it is still saving? The save may not finish.'
+        : 'Leave this memory? Your unsaved field changes will be lost.';
+
+    window.__FIELD_ATLAS_NAVIGATION_GUARD__?.set({
+      id: navigationGuardId,
+      message: leaveMessage,
+      onLeave: markLeaving,
+    });
+
+    const protectPendingChanges = (event: BeforeUnloadEvent) => {
+      if (didLeaveRef.current) return;
+      event.preventDefault();
+      event.returnValue = '';
+    };
+    window.addEventListener('beforeunload', protectPendingChanges);
+    return () => {
+      window.removeEventListener('beforeunload', protectPendingChanges);
+      window.__FIELD_ATLAS_NAVIGATION_GUARD__?.clear(navigationGuardId);
+    };
+  }, [dirty, markLeaving, mediaBusy, navigationGuardId, saveState]);
+
   const setField = <K extends keyof FormState>(
     field: K,
     value: FormState[K],
@@ -165,6 +205,10 @@ export function MemoryDrawer({
 
   const save = useCallback(async () => {
     if (savingRef.current) return;
+    if (mediaBusy) {
+      setMessage('Wait for the photo changes to finish before saving details.');
+      return;
+    }
     if (!form.title.trim()) {
       setSaveState('error');
       setMessage('Give this memory a title before saving it.');
@@ -206,27 +250,57 @@ export function MemoryDrawer({
     } finally {
       savingRef.current = false;
     }
-  }, [entry.id, form, onUpdate, placeValue]);
+  }, [entry.id, form, mediaBusy, onUpdate, placeValue]);
 
   const archive = async () => {
+    if (savingRef.current || mediaBusy) {
+      setMessage(
+        'Wait for the current changes to finish before removing this memory.',
+      );
+      return;
+    }
     if (!archiveArmed) {
       setArchiveArmed(true);
       return;
     }
 
+    savingRef.current = true;
     setSaveState('saving');
-    const result = await archiveAtlasEntryAction(entry.id);
-    if (result.ok) {
-      onArchive(entry.id);
-      return;
-    }
+    setMessage('');
+    let archived = false;
+    try {
+      const result = await archiveAtlasEntryAction(entry.id);
+      if (result.ok) {
+        archived = true;
+        onArchive(entry.id);
+        return;
+      }
 
-    setArchiveArmed(false);
-    setSaveState('error');
-    setMessage(result.message);
+      setSaveState('error');
+      setMessage(result.message);
+    } catch (error) {
+      console.error('Atlas memory removal failed:', error);
+      setSaveState('error');
+      setMessage('The memory could not be removed. Please try again.');
+    } finally {
+      savingRef.current = false;
+      if (!archived) setArchiveArmed(false);
+    }
   };
 
   const requestClose = () => {
+    if (mediaBusy) {
+      setMessage(
+        'Photo changes are still saving. Keep this memory open until they finish.',
+      );
+      return;
+    }
+    if (savingRef.current || saveState === 'saving') {
+      setMessage(
+        'This memory is still saving. Keep it open until it finishes.',
+      );
+      return;
+    }
     if (!dirty) {
       onClose();
       return;
@@ -234,20 +308,35 @@ export function MemoryDrawer({
 
     setDiscardArmed(true);
     setMessage(
-      'You have unsaved changes. Save them, or confirm discard below.',
+      'You have unsaved field changes. Save them, or confirm discard below.',
     );
   };
 
   const discard = () => {
+    if (savingRef.current || mediaBusy) return;
     if (!discardArmed) {
       setDiscardArmed(true);
-      setMessage('Select confirm discard to close without saving.');
+      setMessage(
+        'Select confirm discard to close without saving field changes.',
+      );
       return;
     }
 
     onDirtyChange(false);
     onClose();
   };
+
+  const handleMediaChange = useCallback(
+    (media: AtlasMedia[]) => {
+      mediaRef.current = media;
+      onMediaChange(entry.id, media);
+    },
+    [entry.id, onMediaChange],
+  );
+
+  const handleMediaBusyChange = useCallback((busy: boolean) => {
+    setMediaBusy(busy);
+  }, []);
 
   return (
     <div
@@ -320,17 +409,29 @@ export function MemoryDrawer({
             {entry.recordState === 'draft' ? 'New memory' : 'Atlas memory'}
           </p>
           <span className={styles.saveStatus} aria-live="polite">
-            {saveState === 'saving' ? 'Saving…' : null}
-            {saveState === 'saved' ? (
+            {mediaBusy ? 'Saving photo changes…' : null}
+            {!mediaBusy && saveState === 'saving' ? 'Saving…' : null}
+            {!mediaBusy && saveState === 'saved' ? (
               <>
                 <CheckIcon aria-hidden="true" /> Saved to your atlas
               </>
             ) : null}
-            {saveState === 'idle' && dirty ? 'Unsaved changes' : null}
+            {!mediaBusy && saveState === 'idle' && dirty
+              ? 'Unsaved field changes'
+              : null}
+            {!mediaBusy &&
+            saveState === 'idle' &&
+            !dirty &&
+            entry.recordState === 'draft'
+              ? 'Draft pin saved · Finish it anytime'
+              : null}
           </span>
         </div>
         <div className={styles.drawerHeaderActions}>
-          {entry.recordState === 'saved' && !dirty && saveState !== 'saving' ? (
+          {entry.recordState === 'saved' &&
+          !dirty &&
+          !mediaBusy &&
+          saveState !== 'saving' ? (
             <Link
               className={styles.drawerKeepsakeLink}
               href={`/dashboard/card/${entry.id}`}
@@ -343,7 +444,15 @@ export function MemoryDrawer({
             type="button"
             className={styles.iconButton}
             onClick={requestClose}
-            aria-label={dirty ? 'Review unsaved changes' : 'Close memory'}
+            aria-label={
+              mediaBusy
+                ? 'Wait for photo changes before closing'
+                : dirty
+                  ? 'Review unsaved field changes'
+                  : entry.recordState === 'draft'
+                    ? 'Close saved draft'
+                    : 'Close memory'
+            }
           >
             <XMarkIcon aria-hidden="true" />
           </button>
@@ -476,7 +585,8 @@ export function MemoryDrawer({
           placeName={entry.placeName}
           media={entry.media}
           loading={mediaLoading}
-          onChange={(media) => onUpdate({ ...entry, media })}
+          onChange={handleMediaChange}
+          onBusyChange={handleMediaBusyChange}
         />
 
         <div className={styles.coordinateNote}>
@@ -494,10 +604,10 @@ export function MemoryDrawer({
             className={styles.archiveButton}
             data-armed={discardArmed ? 'true' : 'false'}
             onClick={discard}
-            disabled={saveState === 'saving'}
+            disabled={saveState === 'saving' || mediaBusy}
           >
             <XMarkIcon aria-hidden="true" />
-            {discardArmed ? 'Confirm discard' : 'Discard changes'}
+            {discardArmed ? 'Confirm discard' : 'Discard field changes'}
           </button>
         ) : (
           <button
@@ -505,7 +615,7 @@ export function MemoryDrawer({
             className={styles.archiveButton}
             data-armed={archiveArmed ? 'true' : 'false'}
             onClick={() => void archive()}
-            disabled={saveState === 'saving'}
+            disabled={saveState === 'saving' || mediaBusy}
           >
             <ArchiveBoxIcon aria-hidden="true" />
             {archiveArmed ? 'Remove this memory?' : 'Remove'}
@@ -518,6 +628,7 @@ export function MemoryDrawer({
             onClick={() => void save()}
             disabled={
               saveState === 'saving' ||
+              mediaBusy ||
               (!dirty && entry.recordState === 'saved')
             }
           >

@@ -102,3 +102,8 @@ export const atlasChapterUpdateSchema = z
     version: z.number().int().positive(),
   })
   .transform(enforceEffectiveSharePrecision);
+
+export const atlasChapterDeleteSchema = z.object({
+  id: atlasChapterIdSchema,
+  version: z.number().int().positive(),
+});

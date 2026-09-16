@@ -256,6 +256,41 @@ describe('Atlas Journey Lens', () => {
     );
   });
 
+  it('guides an empty Atlas to memories instead of opening a dead-end builder', async () => {
+    global.fetch = jest.fn(() =>
+      response({ journeys: [], suggestions: [] } satisfies AtlasJourneyIndex),
+    );
+    render(
+      <AtlasWorkspace
+        displayName="Explorer"
+        initialData={{ ...initialData, entries: [] }}
+        initialMode="journeys"
+      />,
+    );
+
+    const tray = await screen.findByRole('region', { name: 'Your journeys' });
+    await within(tray).findByText('Your first journey starts with memories.');
+    expect(
+      within(tray).queryByRole('button', { name: 'Create a journey' }),
+    ).not.toBeInTheDocument();
+    expect(
+      within(tray).getByRole('link', { name: 'Upload photos' }),
+    ).toHaveAttribute('href', '/dashboard/import');
+    expect(
+      within(tray).getByRole('link', { name: 'Place a memory' }),
+    ).toHaveAttribute('href', '/dashboard');
+
+    const tools = screen.getByRole('toolbar', { name: 'Journey tools' });
+    expect(
+      within(tools).queryByRole('button', { name: 'Create journey' }),
+    ).not.toBeInTheDocument();
+    expect(
+      within(tools).getByRole('link', {
+        name: 'Add memories before creating a journey',
+      }),
+    ).toHaveAttribute('href', '/dashboard/import');
+  });
+
   it('opens a journey, relives it, and keeps map-stop selection in sync', async () => {
     const user = userEvent.setup();
     render(

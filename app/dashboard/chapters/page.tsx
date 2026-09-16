@@ -3,6 +3,7 @@ import Link from 'next/link';
 import { redirect } from 'next/navigation';
 
 import { getAtlasChapters } from '@/app/lib/chapters/data';
+import { CHAPTER_MIN_MEMORIES } from '@/app/lib/chapters/validation';
 import { ChapterCard } from '@/components/chapters/chapter-card';
 import styles from '@/components/chapters/chapters.module.css';
 
@@ -23,6 +24,15 @@ export default async function ChaptersPage({
   if (data.total && data.page > data.totalPages) {
     redirect(chaptersHref(data.totalPages));
   }
+  const canCreateJourney = data.availableMemoryCount >= CHAPTER_MIN_MEMORIES;
+  const journeyActionHref = canCreateJourney
+    ? '/dashboard/chapters/new'
+    : '/dashboard/import';
+  const journeyActionLabel = canCreateJourney
+    ? 'New journey'
+    : data.availableMemoryCount === 1
+      ? 'Add one more memory'
+      : 'Add memories';
 
   return (
     <div className={`dashboard-page ${styles.chaptersPage}`}>
@@ -40,12 +50,9 @@ export default async function ChaptersPage({
               {data.total === 1 ? 'journey' : 'journeys'}
             </span>
           </p>
-          <Link
-            href="/dashboard/chapters/new"
-            className={styles.newChapterButton}
-          >
+          <Link href={journeyActionHref} className={styles.newChapterButton}>
             <PlusIcon aria-hidden="true" />
-            New journey
+            {journeyActionLabel}
           </Link>
         </div>
       </header>
@@ -71,15 +78,28 @@ export default async function ChaptersPage({
             <span />
             <span />
           </div>
-          <p className="section-kicker">A story waiting to be told</p>
-          <h2 id="empty-chapters-title">Bring a journey into focus.</h2>
-          <p>
-            Select memories from your atlas, arrange the route, and preserve
-            them together as one journey.
+          <p className="section-kicker">
+            {canCreateJourney
+              ? 'A story waiting to be told'
+              : 'Memories come first'}
           </p>
-          <Link href="/dashboard/chapters/new">
+          <h2 id="empty-chapters-title">
+            {canCreateJourney
+              ? 'Bring a journey into focus.'
+              : 'Start with two memories.'}
+          </h2>
+          <p>
+            {canCreateJourney
+              ? 'Select memories from your atlas, arrange the route, and preserve them together as one journey.'
+              : data.availableMemoryCount === 1
+                ? 'Add one more saved memory, then return to connect both places into a journey.'
+                : 'Upload photographs or place memories in your Atlas. Once two are saved, you can connect them into a journey.'}
+          </p>
+          <Link href={journeyActionHref}>
             <PlusIcon aria-hidden="true" />
-            Create your first journey
+            {canCreateJourney
+              ? 'Create your first journey'
+              : journeyActionLabel}
           </Link>
         </section>
       )}

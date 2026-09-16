@@ -54,6 +54,11 @@ export function monitorBrowserIssues(page: Page): BrowserIssueMonitor {
   let issues: BrowserIssue[] = [];
   const origin = new URL(process.env.E2E_BASE_URL ?? 'http://127.0.0.1:3100');
   const successfulResponses = new WeakSet<Request>();
+  const successfulResponseUrls = new Set<string>();
+  const configuredMapStyleUrl = new URL(
+    process.env.NEXT_PUBLIC_ATLAS_STYLE_URL ?? '/map-style.json',
+    origin,
+  ).href;
 
   const onConsole = (message: ConsoleMessage) => {
     const messageText = message.text();
@@ -105,6 +110,15 @@ export function monitorBrowserIssues(page: Page): BrowserIssueMonitor {
           failure.errorText,
         ),
       );
+    const expectedMapStyleTeardownCancellation =
+      request.url() === configuredMapStyleUrl &&
+      successfulResponseUrls.has(request.url()) &&
+      Boolean(
+        failure &&
+        /ERR_ABORTED|NS_BINDING_ABORTED|cancel(?:led|ed)/i.test(
+          failure.errorText,
+        ),
+      );
     const currentUrl = new URL(page.url());
     // A completed action can be canceled after client-side URL state advances
     // to another query on the same route (for example, the next Journey stop).
@@ -127,6 +141,7 @@ export function monitorBrowserIssues(page: Page): BrowserIssueMonitor {
       !expectedNavigationCancellation &&
       !expectedNextPrefetchCancellation &&
       !expectedReplacedImageCancellation &&
+      !expectedMapStyleTeardownCancellation &&
       !expectedCompletedServerActionCancellation
     ) {
       issues.push({
@@ -139,6 +154,7 @@ export function monitorBrowserIssues(page: Page): BrowserIssueMonitor {
   const onResponse = (response: Response) => {
     if (response.status() < 400) {
       successfulResponses.add(response.request());
+      successfulResponseUrls.add(response.url());
       return;
     }
     const responseUrl = new URL(response.url());

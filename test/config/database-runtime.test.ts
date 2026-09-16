@@ -140,6 +140,53 @@ describe('runtime database configuration', () => {
     expect(vercelQuery).not.toHaveBeenCalled();
   });
 
+  it('allows the separately fenced lifecycle E2E database', async () => {
+    const runtimeUrl =
+      'postgresql://runtime:password@127.0.0.1:5432/field_atlas_e2e_lifecycle';
+    process.env = {
+      ...originalEnvironment,
+      DATABASE_URL: runtimeUrl,
+      E2E_DATABASE_ADAPTER: 'pg',
+      E2E_LIFECYCLE_DATABASE_SEED: '1',
+      E2E_LIFECYCLE_TEST_EMAIL: 'field-atlas-lifecycle-e2e@example.test',
+      E2E_REQUIRE_LIFECYCLE: '1',
+      NODE_ENV: 'production',
+    };
+    const vercelQuery = mockPostgresClient();
+    const native = mockNativePostgres();
+    const database = await loadDatabaseModule();
+
+    await database.sql`SELECT 1`;
+
+    expect(native.Pool).toHaveBeenCalledWith({
+      connectionString: runtimeUrl,
+      max: 12,
+    });
+    expect(native.poolQuery).toHaveBeenCalledWith('SELECT 1', []);
+    expect(vercelQuery).not.toHaveBeenCalled();
+  });
+
+  it('rejects the lifecycle database unless both lifecycle guards are present', async () => {
+    const runtimeUrl =
+      'postgresql://runtime:password@127.0.0.1:5432/field_atlas_e2e_lifecycle';
+    process.env = {
+      ...originalEnvironment,
+      DATABASE_URL: runtimeUrl,
+      E2E_DATABASE_ADAPTER: 'pg',
+      E2E_LIFECYCLE_DATABASE_SEED: '1',
+      NODE_ENV: 'production',
+    };
+    delete process.env.E2E_REQUIRE_LIFECYCLE;
+    mockPostgresClient();
+    const native = mockNativePostgres();
+    const database = await loadDatabaseModule();
+
+    await expect(database.sql`SELECT 1`).rejects.toThrow(
+      'restricted to the loopback field_atlas_e2e database',
+    );
+    expect(native.Pool).not.toHaveBeenCalled();
+  });
+
   it.each([
     [
       'postgresql://runtime:password@database.example.test:5432/field_atlas_e2e',

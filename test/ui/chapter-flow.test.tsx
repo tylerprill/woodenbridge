@@ -4,11 +4,25 @@
 
 /* eslint-disable @next/next/no-img-element */
 
-import { render, screen, waitFor } from '@testing-library/react';
+import {
+  fireEvent,
+  render,
+  screen,
+  waitFor,
+  within,
+} from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 
-import { createAtlasChapterAction } from '@/app/lib/actions/chapters';
-import type { AtlasChapterMemoryOption } from '@/app/lib/chapters/definitions';
+import {
+  createAtlasChapterAction,
+  deleteAtlasChapterAction,
+  updateAtlasChapterAction,
+} from '@/app/lib/actions/chapters';
+import type {
+  AtlasChapterEditorChapter,
+  AtlasChapterMemoryOption,
+  ChapterActionResult,
+} from '@/app/lib/chapters/definitions';
 import { ChapterEditor } from '@/components/chapters/chapter-editor';
 import { ChapterShareControl } from '@/components/chapters/chapter-share-control';
 
@@ -60,10 +74,28 @@ const memories: AtlasChapterMemoryOption[] = [
   },
 ];
 
+const existingJourney: AtlasChapterEditorChapter = {
+  id: 'c202ab58-61c3-455d-8cee-6bd9f29a7e94',
+  title: 'Wonders without borders',
+  introduction: 'Two places held together.',
+  version: 4,
+  coverMediaId: null,
+  visibility: 'private',
+  shareId: '95e54d0c-d3f6-4f5c-aa65-92e006469efd',
+  shareMap: true,
+  shareLocationPrecision: 'approximate',
+  memories: memories.map((memory) => ({
+    entryId: memory.id,
+    transitionNote: '',
+  })),
+};
+
 describe('chapter creation and sharing UI', () => {
   beforeEach(() => {
     mockPush.mockReset();
     jest.mocked(createAtlasChapterAction).mockReset();
+    jest.mocked(deleteAtlasChapterAction).mockReset();
+    jest.mocked(updateAtlasChapterAction).mockReset();
   });
 
   it('uses Journey naming in the workshop and private sharing controls', () => {
@@ -220,6 +252,246 @@ describe('chapter creation and sharing UI', () => {
     expect(mockPush).toHaveBeenCalledWith(
       '/dashboard?view=journeys&journey=chapter-1',
     );
+  });
+
+  it('protects primary navigation but leaves modified and non-primary link gestures alone', async () => {
+    const user = userEvent.setup();
+    const confirm = jest.spyOn(window, 'confirm').mockReturnValue(false);
+    render(<ChapterEditor chapter={null} availableEntries={memories} />);
+
+    await user.type(screen.getByLabelText('Journey title'), 'A new route');
+    const backLink = screen.getByRole('link', { name: 'My Journeys' });
+    backLink.addEventListener('click', (event) => event.preventDefault());
+
+    fireEvent.click(backLink, { button: 0, metaKey: true });
+    fireEvent.click(backLink, { button: 0, ctrlKey: true });
+    fireEvent.click(backLink, { button: 1 });
+    expect(confirm).not.toHaveBeenCalled();
+
+    fireEvent.click(backLink, { button: 0 });
+    expect(confirm).toHaveBeenCalledWith(
+      'Leave this journey? Your unsaved changes will be lost.',
+    );
+    confirm.mockRestore();
+  });
+
+  it('registers and retires the browser-history guard with the dirty state', async () => {
+    const user = userEvent.setup();
+    const clear = jest.fn();
+    const set = jest.fn();
+    window.__FIELD_ATLAS_NAVIGATION_GUARD__ = { clear, set };
+    const { unmount } = render(
+      <ChapterEditor chapter={null} availableEntries={memories} />,
+    );
+    await user.type(screen.getByLabelText('Journey title'), 'A guarded route');
+
+    await waitFor(() =>
+      expect(set).toHaveBeenLastCalledWith(
+        expect.objectContaining({
+          message: 'Leave this journey? Your unsaved changes will be lost.',
+          onLeave: expect.any(Function),
+        }),
+      ),
+    );
+
+    await user.clear(screen.getByLabelText('Journey title'));
+    await waitFor(() => expect(clear).toHaveBeenCalled());
+    expect(clear.mock.invocationCallOrder.at(-1)).toBeGreaterThan(
+      set.mock.invocationCallOrder.at(-1) ?? 0,
+    );
+
+    unmount();
+    delete window.__FIELD_ATLAS_NAVIGATION_GUARD__;
+  });
+
+  it('keeps the leave guard active during save without blocking the successful redirect', async () => {
+    const user = userEvent.setup();
+    let finishSave:
+      | ((
+          result: ChapterActionResult<{
+            id: string;
+            version: number;
+            shareId: string;
+          }>,
+        ) => void)
+      | undefined;
+    jest.mocked(updateAtlasChapterAction).mockReturnValue(
+      new Promise((resolve) => {
+        finishSave = resolve;
+      }),
+    );
+    const confirm = jest.spyOn(window, 'confirm').mockReturnValue(false);
+    render(
+      <ChapterEditor chapter={existingJourney} availableEntries={memories} />,
+    );
+
+    const title = screen.getByLabelText('Journey title');
+    await user.clear(title);
+    await user.type(title, 'Wonders, newly remembered');
+    await user.click(screen.getByRole('button', { name: /Arrange & share/i }));
+    await user.click(screen.getByRole('button', { name: 'Save changes' }));
+    await waitFor(() =>
+      expect(
+        screen.getByRole('button', { name: 'Saving journey…' }),
+      ).toHaveAttribute('aria-busy', 'true'),
+    );
+
+    fireEvent.click(screen.getByRole('link', { name: 'Back to journey' }));
+    expect(confirm).toHaveBeenCalledWith(
+      'Leave this journey while it is still saving? The save may not finish.',
+    );
+
+    finishSave?.({
+      ok: true,
+      data: {
+        id: existingJourney.id,
+        version: existingJourney.version + 1,
+        shareId: existingJourney.shareId,
+      },
+    });
+    await waitFor(() =>
+      expect(mockPush).toHaveBeenCalledWith(
+        `/dashboard/chapters/${existingJourney.id}?saved=updated`,
+      ),
+    );
+    confirm.mockRestore();
+  });
+
+  it('keeps an accepted pending-save departure from being replaced by the save redirect', async () => {
+    const user = userEvent.setup();
+    let finishSave:
+      | ((
+          result: ChapterActionResult<{
+            id: string;
+            version: number;
+            shareId: string;
+          }>,
+        ) => void)
+      | undefined;
+    jest.mocked(updateAtlasChapterAction).mockReturnValue(
+      new Promise((resolve) => {
+        finishSave = resolve;
+      }),
+    );
+    const confirm = jest.spyOn(window, 'confirm').mockReturnValue(true);
+    render(
+      <ChapterEditor chapter={existingJourney} availableEntries={memories} />,
+    );
+
+    const title = screen.getByLabelText('Journey title');
+    await user.clear(title);
+    await user.type(title, 'Wonders, briefly remembered');
+    await user.click(screen.getByRole('button', { name: /Arrange & share/i }));
+    await user.click(screen.getByRole('button', { name: 'Save changes' }));
+    await waitFor(() =>
+      expect(
+        screen.getByRole('button', { name: 'Saving journey…' }),
+      ).toHaveAttribute('aria-busy', 'true'),
+    );
+
+    fireEvent.click(screen.getByRole('link', { name: 'Back to journey' }));
+    expect(mockPush).toHaveBeenCalledWith(
+      `/dashboard/chapters/${existingJourney.id}`,
+    );
+
+    finishSave?.({
+      ok: true,
+      data: {
+        id: existingJourney.id,
+        version: existingJourney.version + 1,
+        shareId: existingJourney.shareId,
+      },
+    });
+    await waitFor(() => expect(updateAtlasChapterAction).toHaveBeenCalled());
+    expect(mockPush).toHaveBeenCalledTimes(1);
+    confirm.mockRestore();
+  });
+
+  it('uses a focused, escapable confirmation before deleting the reviewed version', async () => {
+    const user = userEvent.setup();
+    jest.mocked(deleteAtlasChapterAction).mockResolvedValue({
+      ok: true,
+      data: { id: existingJourney.id },
+    });
+    render(
+      <ChapterEditor
+        chapter={existingJourney}
+        availableEntries={memories}
+        initialStep="arrange"
+      />,
+    );
+
+    const deleteTrigger = screen.getByRole('button', {
+      name: 'Delete journey',
+    });
+    await user.click(deleteTrigger);
+    let confirmation = screen.getByRole('alertdialog', {
+      name: 'Delete this journey?',
+    });
+    expect(
+      within(confirmation).getByRole('button', { name: 'Keep journey' }),
+    ).toHaveFocus();
+    expect(
+      within(confirmation).getByRole('button', {
+        name: 'Delete journey permanently',
+      }),
+    ).not.toBe(deleteTrigger);
+
+    fireEvent.keyDown(document, { key: 'Escape' });
+    await waitFor(() =>
+      expect(screen.queryByRole('alertdialog')).not.toBeInTheDocument(),
+    );
+    const restoredDeleteTrigger = screen.getByRole('button', {
+      name: 'Delete journey',
+    });
+    await waitFor(() => expect(restoredDeleteTrigger).toHaveFocus());
+
+    await user.click(restoredDeleteTrigger);
+    confirmation = screen.getByRole('alertdialog', {
+      name: 'Delete this journey?',
+    });
+    await user.click(
+      within(confirmation).getByRole('button', {
+        name: 'Delete journey permanently',
+      }),
+    );
+
+    await waitFor(() =>
+      expect(deleteAtlasChapterAction).toHaveBeenCalledWith({
+        id: existingJourney.id,
+        version: existingJourney.version,
+      }),
+    );
+    expect(mockPush).toHaveBeenCalledWith('/dashboard/chapters');
+  });
+
+  it('keeps a stale journey when versioned deletion reports a conflict', async () => {
+    const user = userEvent.setup();
+    jest.mocked(deleteAtlasChapterAction).mockResolvedValue({
+      ok: false,
+      error: 'conflict',
+      message: 'This journey changed elsewhere. Refresh it before deleting.',
+    });
+    render(
+      <ChapterEditor
+        chapter={existingJourney}
+        availableEntries={memories}
+        initialStep="arrange"
+      />,
+    );
+
+    await user.click(screen.getByRole('button', { name: 'Delete journey' }));
+    await user.click(
+      screen.getByRole('button', { name: 'Delete journey permanently' }),
+    );
+
+    const alert = await screen.findByRole('alert');
+    expect(alert).toHaveTextContent('A newer version is already saved.');
+    expect(alert).toHaveTextContent(
+      'This journey changed elsewhere. Refresh it before deleting.',
+    );
+    expect(mockPush).not.toHaveBeenCalled();
+    expect(screen.queryByRole('alertdialog')).not.toBeInTheDocument();
   });
 
   it('copies an unlisted link with accurate feedback', async () => {

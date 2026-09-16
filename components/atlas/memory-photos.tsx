@@ -6,7 +6,7 @@ import {
   TrashIcon,
 } from '@heroicons/react/24/outline';
 import Image from 'next/image';
-import { useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 
 import {
   discardAtlasMediaUploadAction,
@@ -36,6 +36,7 @@ type MemoryPhotosProps = {
   media: AtlasMedia[];
   loading: boolean;
   onChange: (media: AtlasMedia[]) => void;
+  onBusyChange: (busy: boolean) => void;
 };
 
 function fileError(file: File) {
@@ -50,6 +51,7 @@ export function MemoryPhotos({
   media,
   loading,
   onChange,
+  onBusyChange,
 }: MemoryPhotosProps) {
   const inputRef = useRef<HTMLInputElement>(null);
   const [uploading, setUploading] = useState(false);
@@ -57,8 +59,32 @@ export function MemoryPhotos({
   const [message, setMessage] = useState('');
   const [messageIsError, setMessageIsError] = useState(false);
   const [removeArmed, setRemoveArmed] = useState<string | null>(null);
+  const [removingId, setRemovingId] = useState<string | null>(null);
+  const busy = uploading || removingId !== null;
+
+  useEffect(() => {
+    return () => onBusyChange(false);
+  }, [onBusyChange]);
+
+  const discardPendingUpload = async (upload: {
+    mediaId: string;
+    pathname: string;
+    thumbnailPathname: string;
+  }) => {
+    try {
+      const result = await discardAtlasMediaUploadAction({
+        entryId,
+        ...upload,
+      });
+      return result.ok;
+    } catch (error) {
+      console.error('Atlas photo upload cleanup failed:', error);
+      return false;
+    }
+  };
 
   const uploadPhotos = async (files: File[]) => {
+    if (busy) return;
     const availableSlots = ATLAS_MEDIA_MAX_FILES - media.length;
     if (files.length > availableSlots) {
       setMessage(
@@ -77,6 +103,7 @@ export function MemoryPhotos({
       return;
     }
 
+    onBusyChange(true);
     setUploading(true);
     setProgress(0);
     setMessage('');
@@ -171,15 +198,10 @@ export function MemoryPhotos({
         });
 
         if (!result.ok) {
-          await discardAtlasMediaUploadAction({
-            entryId,
-            mediaId,
-            pathname,
-            thumbnailPathname,
-          });
+          const cleanedUp = await discardPendingUpload(pendingUpload);
           pendingUpload = null;
           setMessage(
-            `${index ? `${index} ${index === 1 ? 'photo was' : 'photos were'} added. ` : ''}${result.message}`,
+            `${index ? `${index} ${index === 1 ? 'photo was' : 'photos were'} added. ` : ''}${result.message}${cleanedUp ? '' : ' The uploaded files could not be fully cleaned up. Please try again.'}`,
           );
           setMessageIsError(true);
           return;
@@ -192,26 +214,32 @@ export function MemoryPhotos({
 
       setProgress(100);
       setMessage(
-        `${files.length} ${files.length === 1 ? 'photo was' : 'photos were'} added privately.`,
+        `${files.length} ${files.length === 1 ? 'photo was' : 'photos were'} added and saved privately.`,
       );
     } catch (error) {
       console.error('Atlas photo upload failed:', error);
+      let cleanupFailed = false;
       if (pendingUpload) {
-        await discardAtlasMediaUploadAction({ entryId, ...pendingUpload });
+        cleanupFailed = !(await discardPendingUpload(pendingUpload));
+        pendingUpload = null;
       }
       setMessageIsError(true);
       setMessage(
-        error instanceof Error
-          ? error.message
-          : 'The photo could not be uploaded. Please try again.',
+        `${
+          error instanceof Error
+            ? error.message
+            : 'The photo could not be uploaded. Please try again.'
+        }${cleanupFailed ? ' The uploaded files could not be fully cleaned up. Please try again.' : ''}`,
       );
     } finally {
       setUploading(false);
+      onBusyChange(false);
       if (inputRef.current) inputRef.current.value = '';
     }
   };
 
   const removePhoto = async (photo: AtlasMedia) => {
+    if (uploading || (removingId && removingId !== photo.id)) return;
     if (removeArmed !== photo.id) {
       setRemoveArmed(photo.id);
       return;
@@ -219,16 +247,27 @@ export function MemoryPhotos({
 
     setMessage('');
     setMessageIsError(false);
-    const result = await deleteAtlasMediaAction(photo.id);
-    if (!result.ok) {
-      setMessage(result.message);
-      setMessageIsError(true);
-      setRemoveArmed(null);
-      return;
-    }
+    onBusyChange(true);
+    setRemovingId(photo.id);
+    try {
+      const result = await deleteAtlasMediaAction(photo.id);
+      if (!result.ok) {
+        setMessage(result.message);
+        setMessageIsError(true);
+        return;
+      }
 
-    onChange(media.filter((item) => item.id !== photo.id));
-    setRemoveArmed(null);
+      onChange(media.filter((item) => item.id !== photo.id));
+      setMessage('Photo removed and saved.');
+    } catch (error) {
+      console.error('Atlas photo removal failed:', error);
+      setMessage('The photo could not be removed. Please try again.');
+      setMessageIsError(true);
+    } finally {
+      setRemoveArmed(null);
+      setRemovingId(null);
+      onBusyChange(false);
+    }
   };
 
   const atLimit = media.length >= ATLAS_MEDIA_MAX_FILES;
@@ -250,22 +289,24 @@ export function MemoryPhotos({
         </div>
         <label
           className={styles.photoUploadButton}
-          data-disabled={loading || uploading || atLimit ? 'true' : 'false'}
+          data-disabled={loading || busy || atLimit ? 'true' : 'false'}
         >
           <ArrowUpTrayIcon aria-hidden="true" />
           {loading
             ? 'Opening…'
             : uploading
               ? `${progress}%`
-              : atLimit
-                ? 'Full'
-                : 'Upload photos'}
+              : removingId
+                ? 'Saving…'
+                : atLimit
+                  ? 'Full'
+                  : 'Upload photos'}
           <input
             ref={inputRef}
             type="file"
             multiple
             accept="image/jpeg,image/png,image/webp,image/heic,image/heif,.heic,.heif"
-            disabled={loading || uploading || atLimit}
+            disabled={loading || busy || atLimit}
             onChange={(event) => {
               const files = Array.from(event.target.files ?? []);
               if (files.length) void uploadPhotos(files);
@@ -275,7 +316,8 @@ export function MemoryPhotos({
       </div>
       <p className={styles.photoUploadGuidance}>
         JPG, PNG, WebP, HEIC, or HEIF · Up to 25 MB each ·{' '}
-        {ATLAS_MEDIA_MAX_FILES - media.length} remaining
+        {ATLAS_MEDIA_MAX_FILES - media.length} remaining · Photos save
+        immediately
       </p>
 
       {uploading ? (
@@ -318,14 +360,23 @@ export function MemoryPhotos({
                 data-armed={removeArmed === photo.id ? 'true' : 'false'}
                 onClick={() => void removePhoto(photo)}
                 onBlur={() => setRemoveArmed(null)}
+                disabled={uploading || removingId !== null}
                 aria-label={
-                  removeArmed === photo.id
-                    ? 'Confirm remove photo'
-                    : 'Remove photo'
+                  removingId === photo.id
+                    ? 'Removing photo'
+                    : removeArmed === photo.id
+                      ? 'Confirm remove photo'
+                      : 'Remove photo'
                 }
               >
                 <TrashIcon aria-hidden="true" />
-                <span>{removeArmed === photo.id ? 'Remove?' : 'Remove'}</span>
+                <span>
+                  {removingId === photo.id
+                    ? 'Removing…'
+                    : removeArmed === photo.id
+                      ? 'Remove?'
+                      : 'Remove'}
+                </span>
               </button>
             </figure>
           ))}

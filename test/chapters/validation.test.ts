@@ -1,4 +1,5 @@
 import {
+  atlasChapterDeleteSchema,
   atlasChapterInputSchema,
   atlasChapterUpdateSchema,
   CHAPTER_MAX_MEMORIES,
@@ -140,6 +141,21 @@ describe('chapter validation', () => {
     );
 
     expect(parsed.success).toBe(false);
+  });
+
+  it('requires the reviewed version when deleting a journey', () => {
+    expect(
+      atlasChapterDeleteSchema.safeParse({
+        id: 'c202ab58-61c3-455d-8cee-6bd9f29a7e94',
+        version: 3,
+      }).success,
+    ).toBe(true);
+    expect(
+      atlasChapterDeleteSchema.safeParse({
+        id: 'c202ab58-61c3-455d-8cee-6bd9f29a7e94',
+        version: 0,
+      }).success,
+    ).toBe(false);
   });
 
   it('rejects unknown sharing states', () => {

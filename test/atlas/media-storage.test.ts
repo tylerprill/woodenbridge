@@ -30,8 +30,11 @@ const environmentKeys = [
   'AUTH_URL',
   'DATABASE_URL',
   'E2E_DATABASE_ADAPTER',
+  'E2E_LIFECYCLE_DATABASE_SEED',
+  'E2E_LIFECYCLE_TEST_EMAIL',
   'E2E_MEDIA_STORAGE_ADAPTER',
   'E2E_MEDIA_STORAGE_ROOT',
+  'E2E_REQUIRE_LIFECYCLE',
   'NEXT_PUBLIC_E2E_MEDIA_STORAGE_ADAPTER',
   'POSTGRES_URL',
   'RUNNER_TEMP',
@@ -169,6 +172,31 @@ describe('isolated Atlas filesystem media storage', () => {
       ).rejects.toThrow();
       expect(description).toBeTruthy();
     }
+  });
+
+  it('accepts the separately fenced lifecycle database and media root', async () => {
+    const root = join(
+      tmpdir(),
+      `field-atlas-e2e-media-lifecycle-${randomUUID()}`,
+    );
+    cleanupPaths.add(root);
+    const lifecycleUrl =
+      'postgresql://runtime:password@127.0.0.1:5432/field_atlas_e2e_lifecycle';
+
+    await expect(
+      getE2EAtlasMediaStorageConfiguration(
+        filesystemEnvironment(root, {
+          DATABASE_URL: lifecycleUrl,
+          E2E_LIFECYCLE_DATABASE_SEED: '1',
+          E2E_LIFECYCLE_TEST_EMAIL: 'field-atlas-lifecycle-e2e@example.test',
+          E2E_REQUIRE_LIFECYCLE: '1',
+          POSTGRES_URL: lifecycleUrl,
+        }),
+      ),
+    ).resolves.toEqual({
+      appOrigin: 'http://127.0.0.1:3100',
+      root,
+    });
   });
 
   it('keeps production reads and deletes on private Vercel Blob storage', async () => {

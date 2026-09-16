@@ -12,9 +12,10 @@ import {
   type QueryResultRow,
 } from 'pg';
 
+import { getExpectedE2EDatabaseName } from './e2e-database-target';
+
 type Queryable = Pick<Pool | PoolClient, 'query'>;
 
-const E2E_DATABASE_NAME = 'field_atlas_e2e';
 const LOOPBACK_HOSTS = new Set(['127.0.0.1', 'localhost', '[::1]']);
 
 let nativePool: Pool | undefined;
@@ -61,14 +62,15 @@ function getE2ENativeConnectionString() {
   const overridesAuthorityHost = Array.from(
     connection.searchParams.keys(),
   ).some((key) => key.toLowerCase() === 'host');
+  const expectedDatabaseName = getExpectedE2EDatabaseName();
   if (
     !['postgres:', 'postgresql:'].includes(connection.protocol) ||
     !LOOPBACK_HOSTS.has(connection.hostname.toLowerCase()) ||
-    connection.pathname !== `/${E2E_DATABASE_NAME}` ||
+    connection.pathname !== `/${expectedDatabaseName}` ||
     overridesAuthorityHost
   ) {
     throw new Error(
-      `The native E2E PostgreSQL adapter is restricted to the loopback ${E2E_DATABASE_NAME} database.`,
+      `The native E2E PostgreSQL adapter is restricted to the loopback ${expectedDatabaseName} database.`,
     );
   }
 
