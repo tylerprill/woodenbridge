@@ -211,7 +211,10 @@ export function OnThisDay({
               </div>
               <p>These are recent visits, not anniversary matches.</p>
             </div>
-            <div className={styles.memoryGrid}>
+            <div
+              className={`${styles.memoryGrid} ${styles.uniformMemoryGrid}`}
+              data-memory-grid="recent"
+            >
               {data.memories.map((memory, index) => (
                 <MemoryCard
                   key={memory.entry.id}
