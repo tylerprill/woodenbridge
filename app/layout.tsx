@@ -1,7 +1,11 @@
 import type { Metadata, Viewport } from 'next';
+import { headers } from 'next/headers';
+import Script from 'next/script';
 import { connection } from 'next/server';
 
 import '@/app/global.css';
+import { NAVIGATION_GUARD_BOOTSTRAP } from '@/app/lib/navigation-guard';
+import { CSP_NONCE_HEADER } from '@/app/lib/security/content-security-policy';
 import {
   getSiteManifestHref,
   SITE_DESCRIPTION,
@@ -39,10 +43,20 @@ export default async function RootLayout({
   // Waiting for the request is required for Next.js to nonce its framework
   // scripts; without this, statically generated auth pages would be blocked.
   await connection();
+  const nonce = (await headers()).get(CSP_NONCE_HEADER) ?? undefined;
 
   return (
     <html lang="en" data-scroll-behavior="smooth">
-      <body>{children}</body>
+      <body>
+        {children}
+        <Script
+          id="field-atlas-navigation-guard"
+          nonce={nonce}
+          strategy="beforeInteractive"
+        >
+          {NAVIGATION_GUARD_BOOTSTRAP}
+        </Script>
+      </body>
     </html>
   );
 }

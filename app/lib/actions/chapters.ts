@@ -6,13 +6,14 @@ import { revalidatePath } from 'next/cache';
 
 import { requireVerifiedSession } from '@/app/lib/auth/session';
 import type {
+  AtlasChapterDeleteInput,
   AtlasChapterInput,
   AtlasChapterMemoryInput,
   AtlasChapterUpdateInput,
   ChapterActionResult,
 } from '@/app/lib/chapters/definitions';
 import {
-  atlasChapterIdSchema,
+  atlasChapterDeleteSchema,
   atlasChapterInputSchema,
   atlasChapterUpdateSchema,
 } from '@/app/lib/chapters/validation';
@@ -544,10 +545,10 @@ export async function updateAtlasChapterAction(
 }
 
 export async function deleteAtlasChapterAction(
-  chapterId: string,
+  input: AtlasChapterDeleteInput,
 ): Promise<ChapterActionResult<{ id: string }>> {
   const session = await requireVerifiedSession();
-  const parsed = atlasChapterIdSchema.safeParse(chapterId);
+  const parsed = atlasChapterDeleteSchema.safeParse(input);
 
   if (!parsed.success) {
     return { ok: false, error: 'invalid', message: 'Invalid journey.' };
@@ -556,16 +557,22 @@ export async function deleteAtlasChapterAction(
   try {
     const client = await db.connect();
     try {
-      const deleted = await client.query<{ id: string }>(
+      await client.query('BEGIN');
+      const current = await client.query<{
+        shareId: string;
+        version: number;
+      }>(
         `
-          DELETE FROM atlas_chapters
+          SELECT version, share_id AS "shareId"
+          FROM atlas_chapters
           WHERE id = $1 AND user_id = $2
-          RETURNING id
+          FOR UPDATE
         `,
-        [parsed.data, session.user.id],
+        [parsed.data.id, session.user.id],
       );
 
-      if (!deleted.rows[0]) {
+      if (!current.rows[0]) {
+        await client.query('ROLLBACK');
         return {
           ok: false,
           error: 'not-found',
@@ -573,8 +580,40 @@ export async function deleteAtlasChapterAction(
         };
       }
 
-      revalidateChapter(parsed.data);
+      if (current.rows[0].version !== parsed.data.version) {
+        await client.query('ROLLBACK');
+        return {
+          ok: false,
+          error: 'conflict',
+          message:
+            'This journey changed elsewhere. Refresh it before deleting.',
+        };
+      }
+
+      const deleted = await client.query<{ id: string }>(
+        `
+          DELETE FROM atlas_chapters
+          WHERE id = $1 AND user_id = $2
+          RETURNING id
+        `,
+        [parsed.data.id, session.user.id],
+      );
+
+      if (!deleted.rows[0]) {
+        await client.query('ROLLBACK');
+        return {
+          ok: false,
+          error: 'not-found',
+          message: 'That journey no longer exists.',
+        };
+      }
+
+      await client.query('COMMIT');
+      revalidateChapter(parsed.data.id, current.rows[0].shareId);
       return { ok: true, data: deleted.rows[0] };
+    } catch (error) {
+      await client.query('ROLLBACK').catch(() => undefined);
+      throw error;
     } finally {
       client.release();
     }

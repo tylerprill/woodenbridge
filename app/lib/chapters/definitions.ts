@@ -116,6 +116,11 @@ export type AtlasChapterUpdateInput = Omit<
   version: number;
 };
 
+export type AtlasChapterDeleteInput = Pick<
+  AtlasChapterUpdateInput,
+  'id' | 'version'
+>;
+
 export type ChapterActionError =
   'invalid' | 'not-found' | 'conflict' | 'failed';
 

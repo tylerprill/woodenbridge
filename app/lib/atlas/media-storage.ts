@@ -23,8 +23,8 @@ import {
   isAtlasMediaPath,
   isAtlasThumbnailPath,
 } from './media-policy';
+import { getExpectedE2EDatabaseName } from '../e2e-database-target';
 
-const E2E_DATABASE_NAME = 'field_atlas_e2e';
 const E2E_STORAGE_DIRECTORY_PATTERN =
   /^field-atlas-e2e-media(?:-[A-Za-z0-9._-]+)?$/;
 const LOOPBACK_HOSTS = new Set(['127.0.0.1', 'localhost', '[::1]']);
@@ -73,7 +73,11 @@ function parseLoopbackUrl(value: string, label: string) {
   return parsed.origin;
 }
 
-function assertE2EDatabaseUrl(value: string | undefined, label: string) {
+function assertE2EDatabaseUrl(
+  value: string | undefined,
+  label: string,
+  environment: Environment,
+) {
   if (!value) throw new Error(`${label} is required for E2E media storage.`);
 
   let parsed: URL;
@@ -86,14 +90,15 @@ function assertE2EDatabaseUrl(value: string | undefined, label: string) {
   const overridesAuthorityHost = Array.from(parsed.searchParams.keys()).some(
     (key) => key.toLowerCase() === 'host',
   );
+  const expectedDatabaseName = getExpectedE2EDatabaseName(environment);
   if (
     !['postgres:', 'postgresql:'].includes(parsed.protocol) ||
     !LOOPBACK_HOSTS.has(parsed.hostname.toLowerCase()) ||
-    parsed.pathname !== `/${E2E_DATABASE_NAME}` ||
+    parsed.pathname !== `/${expectedDatabaseName}` ||
     overridesAuthorityHost
   ) {
     throw new Error(
-      `${label} must target the loopback ${E2E_DATABASE_NAME} database.`,
+      `${label} must target the loopback ${expectedDatabaseName} database.`,
     );
   }
 }
@@ -177,8 +182,8 @@ export async function getE2EAtlasMediaStorageConfiguration(
     throw new Error('E2E media storage cannot run in a Vercel environment.');
   }
 
-  assertE2EDatabaseUrl(environment.DATABASE_URL, 'DATABASE_URL');
-  assertE2EDatabaseUrl(environment.POSTGRES_URL, 'POSTGRES_URL');
+  assertE2EDatabaseUrl(environment.DATABASE_URL, 'DATABASE_URL', environment);
+  assertE2EDatabaseUrl(environment.POSTGRES_URL, 'POSTGRES_URL', environment);
 
   const appOrigin = parseLoopbackUrl(environment.APP_URL ?? '', 'APP_URL');
   const authOrigin = parseLoopbackUrl(environment.AUTH_URL ?? '', 'AUTH_URL');

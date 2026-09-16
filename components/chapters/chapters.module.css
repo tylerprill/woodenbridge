@@ -953,6 +953,30 @@
   text-decoration: none;
 }
 
+.editorEmpty a {
+  display: inline-flex;
+  min-height: 2.75rem;
+  align-items: center;
+  justify-content: center;
+  padding: 0.65rem 1rem;
+  border: 1px solid rgba(166, 91, 57, 0.26);
+  border-radius: 999px;
+  background: rgba(166, 91, 57, 0.08);
+  transition:
+    border-color 160ms ease,
+    background 160ms ease,
+    color 160ms ease,
+    transform 160ms ease;
+}
+
+.editorEmpty a:hover,
+.editorEmpty a:focus-visible {
+  border-color: var(--timber);
+  background: var(--timber);
+  color: var(--paper-light);
+  transform: translateY(-1px);
+}
+
 .editorEmpty > svg {
   width: 1.5rem;
   margin-bottom: 0.8rem;
@@ -1566,6 +1590,37 @@
   text-align: center;
 }
 
+.chapterDeletePrompt {
+  display: grid;
+  width: 100%;
+  gap: 0.9rem;
+}
+
+.chapterDeletePrompt > div:first-child {
+  display: grid;
+  gap: 0.35rem;
+  text-align: left;
+}
+
+.chapterDeletePrompt strong {
+  color: var(--forest-950);
+  font-family: Georgia, 'Times New Roman', serif;
+  font-size: 1rem;
+  font-weight: 400;
+}
+
+.chapterDeletePrompt p {
+  margin: 0;
+  text-align: left;
+}
+
+.chapterDeleteActions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 0.65rem;
+}
+
 .chapterDelete button {
   display: inline-flex;
   align-items: center;
@@ -1578,6 +1633,19 @@
 .chapterDelete button:hover,
 .chapterDelete button:focus-visible {
   color: var(--timber);
+}
+
+.chapterDelete .chapterDeleteDanger {
+  border-radius: 999px;
+  background: #8e4327;
+  color: var(--paper-light);
+  padding: 0.6rem 0.8rem;
+}
+
+.chapterDelete .chapterDeleteDanger:hover,
+.chapterDelete .chapterDeleteDanger:focus-visible {
+  background: #74351f;
+  color: var(--paper-light);
 }
 
 .chapterDelete button svg {

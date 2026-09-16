@@ -21,7 +21,10 @@ jest.mock('@/app/lib/atlas/journeys/data', () => ({
 }));
 
 import { revalidatePath } from 'next/cache';
-import { createAtlasChapterAction } from '@/app/lib/actions/chapters';
+import {
+  createAtlasChapterAction,
+  deleteAtlasChapterAction,
+} from '@/app/lib/actions/chapters';
 import { requireVerifiedSession } from '@/app/lib/auth/session';
 import { loadAtlasJourneySuggestions } from '@/app/lib/atlas/journeys/data';
 import type { AtlasChapterInput } from '@/app/lib/chapters/definitions';
@@ -359,5 +362,81 @@ describe('Atlas Chapter creation idempotency', () => {
       ok: true,
       data: chapter,
     });
+  });
+});
+
+describe('Atlas Chapter deletion concurrency', () => {
+  beforeEach(() => {
+    __testMocks.clientQuery.mockReset();
+    __testMocks.release.mockReset();
+    __testMocks.connect.mockClear();
+    jest.mocked(revalidatePath).mockReset();
+    jest.mocked(requireVerifiedSession).mockResolvedValue({
+      user: { id: userId },
+    } as Awaited<ReturnType<typeof requireVerifiedSession>>);
+  });
+
+  it('deletes the exact version the user reviewed', async () => {
+    __testMocks.clientQuery.mockImplementation(async (query: unknown) => {
+      const text = normalizeQuery(query);
+      if (text.startsWith('SELECT version, share_id AS')) {
+        return { rows: [{ shareId: chapter.shareId, version: 4 }] };
+      }
+      if (text.startsWith('DELETE FROM atlas_chapters')) {
+        return { rows: [{ id: chapter.id }] };
+      }
+      return { rows: [] };
+    });
+
+    await expect(
+      deleteAtlasChapterAction({ id: chapter.id, version: 4 }),
+    ).resolves.toEqual({ ok: true, data: { id: chapter.id } });
+
+    expect(
+      __testMocks.clientQuery.mock.calls.map(([query]) =>
+        normalizeQuery(query),
+      ),
+    ).toEqual(
+      expect.arrayContaining([
+        'BEGIN',
+        expect.stringMatching(/^SELECT version, share_id AS/),
+        expect.stringMatching(/^DELETE FROM atlas_chapters/),
+        'COMMIT',
+      ]),
+    );
+    expect(revalidatePath).toHaveBeenCalledWith(
+      `/dashboard/chapters/${chapter.id}`,
+    );
+    expect(revalidatePath).toHaveBeenCalledWith(
+      `/shared/chapters/${chapter.shareId}`,
+    );
+    expect(__testMocks.release).toHaveBeenCalledTimes(1);
+  });
+
+  it('preserves a journey that changed after the editor was opened', async () => {
+    __testMocks.clientQuery.mockImplementation(async (query: unknown) => {
+      const text = normalizeQuery(query);
+      if (text.startsWith('SELECT version, share_id AS')) {
+        return { rows: [{ shareId: chapter.shareId, version: 5 }] };
+      }
+      return { rows: [] };
+    });
+
+    await expect(
+      deleteAtlasChapterAction({ id: chapter.id, version: 4 }),
+    ).resolves.toEqual({
+      ok: false,
+      error: 'conflict',
+      message: 'This journey changed elsewhere. Refresh it before deleting.',
+    });
+
+    expect(
+      __testMocks.clientQuery.mock.calls.some(([query]) =>
+        normalizeQuery(query).startsWith('DELETE FROM atlas_chapters'),
+      ),
+    ).toBe(false);
+    expect(__testMocks.clientQuery).toHaveBeenCalledWith('ROLLBACK');
+    expect(revalidatePath).not.toHaveBeenCalled();
+    expect(__testMocks.release).toHaveBeenCalledTimes(1);
   });
 });

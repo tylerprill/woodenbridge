@@ -31,6 +31,7 @@ import { getAtlasEntryMediaAction } from '@/app/lib/actions/atlas-media';
 import type {
   AtlasData,
   AtlasEntry,
+  AtlasMedia,
   AtlasView,
   JourneyState,
 } from '@/app/lib/atlas/definitions';
@@ -43,6 +44,7 @@ import {
   getAtlasPlaceContextLabel,
   withAtlasPlaceContext,
 } from '@/app/lib/atlas/place';
+import { CHAPTER_MIN_MEMORIES } from '@/app/lib/chapters/validation';
 import AtlasMap from './atlas-map-loader';
 import {
   atlasExperienceReducer,
@@ -680,6 +682,14 @@ export function AtlasWorkspace({
       requestedIds: string[] = [],
       suggestion: AtlasJourneySuggestion | null = null,
     ) => {
+      if (eligibleJourneyEntries.length < CHAPTER_MIN_MEMORIES) {
+        setNotice(
+          eligibleJourneyEntries.length
+            ? 'Add one more saved memory before creating a journey.'
+            : 'Add two saved memories before creating a journey.',
+        );
+        return;
+      }
       const eligibleIds = new Set(
         eligibleJourneyEntries.map((entry) => entry.id),
       );
@@ -833,6 +843,13 @@ export function AtlasWorkspace({
       loadingMediaIdsRef.current.delete(id);
       setMediaLoadingId((current) => (current === id ? null : current));
     }
+  }, []);
+
+  const updateEntryMedia = useCallback((id: string, media: AtlasMedia[]) => {
+    loadedMediaIdsRef.current.add(id);
+    setEntries((current) =>
+      current.map((entry) => (entry.id === id ? { ...entry, media } : entry)),
+    );
   }, []);
 
   const enrichPlace = useCallback((id: string) => {
@@ -1144,6 +1161,7 @@ export function AtlasWorkspace({
       data-placement={mode === 'places' && placementMode ? 'true' : 'false'}
       data-editor-open={selectedEntry ? 'true' : 'false'}
       data-atlas-mode={mode}
+      data-atlas-empty={mode === 'places' && !entries.length ? 'true' : 'false'}
       data-atlas-surface={experience.surface}
       data-builder-list-open={builderListOpen ? 'true' : 'false'}
       data-journey-panel-open={
@@ -1439,27 +1457,47 @@ export function AtlasWorkspace({
       >
         {mode === 'journeys' ? (
           <>
-            <button
-              type="button"
-              className={styles.addButton}
-              data-active={buildingJourney ? 'true' : 'false'}
-              aria-pressed={buildingJourney}
-              onClick={() =>
-                buildingJourney ? showJourneyOverview() : startJourneyBuilder()
-              }
-            >
-              {buildingJourney ? (
-                <XMarkIcon aria-hidden="true" />
-              ) : (
-                <PlusIcon aria-hidden="true" />
-              )}
-              <span>{buildingJourney ? 'Cancel' : 'Create journey'}</span>
-            </button>
+            {eligibleJourneyEntries.length >= CHAPTER_MIN_MEMORIES ? (
+              <button
+                type="button"
+                className={styles.addButton}
+                data-active={buildingJourney ? 'true' : 'false'}
+                aria-pressed={buildingJourney}
+                onClick={() =>
+                  buildingJourney
+                    ? showJourneyOverview()
+                    : startJourneyBuilder()
+                }
+              >
+                {buildingJourney ? (
+                  <XMarkIcon aria-hidden="true" />
+                ) : (
+                  <PlusIcon aria-hidden="true" />
+                )}
+                <span>{buildingJourney ? 'Cancel' : 'Create journey'}</span>
+              </button>
+            ) : (
+              <Link
+                href="/dashboard/import"
+                className={styles.addButton}
+                aria-label="Add memories before creating a journey"
+              >
+                <PhotoIcon aria-hidden="true" />
+                <span>Add memories</span>
+              </Link>
+            )}
             <span className={styles.toolDivider} aria-hidden="true" />
-            <Link href="/dashboard/import" aria-label="Upload photos">
-              <PhotoIcon aria-hidden="true" />
-              <span>Upload</span>
-            </Link>
+            {eligibleJourneyEntries.length >= CHAPTER_MIN_MEMORIES ? (
+              <Link href="/dashboard/import" aria-label="Upload photos">
+                <PhotoIcon aria-hidden="true" />
+                <span>Upload</span>
+              </Link>
+            ) : (
+              <Link href="/dashboard" aria-label="Place a memory on the map">
+                <PlusIcon aria-hidden="true" />
+                <span>Place</span>
+              </Link>
+            )}
             <button
               ref={journeyListButtonRef}
               type="button"
@@ -1731,6 +1769,7 @@ export function AtlasWorkspace({
         <AtlasJourneyTray
           journeys={visibleJourneys}
           suggestions={journeyIndex.suggestions}
+          availableMemoryCount={eligibleJourneyEntries.length}
           selectedJourney={selectedJourney}
           selectedStopId={selectedJourneyStopId}
           loadState={journeyLoadState}
@@ -1803,6 +1842,7 @@ export function AtlasWorkspace({
           entry={selectedEntry}
           onClose={closeSelectedEntry}
           onDirtyChange={setDrawerDirty}
+          onMediaChange={updateEntryMedia}
           onUpdate={(updated) => {
             loadedMediaIdsRef.current.add(updated.id);
             setEntries((current) =>

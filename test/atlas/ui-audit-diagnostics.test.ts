@@ -1,4 +1,4 @@
-import type { ConsoleMessage, Page } from '@playwright/test';
+import type { ConsoleMessage, Page, Request, Response } from '@playwright/test';
 
 import {
   isExpectedMapTeardownWarning,
@@ -18,6 +18,45 @@ const warning = {
 };
 
 describe('Intentional MapLibre removal diagnostics', () => {
+  it('ignores only an aborted repeat of a map style that already loaded', () => {
+    const originalStyleUrl = process.env.NEXT_PUBLIC_ATLAS_STYLE_URL;
+    const styleUrl = 'http://127.0.0.1:3100/e2e-map-style.json';
+    process.env.NEXT_PUBLIC_ATLAS_STYLE_URL = styleUrl;
+    const listeners = new Map<string, (value: unknown) => void>();
+    const page = {
+      url: () => destination,
+      on: (event: string, listener: (value: never) => void) => {
+        listeners.set(event, listener as (value: unknown) => void);
+      },
+      off: (event: string) => listeners.delete(event),
+    } as unknown as Page;
+    const monitor = monitorBrowserIssues(page);
+    const successfulRequest = {
+      url: () => styleUrl,
+    } as unknown as Request;
+    listeners.get('response')!({
+      status: () => 200,
+      url: () => styleUrl,
+      request: () => successfulRequest,
+    } as Response);
+    listeners.get('requestfailed')!({
+      url: () => styleUrl,
+      failure: () => ({ errorText: 'net::ERR_ABORTED' }),
+      isNavigationRequest: () => false,
+      resourceType: () => 'fetch',
+      method: () => 'GET',
+      headers: () => ({}),
+    } as Request);
+
+    expect(monitor.flush()).toEqual([]);
+    monitor.stop();
+    if (originalStyleUrl === undefined) {
+      delete process.env.NEXT_PUBLIC_ATLAS_STYLE_URL;
+    } else {
+      process.env.NEXT_PUBLIC_ATLAS_STYLE_URL = originalStyleUrl;
+    }
+  });
+
   it('keeps an identical live-map warning when a later teardown warning is deduplicated', () => {
     let documentUrl = 'http://127.0.0.1:3100/dashboard?view=journeys';
     const listeners = new Map<string, (message: ConsoleMessage) => void>();

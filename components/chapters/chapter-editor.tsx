@@ -24,8 +24,10 @@ import { useRouter } from 'next/navigation';
 import {
   Fragment,
   type FormEvent,
+  useCallback,
   useDeferredValue,
   useEffect,
+  useId,
   useMemo,
   useRef,
   useState,
@@ -175,6 +177,10 @@ export function ChapterEditor({
   const [errorType, setErrorType] = useState<ChapterActionError | null>(null);
   const [reorderAnnouncement, setReorderAnnouncement] = useState('');
   const [confirmingDelete, setConfirmingDelete] = useState(false);
+  const deleteCancelRef = useRef<HTMLButtonElement>(null);
+  const deleteTriggerRef = useRef<HTMLButtonElement>(null);
+  const navigationGuardId = useId();
+  const didLeaveRef = useRef(false);
   const [isPending, startTransition] = useTransition();
   const initialMemoryState = JSON.stringify(initialMemories);
   const currentMemoryState = JSON.stringify(
@@ -224,14 +230,56 @@ export function ChapterEditor({
     ? `/dashboard?view=journeys&journey=${encodeURIComponent(chapter.id)}`
     : '/dashboard?view=journeys';
 
+  const dismissDeleteConfirmation = useCallback(() => {
+    setConfirmingDelete(false);
+    window.requestAnimationFrame(() => deleteTriggerRef.current?.focus());
+  }, []);
+
+  const markLeaving = useCallback(() => {
+    didLeaveRef.current = true;
+    window.__FIELD_ATLAS_NAVIGATION_GUARD__?.clear(navigationGuardId);
+  }, [navigationGuardId]);
+
+  const leaveGuardedPage = useCallback(
+    (navigate: () => void) => {
+      markLeaving();
+      navigate();
+    },
+    [markLeaving],
+  );
+
   useEffect(() => {
-    if (!isDirty || isPending) return;
+    if (!isDirty && !isPending) {
+      window.__FIELD_ATLAS_NAVIGATION_GUARD__?.clear(navigationGuardId);
+      return;
+    }
+
+    const leaveMessage = isPending
+      ? 'Leave this journey while it is still saving? The save may not finish.'
+      : 'Leave this journey? Your unsaved changes will be lost.';
+
+    window.__FIELD_ATLAS_NAVIGATION_GUARD__?.set({
+      id: navigationGuardId,
+      message: leaveMessage,
+      onLeave: markLeaving,
+    });
 
     const confirmExit = (event: BeforeUnloadEvent) => {
+      if (didLeaveRef.current) return;
       event.preventDefault();
       event.returnValue = '';
     };
     const confirmLinkNavigation = (event: MouseEvent) => {
+      if (
+        event.defaultPrevented ||
+        event.button !== 0 ||
+        event.metaKey ||
+        event.ctrlKey ||
+        event.shiftKey ||
+        event.altKey
+      ) {
+        return;
+      }
       const target = event.target;
       const link =
         target instanceof Element
@@ -239,29 +287,63 @@ export function ChapterEditor({
           : null;
       if (
         !link ||
-        link.target === '_blank' ||
-        link.hasAttribute('download') ||
-        link.href === window.location.href
+        (link.target && link.target.toLowerCase() !== '_self') ||
+        link.hasAttribute('download')
       ) {
         return;
       }
-      if (
-        !window.confirm(
-          'Leave this journey? Your unsaved changes will be lost.',
-        )
-      ) {
+      const destination = new URL(link.href);
+      const sameDocument =
+        destination.origin === window.location.origin &&
+        destination.pathname === window.location.pathname &&
+        destination.search === window.location.search;
+      if (sameDocument) return;
+      if (!window.confirm(leaveMessage)) {
         event.preventDefault();
         event.stopImmediatePropagation();
+        return;
       }
-    };
 
+      event.preventDefault();
+      event.stopImmediatePropagation();
+      leaveGuardedPage(() => {
+        if (destination.origin === window.location.origin) {
+          router.push(
+            `${destination.pathname}${destination.search}${destination.hash}`,
+          );
+        } else {
+          window.location.assign(destination.href);
+        }
+      });
+    };
     window.addEventListener('beforeunload', confirmExit);
     document.addEventListener('click', confirmLinkNavigation, true);
     return () => {
       window.removeEventListener('beforeunload', confirmExit);
       document.removeEventListener('click', confirmLinkNavigation, true);
+      window.__FIELD_ATLAS_NAVIGATION_GUARD__?.clear(navigationGuardId);
     };
-  }, [isDirty, isPending]);
+  }, [
+    isDirty,
+    isPending,
+    leaveGuardedPage,
+    markLeaving,
+    navigationGuardId,
+    router,
+  ]);
+
+  useEffect(() => {
+    if (!confirmingDelete) return;
+
+    if (!isPending) deleteCancelRef.current?.focus();
+    const handleEscape = (event: KeyboardEvent) => {
+      if (event.key !== 'Escape' || isPending) return;
+      event.preventDefault();
+      dismissDeleteConfirmation();
+    };
+    document.addEventListener('keydown', handleEscape);
+    return () => document.removeEventListener('keydown', handleEscape);
+  }, [confirmingDelete, dismissDeleteConfirmation, isPending]);
 
   function updateQuery(value: string) {
     setQuery(value);
@@ -392,18 +474,20 @@ export function ChapterEditor({
               journeySuggestion: journeySuggestion ?? undefined,
             });
 
+        if (didLeaveRef.current) return;
+
         if (!result.ok) {
           setError(result.message);
           setErrorType(result.error);
           return;
         }
 
-        router.push(
-          returnsToAtlas
-            ? `/dashboard?view=journeys&journey=${encodeURIComponent(result.data.id)}`
-            : `/dashboard/chapters/${result.data.id}?saved=${chapter ? 'updated' : 'created'}`,
-        );
+        const destination = returnsToAtlas
+          ? `/dashboard?view=journeys&journey=${encodeURIComponent(result.data.id)}`
+          : `/dashboard/chapters/${result.data.id}?saved=${chapter ? 'updated' : 'created'}`;
+        leaveGuardedPage(() => router.push(destination));
       } catch {
+        if (didLeaveRef.current) return;
         setError(
           'We could not reach Field Atlas. Check your connection and try saving again.',
         );
@@ -413,32 +497,34 @@ export function ChapterEditor({
   }
 
   function handleDelete() {
-    if (!chapter) return;
-    if (!confirmingDelete) {
-      setConfirmingDelete(true);
-      return;
-    }
+    if (!chapter || !confirmingDelete) return;
 
     setError('');
     setErrorType(null);
     startTransition(async () => {
       try {
-        const result = await deleteAtlasChapterAction(chapter.id);
+        const result = await deleteAtlasChapterAction({
+          id: chapter.id,
+          version: chapter.version,
+        });
+        if (didLeaveRef.current) return;
         if (!result.ok) {
           setError(result.message);
           setErrorType(result.error);
-          setConfirmingDelete(false);
+          dismissDeleteConfirmation();
           return;
         }
-        router.push(
-          returnsToAtlas ? '/dashboard?view=journeys' : '/dashboard/chapters',
-        );
+        const destination = returnsToAtlas
+          ? '/dashboard?view=journeys'
+          : '/dashboard/chapters';
+        leaveGuardedPage(() => router.push(destination));
       } catch {
+        if (didLeaveRef.current) return;
         setError(
           'We could not reach Field Atlas. Your journey has not been deleted.',
         );
         setErrorType('failed');
-        setConfirmingDelete(false);
+        dismissDeleteConfirmation();
       }
     });
   }
@@ -902,26 +988,55 @@ export function ChapterEditor({
             {chapter ? (
               <div className={styles.chapterDelete}>
                 {confirmingDelete ? (
-                  <p>
-                    Delete this journey? Its memories will stay in your atlas.
-                  </p>
-                ) : null}
-                <button
-                  type="button"
-                  onClick={handleDelete}
-                  disabled={isPending}
-                >
-                  <TrashIcon aria-hidden="true" />
-                  {confirmingDelete ? 'Yes, delete journey' : 'Delete journey'}
-                </button>
-                {confirmingDelete ? (
-                  <button
-                    type="button"
-                    onClick={() => setConfirmingDelete(false)}
+                  <div
+                    className={styles.chapterDeletePrompt}
+                    role="alertdialog"
+                    aria-labelledby="chapter-delete-title"
+                    aria-describedby="chapter-delete-description"
+                    aria-busy={isPending}
                   >
-                    Keep it
+                    <div>
+                      <strong id="chapter-delete-title">
+                        Delete this journey?
+                      </strong>
+                      <p id="chapter-delete-description">
+                        Its memories will stay in your atlas. This journey and
+                        its shared link will be removed permanently.
+                      </p>
+                    </div>
+                    <div className={styles.chapterDeleteActions}>
+                      <button
+                        ref={deleteCancelRef}
+                        type="button"
+                        onClick={dismissDeleteConfirmation}
+                        disabled={isPending}
+                      >
+                        Keep journey
+                      </button>
+                      <button
+                        type="button"
+                        className={styles.chapterDeleteDanger}
+                        onClick={handleDelete}
+                        disabled={isPending}
+                      >
+                        <TrashIcon aria-hidden="true" />
+                        {isPending
+                          ? 'Deleting journey…'
+                          : 'Delete journey permanently'}
+                      </button>
+                    </div>
+                  </div>
+                ) : (
+                  <button
+                    ref={deleteTriggerRef}
+                    type="button"
+                    onClick={() => setConfirmingDelete(true)}
+                    disabled={isPending}
+                  >
+                    <TrashIcon aria-hidden="true" />
+                    Delete journey
                   </button>
-                ) : null}
+                )}
               </div>
             ) : null}
           </div>

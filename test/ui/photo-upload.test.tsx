@@ -5,7 +5,11 @@
 import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 
-import { registerAtlasMediaAction } from '@/app/lib/actions/atlas-media';
+import {
+  deleteAtlasMediaAction,
+  discardAtlasMediaUploadAction,
+  registerAtlasMediaAction,
+} from '@/app/lib/actions/atlas-media';
 import { uploadAtlasMedia } from '@/app/lib/atlas/media-upload-client';
 import {
   analyzeAtlasImportPhoto,
@@ -28,9 +32,18 @@ jest.mock('@/app/lib/atlas/photo-import-client', () => ({
 }));
 
 describe('photo upload UI', () => {
+  beforeEach(() => {
+    jest.clearAllMocks();
+    jest.mocked(discardAtlasMediaUploadAction).mockResolvedValue({
+      ok: true,
+      data: { discarded: true },
+    });
+  });
+
   it('prepares, uploads, registers, and returns a valid photo', async () => {
     const user = userEvent.setup();
     const onChange = jest.fn();
+    const onBusyChange = jest.fn();
     Object.defineProperty(window.crypto, 'randomUUID', {
       configurable: true,
       value: jest.fn(() => '00000000-0000-4000-8000-000000000001'),
@@ -106,6 +119,7 @@ describe('photo upload UI', () => {
         media={[]}
         loading={false}
         onChange={onChange}
+        onBusyChange={onBusyChange}
       />,
     );
 
@@ -141,6 +155,11 @@ describe('photo upload UI', () => {
       }),
     );
     expect(onChange).toHaveBeenCalledWith([media]);
+    expect(onBusyChange).toHaveBeenCalledWith(true);
+    await waitFor(() => expect(onBusyChange).toHaveBeenLastCalledWith(false));
+    expect(screen.getByRole('status')).toHaveTextContent(
+      '1 photo was added and saved privately.',
+    );
   });
 
   it('rejects unsupported files before any upload begins', async () => {
@@ -154,6 +173,7 @@ describe('photo upload UI', () => {
         media={[]}
         loading={false}
         onChange={jest.fn()}
+        onBusyChange={jest.fn()}
       />,
     );
 
@@ -166,5 +186,135 @@ describe('photo upload UI', () => {
       'Choose a JPG, PNG, WebP, HEIC, or HEIF photograph.',
     );
     expect(uploadAtlasMedia).not.toHaveBeenCalled();
+  });
+
+  it('preserves the registration error when upload cleanup also fails', async () => {
+    const user = userEvent.setup();
+    const onBusyChange = jest.fn();
+    const consoleError = jest
+      .spyOn(console, 'error')
+      .mockImplementation(() => undefined);
+    Object.defineProperty(window.crypto, 'randomUUID', {
+      configurable: true,
+      value: jest.fn(() => '00000000-0000-4000-8000-000000000001'),
+    });
+    const source = new File(['photo'], 'kyoto.png', { type: 'image/png' });
+    const analysis = {
+      file: source,
+      name: source.name,
+      byteSize: source.size,
+      sourceHash: 'source-hash',
+      declaredMimeType: source.type,
+      format: 'png' as const,
+      isHeic: false,
+      canPrepare: true,
+      orientation: 1,
+      location: null,
+      capture: null,
+      issues: [],
+    };
+    jest.mocked(analyzeAtlasImportPhoto).mockResolvedValue(analysis);
+    jest.mocked(prepareAtlasImportPhoto).mockResolvedValue({
+      analysis,
+      master: new Blob(['master'], { type: 'image/jpeg' }),
+      thumbnail: new Blob(['thumbnail'], { type: 'image/webp' }),
+      dimensions: {
+        sourceWidth: 2400,
+        sourceHeight: 1600,
+        masterWidth: 1200,
+        masterHeight: 800,
+        thumbnailWidth: 600,
+        thumbnailHeight: 400,
+      },
+    });
+    jest
+      .mocked(uploadAtlasMedia)
+      .mockResolvedValueOnce({ pathname: 'atlas/memory-1/photo.jpg' } as never)
+      .mockResolvedValueOnce({
+        pathname: 'atlas/memory-1/photo.thumb.webp',
+      } as never);
+    jest.mocked(registerAtlasMediaAction).mockResolvedValue({
+      ok: false,
+      error: 'invalid',
+      message: 'The photo could not be registered.',
+    });
+    jest
+      .mocked(discardAtlasMediaUploadAction)
+      .mockRejectedValue(new Error('cleanup unavailable'));
+
+    render(
+      <MemoryPhotos
+        entryId="memory-1"
+        title="Kyoto at dusk"
+        placeLabel="Kyoto, Japan"
+        placeName="Kyoto"
+        media={[]}
+        loading={false}
+        onChange={jest.fn()}
+        onBusyChange={onBusyChange}
+      />,
+    );
+
+    await user.upload(screen.getByLabelText('Upload photos'), source);
+
+    expect(await screen.findByRole('alert')).toHaveTextContent(
+      'The photo could not be registered. The uploaded files could not be fully cleaned up. Please try again.',
+    );
+    expect(discardAtlasMediaUploadAction).toHaveBeenCalledTimes(1);
+    await waitFor(() => expect(onBusyChange).toHaveBeenLastCalledWith(false));
+    expect(screen.getByLabelText('Upload photos')).toBeEnabled();
+    consoleError.mockRestore();
+  });
+
+  it('recovers and reports an error when photo removal throws', async () => {
+    const user = userEvent.setup();
+    const onBusyChange = jest.fn();
+    const onChange = jest.fn();
+    const consoleError = jest
+      .spyOn(console, 'error')
+      .mockImplementation(() => undefined);
+    const media = {
+      id: 'photo-1',
+      entryId: 'memory-1',
+      mimeType: 'image/jpeg',
+      width: 1200,
+      height: 800,
+      byteSize: 5,
+      altText: 'Kyoto at dusk',
+      sortOrder: 0,
+      createdAt: '2026-08-17T12:00:00.000Z',
+      deliveryUrl: '/api/atlas/media/photo-1',
+      thumbnailUrl: '/api/atlas/media/photo-1?variant=thumbnail',
+    };
+    jest
+      .mocked(deleteAtlasMediaAction)
+      .mockRejectedValue(new Error('network down'));
+
+    render(
+      <MemoryPhotos
+        entryId="memory-1"
+        title="Kyoto at dusk"
+        placeLabel="Kyoto, Japan"
+        placeName="Kyoto"
+        media={[media]}
+        loading={false}
+        onChange={onChange}
+        onBusyChange={onBusyChange}
+      />,
+    );
+
+    await user.click(screen.getByRole('button', { name: 'Remove photo' }));
+    await user.click(
+      screen.getByRole('button', { name: 'Confirm remove photo' }),
+    );
+
+    expect(await screen.findByRole('alert')).toHaveTextContent(
+      'The photo could not be removed. Please try again.',
+    );
+    expect(onChange).not.toHaveBeenCalled();
+    expect(onBusyChange).toHaveBeenCalledWith(true);
+    await waitFor(() => expect(onBusyChange).toHaveBeenLastCalledWith(false));
+    expect(screen.getByRole('button', { name: 'Remove photo' })).toBeEnabled();
+    consoleError.mockRestore();
   });
 });

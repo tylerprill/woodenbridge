@@ -338,8 +338,19 @@ export async function getAtlasChapters({
         media.sort_order,
         media.created_at
     `,
-    sql<{ total: number | string }>`
-      SELECT COUNT(*)::int AS total
+    sql<{
+      total: number | string;
+      available_memory_count: number | string;
+    }>`
+      SELECT
+        COUNT(*)::int AS total,
+        (
+          SELECT COUNT(*)::int
+          FROM atlas_entries
+          WHERE user_id = ${userId}
+            AND record_state = 'saved'
+            AND deleted_at IS NULL
+        ) AS available_memory_count
       FROM atlas_chapters
       WHERE user_id = ${userId}
     `,
@@ -350,11 +361,15 @@ export async function getAtlasChapters({
   );
 
   const total = Number(countResult.rows[0]?.total ?? 0);
+  const availableMemoryCount = Number(
+    countResult.rows[0]?.available_memory_count ?? 0,
+  );
   return {
     chapters: chaptersResult.rows.map((row) =>
       toChapterSummary(row, coverByChapter.get(row.id) ?? null),
     ),
     total,
+    availableMemoryCount,
     page: currentPage,
     pageSize: limit,
     offset,
