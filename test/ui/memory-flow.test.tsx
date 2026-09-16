@@ -42,6 +42,41 @@ const entry: AtlasEntry = {
 };
 
 describe('memory capture UI', () => {
+  it.each(['draft', 'saved'] as const)(
+    'renders the %s editor on a valid modal dialog element',
+    (recordState) => {
+      render(
+        <MemoryDrawer
+          entry={{ ...entry, recordState }}
+          onClose={jest.fn()}
+          onDirtyChange={jest.fn()}
+          onUpdate={jest.fn()}
+          onArchive={jest.fn()}
+          mediaLoading={false}
+          placeResolving={false}
+        />,
+      );
+
+      const dialog = screen.getByRole('dialog', {
+        name: recordState === 'draft' ? 'Create memory' : 'Edit memory',
+      });
+      expect(dialog.tagName).toBe('DIV');
+      expect(screen.getByRole('textbox', { name: 'Title' })).toHaveStyle({
+        height: '44px',
+      });
+      expect(dialog.matches('aside')).toBe(false);
+      expect(dialog).toHaveAttribute('aria-modal', 'true');
+      expect(dialog).toHaveAttribute(
+        'aria-labelledby',
+        'memory-drawer-heading',
+      );
+      expect(dialog).toHaveAttribute(
+        'aria-describedby',
+        'memory-drawer-context',
+      );
+    },
+  );
+
   it('uses a growing title field and explicitly saves the complete memory', async () => {
     const user = userEvent.setup();
     const onUpdate = jest.fn();

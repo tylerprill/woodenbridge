@@ -12,6 +12,7 @@ every journey.
 - Structured place recognition with editable city, region, and country labels.
 - Multi-photo memories, optimized thumbnails, and designed keepsake cards.
 - My Journeys with ordered routes and revocable unlisted sharing links.
+- A private On this day page for rediscovering memories from earlier years.
 - Hierarchical user, administrator, and protected-owner access.
 - Database-backed revocable sessions and phishing-resistant passkey step-up for
   owner and administrator actions.
@@ -61,6 +62,18 @@ documented in the
 3. Sign in to open your personal atlas.
 4. Drop a pin and explicitly save a title, place, date, field note, and photos.
 5. Revisit keepsakes in My Places or arrange them into a shareable journey.
+
+## On this day
+
+On this day opens with your browser's local calendar date and finds memories
+from that exact month and day in earlier years. Browse historical dates with
+the date picker or previous/next day controls; February 29 matches only February 29. Anniversary results are paginated in groups of 24.
+
+When no anniversaries match, a separate **Recent memories** section shows up to
+six visited memories on or before the selected date. Only your saved, visited,
+undeleted memories appear; unfinished photo imports are excluded. Cards link
+to the memory's keepsake, its pin on the Atlas, and a related journey when one
+exists. The page and its photographs remain private to your verified account.
 
 ## Browser UI audits
 

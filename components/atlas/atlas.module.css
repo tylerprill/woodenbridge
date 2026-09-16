@@ -1015,6 +1015,7 @@
 
 .titleField textarea {
   width: 100%;
+  min-height: 44px;
   max-height: 5.75rem;
   resize: none;
   overflow-y: auto;
@@ -1085,7 +1086,7 @@
 }
 
 .segmentedControl button {
-  min-height: 2.45rem;
+  min-height: 44px;
   border-radius: 0.68rem;
   color: var(--forest-600);
   font-size: 0.68rem;

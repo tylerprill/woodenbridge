@@ -3,6 +3,7 @@
 import {
   BookOpenIcon,
   BookmarkIcon,
+  CalendarDaysIcon,
   GlobeAltIcon,
   PhotoIcon,
   ShieldCheckIcon,
@@ -20,6 +21,11 @@ const atlasLinks = [
   { name: 'Upload photos', href: '/dashboard/import', icon: PhotoIcon },
   { name: 'My places', href: '/dashboard/places', icon: BookmarkIcon },
   { name: 'My Journeys', href: '/dashboard/chapters', icon: BookOpenIcon },
+  {
+    name: 'On this day',
+    href: '/dashboard/on-this-day',
+    icon: CalendarDaysIcon,
+  },
 ];
 
 type NavigationLink = (typeof atlasLinks)[number];
@@ -64,6 +70,12 @@ function NavigationSection({
             <Link
               key={link.name}
               href={link.href}
+              prefetch={
+                link.href === '/dashboard/on-this-day' ||
+                link.href === '/dashboard/chapters'
+                  ? false
+                  : undefined
+              }
               aria-label={link.name}
               aria-current={isActive ? 'page' : undefined}
               title={link.name}
