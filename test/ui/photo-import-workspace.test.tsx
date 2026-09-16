@@ -460,7 +460,7 @@ async function reachStories(user: ReturnType<typeof userEvent.setup>) {
   expect(
     screen.getByRole('heading', {
       level: 1,
-      name: 'See where the journey took shape.',
+      name: 'See where your memories took shape.',
     }),
   ).toBeVisible();
   await user.click(
@@ -547,6 +547,24 @@ describe('bulk photo import workspace', () => {
     expect(finalizeAtlasImportBatchAction).toHaveBeenCalledWith(
       expect.objectContaining({ createChapter: false, coverMediaId: null }),
     );
+  });
+
+  it('keeps rejected-file feedback outside pristine landscape styling', async () => {
+    const { container } = render(<PhotoImportWorkspace />);
+
+    fireEvent.change(screen.getByLabelText('Choose photos'), {
+      target: {
+        files: [new File(['notes'], 'notes.txt', { type: 'text/plain' })],
+      },
+    });
+
+    expect(await screen.findByRole('alert')).toHaveTextContent(
+      'Some photographs need attention.',
+    );
+    expect(container.querySelector('[data-step="choose"]')).not.toHaveAttribute(
+      'data-pristine',
+    );
+    expect(screen.getByLabelText('Choose photos')).toBeVisible();
   });
 
   it('blocks finalization until a filesystem fallback date is explicitly accepted', async () => {
@@ -992,13 +1010,18 @@ describe('bulk photo import workspace', () => {
         shareId: 'share-recovered',
       },
     });
-    render(<PhotoImportWorkspace recoveredBatch={recoveredBatch('ready')} />);
+    const { container } = render(
+      <PhotoImportWorkspace recoveredBatch={recoveredBatch('ready')} />,
+    );
 
     expect(
       screen.getByRole('heading', {
         name: 'An interrupted private upload is waiting.',
       }),
     ).toBeVisible();
+    expect(container.querySelector('[data-step="choose"]')).not.toHaveAttribute(
+      'data-pristine',
+    );
     expect(screen.queryByLabelText('Choose photos')).not.toBeInTheDocument();
     expect(screen.getByText('Lanterns after rain')).toBeVisible();
     await user.click(screen.getByRole('button', { name: 'Finish journey' }));
@@ -1535,7 +1558,7 @@ describe('bulk photo import workspace', () => {
 
     expect(
       screen.getByRole('heading', {
-        name: 'See where the journey took shape.',
+        name: 'See where your memories took shape.',
       }),
     ).toBeVisible();
     expect(

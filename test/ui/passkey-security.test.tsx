@@ -284,17 +284,27 @@ describe('passkey security experience', () => {
     );
   });
 
-  it('truthfully presents legacy credentials as inactive for regular users', () => {
+  it('keeps legacy credential cleanup concise for regular users', () => {
     renderPanel({ isPrivileged: false });
 
-    expect(screen.getByText('Inactive passkeys')).toBeVisible();
-    expect(screen.getByText(/members cannot use passkeys/i)).toBeVisible();
+    expect(screen.getByText('Legacy passkeys')).toBeVisible();
+    expect(screen.getByText(/inactive now/i)).toBeVisible();
+    expect(
+      screen.queryByText(/management step-up is inactive/i),
+    ).not.toBeInTheDocument();
     expect(
       screen.queryByRole('button', { name: /create passkey/i }),
     ).toBeNull();
     expect(
       screen.queryByRole('button', { name: /verify with a passkey/i }),
     ).toBeNull();
+  });
+
+  it('omits management-only passkey content for a regular user with no legacy credentials', () => {
+    renderPanel({ isPrivileged: false, passkeys: [] });
+
+    expect(screen.queryByText(/passkey/i)).not.toBeInTheDocument();
+    expect(screen.queryByRole('button')).not.toBeInTheDocument();
   });
 
   it('uses recovery only to open a short replacement-passkey window', async () => {

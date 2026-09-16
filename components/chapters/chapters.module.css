@@ -1,6 +1,7 @@
 .chaptersPage,
 .editorPage,
-.chapterDetail {
+.chapterDetail,
+.journeyPrerequisitePage {
   --chapter-line: rgba(16, 35, 29, 0.14);
   --chapter-soft-line: rgba(16, 35, 29, 0.09);
   width: min(100%, 86rem);
@@ -405,6 +406,138 @@
 
 .chaptersEmpty > a {
   margin-top: 1.7rem;
+}
+
+/* New journey prerequisite */
+
+.journeyPrerequisitePage {
+  display: grid;
+  align-content: start;
+}
+
+.prerequisiteBack {
+  display: inline-flex;
+  width: fit-content;
+  min-height: 2.75rem;
+  align-items: center;
+  margin-bottom: clamp(1rem, 3vw, 1.75rem);
+  color: var(--forest-600);
+  gap: 0.4rem;
+  font-size: 0.69rem;
+  font-weight: 800;
+  letter-spacing: 0.05em;
+  text-decoration: none;
+  text-transform: uppercase;
+  transition: color 180ms ease;
+}
+
+.prerequisiteBack:hover,
+.prerequisiteBack:focus-visible {
+  color: var(--timber);
+}
+
+.prerequisiteBack svg {
+  width: 1rem;
+}
+
+.journeyPrerequisite {
+  display: grid;
+  width: min(100%, 44rem);
+  justify-self: center;
+  justify-items: center;
+  border: 1px solid var(--chapter-line);
+  border-radius: 2rem;
+  background: rgba(251, 250, 245, 0.76);
+  padding: clamp(2rem, 7vw, 4.75rem) clamp(1.25rem, 5vw, 3.5rem);
+  box-shadow: 0 1rem 2.8rem rgba(16, 35, 29, 0.04);
+  text-align: center;
+}
+
+.prerequisiteIcon {
+  display: grid;
+  width: 3.5rem;
+  height: 3.5rem;
+  place-items: center;
+  border-radius: 50%;
+  margin-bottom: 1rem;
+  background: rgba(76, 106, 91, 0.09);
+  color: var(--forest-600);
+}
+
+.prerequisiteIcon svg {
+  width: 1.55rem;
+}
+
+.journeyPrerequisite h1 {
+  max-width: 32rem;
+  margin-top: 0.7rem;
+  font-family: Georgia, 'Times New Roman', serif;
+  font-size: clamp(2rem, 6vw, 3.6rem);
+  font-weight: 400;
+  letter-spacing: -0.05em;
+  line-height: 1.02;
+}
+
+.journeyPrerequisite > p:last-of-type {
+  max-width: 32rem;
+  margin-top: 1rem;
+  color: var(--forest-600);
+  font-size: 0.88rem;
+  line-height: 1.65;
+}
+
+.prerequisiteActions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  margin-top: 1.6rem;
+  gap: 0.65rem;
+}
+
+.prerequisiteActions a {
+  display: inline-flex;
+  min-width: 44px;
+  min-height: 44px;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid rgba(16, 35, 29, 0.17);
+  border-radius: 999px;
+  background: var(--paper-light);
+  color: var(--forest-950);
+  padding: 0.7rem 1.05rem;
+  gap: 0.45rem;
+  font-size: 0.72rem;
+  font-weight: 800;
+  text-decoration: none;
+  transition:
+    background 180ms ease,
+    border-color 180ms ease,
+    color 180ms ease,
+    transform 180ms ease;
+}
+
+.prerequisiteActions a:hover,
+.prerequisiteActions a:focus-visible {
+  border-color: var(--timber);
+  color: var(--timber);
+  transform: translateY(-1px);
+}
+
+.prerequisiteActions a.primaryAction {
+  border-color: var(--forest-950);
+  background: var(--forest-950);
+  color: var(--paper-light);
+}
+
+.prerequisiteActions a.primaryAction:hover,
+.prerequisiteActions a.primaryAction:focus-visible {
+  border-color: var(--timber);
+  background: var(--timber);
+  color: white;
+}
+
+.prerequisiteActions svg {
+  width: 1rem;
 }
 
 /* Editor */
@@ -2707,8 +2840,8 @@
 }
 
 .chapterStop :global(.atlas-carousel-dots button) {
-  width: 2.5rem;
-  height: 2.5rem;
+  width: 2.75rem;
+  height: 2.75rem;
 }
 
 .chapterStop :global(.atlas-carousel-count) {
@@ -2959,6 +3092,18 @@
 
   .newChapterButton {
     min-height: 2.9rem;
+  }
+
+  .journeyPrerequisite {
+    border-radius: 1.5rem;
+  }
+
+  .prerequisiteActions {
+    width: 100%;
+  }
+
+  .prerequisiteActions a {
+    width: 100%;
   }
 
   .editorProgress {
@@ -3361,6 +3506,89 @@
   .transitionEditor label > button,
   .chapterDelete button {
     padding: 0.5rem 0.65rem;
+  }
+}
+
+@media (max-height: 480px) and (orientation: landscape) {
+  .chaptersHeader {
+    margin-bottom: 0.75rem;
+    gap: 0.5rem;
+  }
+
+  .chaptersHeader h1 {
+    margin-top: 0.25rem;
+    font-size: 2.15rem;
+  }
+
+  .chaptersHeader > div:first-child > p:last-child {
+    margin-top: 0.35rem;
+    font-size: 0.72rem;
+    line-height: 1.35;
+  }
+
+  .chaptersEmpty {
+    min-height: 0;
+    padding: 1rem 1.25rem;
+  }
+
+  .emptyChapterArt,
+  .chaptersEmpty > p:first-of-type {
+    display: none;
+  }
+
+  .chaptersEmpty h2 {
+    margin-top: 0;
+    font-size: 1.65rem;
+  }
+
+  .chaptersEmpty > p:not(:first-of-type) {
+    margin-top: 0.4rem;
+    font-size: 0.72rem;
+    line-height: 1.4;
+  }
+
+  .chaptersEmpty > a {
+    min-height: 2.75rem;
+    margin-top: 0.65rem;
+  }
+
+  .prerequisiteBack {
+    min-height: 2.75rem;
+    margin-bottom: 0.35rem;
+  }
+
+  .journeyPrerequisite {
+    justify-items: start;
+    border-radius: 1.15rem;
+    padding: 0.9rem 1.15rem;
+    text-align: left;
+  }
+
+  .prerequisiteIcon,
+  .journeyPrerequisite > p:first-of-type {
+    display: none;
+  }
+
+  .journeyPrerequisite h1 {
+    margin-top: 0;
+    font-size: 1.7rem;
+  }
+
+  .journeyPrerequisite > p:last-of-type {
+    margin-top: 0.35rem;
+    font-size: 0.72rem;
+    line-height: 1.4;
+  }
+
+  .prerequisiteActions {
+    width: 100%;
+    justify-content: flex-start;
+    margin-top: 0.65rem;
+  }
+
+  .prerequisiteActions a {
+    width: auto;
+    min-height: 2.75rem;
   }
 }
 

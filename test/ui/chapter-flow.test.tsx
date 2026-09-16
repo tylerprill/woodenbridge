@@ -109,6 +109,9 @@ describe('chapter creation and sharing UI', () => {
     expect(screen.getByText('Journey workshop')).toBeInTheDocument();
     expect(screen.getByLabelText('Journey title')).toBeInTheDocument();
     expect(screen.getByLabelText('Journey introduction')).toBeInTheDocument();
+    expect(screen.getByText(/memories selected/)).toHaveTextContent(
+      /0\s*memories selected/,
+    );
     expect(screen.getByRole('link', { name: 'My Journeys' })).toHaveAttribute(
       'href',
       '/dashboard/chapters',
@@ -127,6 +130,20 @@ describe('chapter creation and sharing UI', () => {
     expect(screen.getByRole('link', { name: 'Share journey' })).toHaveAttribute(
       'href',
       '/dashboard/chapters/chapter-1/edit?step=arrange#chapter-sharing-heading',
+    );
+  });
+
+  it('uses singular memory copy for a one-item populated selection', () => {
+    render(
+      <ChapterEditor
+        chapter={null}
+        availableEntries={memories}
+        initialMemoryIds={['memory-1']}
+      />,
+    );
+
+    expect(screen.getByText(/memory selected/)).toHaveTextContent(
+      /01\s*memory selected/,
     );
   });
 

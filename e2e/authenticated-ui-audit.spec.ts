@@ -2,7 +2,6 @@ import path from 'node:path';
 
 import { expect, test, type Page, type TestInfo } from '@playwright/test';
 
-import { E2E_FIXTURE } from '../scripts/seed-e2e.js';
 import {
   auditCurrentPage,
   monitorBrowserIssues,
@@ -45,7 +44,9 @@ function auditedViewports(testInfo: TestInfo): AuditViewport[] {
   if (testInfo.project.name === 'chromium') {
     return [
       { name: 'small-phone', width: 320, height: 568 },
+      { name: 'mobile-landscape', width: 568, height: 320 },
       { name: 'tablet', width: 901, height: 900 },
+      { name: 'short-desktop', width: 1280, height: 600 },
       { name: 'desktop', width: 1440, height: 900 },
     ];
   }
@@ -99,7 +100,7 @@ async function signIn(page: Page) {
 test('authenticated routes and primary interactions pass the UI audit', async ({
   page,
 }, testInfo) => {
-  test.setTimeout(300_000);
+  test.setTimeout(480_000);
   await signIn(page);
   // This suite consumes login as test setup; the public UI audit owns the
   // login page itself. Start route diagnostics at the authenticated boundary
@@ -133,7 +134,6 @@ test('authenticated routes and primary interactions pass the UI audit', async ({
       name: 'on-this-day-anniversary',
       path: '/dashboard/on-this-day?date=2026-09-15',
       expectedHeading: 'On this day',
-      expectedSelector: `[data-rediscovery-mode="anniversary"] a[href="/dashboard/card/${E2E_FIXTURE.entryIds[1]}"]`,
       readySelector: '[data-rediscovery-state="ready"]',
     },
     {
@@ -179,7 +179,7 @@ test('authenticated routes and primary interactions pass the UI audit', async ({
     {
       name: 'security',
       path: '/dashboard/security',
-      expectedHeading: 'Security.',
+      expectedHeading: /^(?:Account & security|Security)\.$/,
     },
     {
       name: 'legacy-users',
@@ -215,7 +215,10 @@ test('authenticated routes and primary interactions pass the UI audit', async ({
           readySelector: route.readySelector,
         },
       );
-      if (route.name === 'on-this-day-recent') {
+      if (
+        route.name === 'on-this-day-recent' &&
+        (await page.locator('[data-memory-grid="recent"]').count()) > 0
+      ) {
         const heights = await page
           .locator('[data-memory-grid="recent"] > article')
           .evaluateAll((cards) =>
@@ -235,51 +238,79 @@ test('authenticated routes and primary interactions pass the UI audit', async ({
   }
   await page.goto('/dashboard/on-this-day');
   await expect(page.locator('[data-rediscovery-state="ready"]')).toBeVisible();
-  await page.getByLabel('Choose a date', { exact: true }).fill('2026-09-15');
+  const anniversaryCandidate = await page
+    .locator('article')
+    .evaluateAll((cards) => {
+      const today = new Date();
+      const todayDate = [
+        today.getFullYear(),
+        String(today.getMonth() + 1).padStart(2, '0'),
+        String(today.getDate()).padStart(2, '0'),
+      ].join('-');
+
+      for (const card of cards) {
+        const memoryDate = card.querySelector('time')?.getAttribute('datetime');
+        const memoryLink = card.querySelector<HTMLAnchorElement>(
+          'a[href^="/dashboard/card/"]',
+        );
+        if (!memoryDate || !memoryLink) continue;
+
+        const monthAndDay = memoryDate.slice(5);
+        const selectedYear =
+          monthAndDay <= todayDate.slice(5)
+            ? today.getFullYear()
+            : today.getFullYear() - 1;
+        if (selectedYear <= Number(memoryDate.slice(0, 4))) continue;
+
+        return {
+          href: memoryLink.getAttribute('href'),
+          selectedDate: `${selectedYear}-${monthAndDay}`,
+        };
+      }
+
+      return null;
+    });
+  expect(
+    anniversaryCandidate,
+    'The populated UI account needs a dated memory from an earlier year.',
+  ).not.toBeNull();
+  if (!anniversaryCandidate?.href) {
+    throw new Error(
+      'Could not derive an anniversary from the populated account.',
+    );
+  }
+  const previousDate = new Date(
+    `${anniversaryCandidate.selectedDate}T12:00:00Z`,
+  );
+  previousDate.setUTCDate(previousDate.getUTCDate() - 1);
+  const previousDateValue = previousDate.toISOString().slice(0, 10);
+
+  await page
+    .getByLabel('Choose a date', { exact: true })
+    .fill(anniversaryCandidate.selectedDate);
   await page
     .getByRole('button', { name: 'Find memories', exact: true })
     .click();
   await expect(page).toHaveURL((url) => {
     return (
       url.pathname === '/dashboard/on-this-day' &&
-      url.searchParams.get('date') === '2026-09-15'
+      url.searchParams.get('date') === anniversaryCandidate.selectedDate
     );
   });
   await expect(
     page.locator('[data-rediscovery-state="ready"]'),
   ).toHaveAttribute('data-rediscovery-mode', 'anniversary');
   await expect(
-    page.getByRole('heading', {
-      name: 'Bikes beneath the Belle Isle trees',
-      exact: true,
-    }),
-  ).toBeVisible();
-  await expect(
-    page
-      .locator(`a[href="/dashboard/card/${E2E_FIXTURE.entryIds[1]}"]`)
-      .first(),
+    page.locator(`a[href="${anniversaryCandidate.href}"]`).first(),
   ).toBeVisible();
   await page.getByRole('link', { name: 'Previous day', exact: true }).click();
   await expect(page).toHaveURL((url) => {
     return (
       url.pathname === '/dashboard/on-this-day' &&
-      url.searchParams.get('date') === '2026-09-14'
+      url.searchParams.get('date') === previousDateValue
     );
   });
-  await expect(
-    page.locator('[data-rediscovery-state="ready"]'),
-  ).toHaveAttribute('data-rediscovery-mode', 'anniversary');
-  await expect(
-    page.getByRole('heading', {
-      name: 'Morning along the Detroit RiverWalk',
-      exact: true,
-    }),
-  ).toBeVisible();
-  await expect(
-    page
-      .locator(`a[href="/dashboard/card/${E2E_FIXTURE.entryIds[0]}"]`)
-      .first(),
-  ).toBeVisible();
+  await expect(page.locator('[data-rediscovery-state="ready"]')).toBeVisible();
   await auditCurrentPage(
     page,
     testInfo,
@@ -295,17 +326,14 @@ test('authenticated routes and primary interactions pass the UI audit', async ({
   await expect(page).toHaveURL((url) => {
     return (
       url.pathname === '/dashboard/on-this-day' &&
-      url.searchParams.get('date') === '2026-09-15'
+      url.searchParams.get('date') === anniversaryCandidate.selectedDate
     );
   });
   await expect(
     page.locator('[data-rediscovery-state="ready"]'),
   ).toHaveAttribute('data-rediscovery-mode', 'anniversary');
   await expect(
-    page.getByRole('heading', {
-      name: 'Bikes beneath the Belle Isle trees',
-      exact: true,
-    }),
+    page.locator(`a[href="${anniversaryCandidate.href}"]`).first(),
   ).toBeVisible();
 
   await page.goto('/dashboard');

@@ -7,8 +7,11 @@ import { z } from 'zod';
 import { signOut } from '@/auth.session';
 import {
   clearEmailVerificationChallengeCookie,
+  clearEmailVerificationDestinationCookie,
+  clearVerifiedLoginChallengeCookie,
   getEmailVerificationChallengeCookie,
   setEmailVerificationChallengeCookie,
+  setVerifiedLoginChallengeCookie,
 } from '@/app/lib/auth/email-verification-cookie';
 import {
   deleteExpiredEmailVerificationData,
@@ -127,7 +130,11 @@ export async function submitEmailVerificationCode(
       };
     }
 
-    await clearEmailVerificationChallengeCookie();
+    await Promise.all([
+      setVerifiedLoginChallengeCookie(challengeId),
+      clearEmailVerificationChallengeCookie(),
+      clearEmailVerificationDestinationCookie(),
+    ]);
     verifiedUser = result.user;
     recordSecurityEvent('verification.attempt', 'success');
   } catch (error) {
@@ -162,7 +169,11 @@ export async function submitEmailVerificationCode(
 
 export async function restartEmailVerification(formData?: FormData) {
   const postAuthIntent = getPostAuthIntent(formData?.get('intent'));
-  await clearEmailVerificationChallengeCookie();
+  await Promise.all([
+    clearEmailVerificationChallengeCookie(),
+    clearEmailVerificationDestinationCookie(),
+    clearVerifiedLoginChallengeCookie(),
+  ]);
   await signOut({
     redirectTo: withPostAuthIntent('/sign-up', postAuthIntent),
   });

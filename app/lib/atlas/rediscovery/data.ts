@@ -86,28 +86,41 @@ export async function getRediscoveryData({
   const day = Number(calendarDate.slice(8, 10));
   const yearStart = `${calendarDate.slice(0, 4)}-01-01`;
 
-  const countResult = await sql<{ total: number | string }>`
-    SELECT COUNT(*)::int AS total
-    FROM atlas_entries AS entry
-    WHERE entry.user_id = ${userId}
-      AND entry.record_state = 'saved'
-      AND entry.journey_state = 'visited'
-      AND entry.deleted_at IS NULL
-      AND entry.visited_on < ${yearStart}::date
-      AND EXTRACT(MONTH FROM entry.visited_on) = ${month}
-      AND EXTRACT(DAY FROM entry.visited_on) = ${day}
-      AND NOT EXISTS (
-        SELECT 1
-        FROM atlas_import_items AS import_item
-        INNER JOIN atlas_import_batches AS import_batch
-          ON import_batch.id = import_item.batch_id
-          AND import_batch.user_id = import_item.user_id
-        WHERE import_item.entry_id = entry.id
-          AND import_item.user_id = entry.user_id
-          AND import_batch.status <> 'completed'
-      )
+  const countResult = await sql<{
+    total: number | string;
+    earliest_date: Date | string | null;
+  }>`
+    WITH eligible_entries AS (
+      SELECT entry.visited_on
+      FROM atlas_entries AS entry
+      WHERE entry.user_id = ${userId}
+        AND entry.record_state = 'saved'
+        AND entry.journey_state = 'visited'
+        AND entry.deleted_at IS NULL
+        AND NOT EXISTS (
+          SELECT 1
+          FROM atlas_import_items AS import_item
+          INNER JOIN atlas_import_batches AS import_batch
+            ON import_batch.id = import_item.batch_id
+            AND import_batch.user_id = import_item.user_id
+          WHERE import_item.entry_id = entry.id
+            AND import_item.user_id = entry.user_id
+            AND import_batch.status <> 'completed'
+        )
+    )
+    SELECT
+      COUNT(*) FILTER (
+        WHERE entry.visited_on < ${yearStart}::date
+          AND EXTRACT(MONTH FROM entry.visited_on) = ${month}
+          AND EXTRACT(DAY FROM entry.visited_on) = ${day}
+      )::int AS total,
+      MIN(entry.visited_on)::text AS earliest_date
+    FROM eligible_entries AS entry
   `;
   const anniversaryTotal = Number(countResult.rows[0]?.total ?? 0);
+  const earliestDate = toCalendarDate(
+    countResult.rows[0]?.earliest_date ?? null,
+  );
   const mode = anniversaryTotal > 0 ? 'anniversary' : 'recent';
   const pageSize =
     mode === 'anniversary' ? ANNIVERSARY_PAGE_SIZE : RECENT_MEMORY_LIMIT;
@@ -214,6 +227,7 @@ export async function getRediscoveryData({
 
   return {
     date: calendarDate,
+    earliestDate,
     mode,
     total: mode === 'anniversary' ? anniversaryTotal : memories.length,
     page: currentPage,

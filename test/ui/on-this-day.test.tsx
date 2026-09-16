@@ -61,6 +61,7 @@ function memory(
 function data(overrides: Partial<RediscoveryData> = {}): RediscoveryData {
   return {
     date: '2026-09-15',
+    earliestDate: '2025-09-15',
     mode: 'anniversary',
     total: 1,
     page: 1,
@@ -187,8 +188,13 @@ describe('On this day', () => {
   it('invites uploading and opening Atlas when there are no memories', () => {
     const { container } = render(
       <OnThisDay
-        data={data({ mode: 'recent', total: 0, memories: [] })}
-        controls={null}
+        data={data({
+          earliestDate: null,
+          mode: 'recent',
+          total: 0,
+          memories: [],
+        })}
+        controls={<button type="button">Find memories</button>}
       />,
     );
 
@@ -198,8 +204,14 @@ describe('On this day', () => {
       }),
     ).toBeInTheDocument();
     expect(
-      screen.getByText('No memories from September 15 in earlier years.'),
-    ).toBeInTheDocument();
+      screen.queryByText('No memories from September 15 in earlier years.'),
+    ).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole('button', { name: 'Find memories' }),
+    ).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole('region', { name: 'Selected memory date' }),
+    ).not.toBeInTheDocument();
     expect(screen.getByRole('link', { name: 'Upload photos' })).toHaveAttribute(
       'href',
       '/dashboard/import',
@@ -212,6 +224,25 @@ describe('On this day', () => {
     expect(
       screen.queryByRole('navigation', { name: 'Memory pages' }),
     ).not.toBeInTheDocument();
+  });
+
+  it('keeps date exploration available when a populated atlas has no result for the selected day', () => {
+    render(
+      <OnThisDay
+        data={data({ mode: 'recent', total: 0, memories: [] })}
+        controls={<button type="button">Find memories</button>}
+      />,
+    );
+
+    expect(
+      screen.getByRole('button', { name: 'Find memories' }),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole('region', { name: 'Selected memory date' }),
+    ).toHaveTextContent('No memories from September 15 in earlier years.');
+    expect(
+      screen.getByRole('heading', { name: 'Try another day in your atlas.' }),
+    ).toBeInTheDocument();
   });
 
   it('links owner memories, Atlas pins, and their journey without nested links', () => {

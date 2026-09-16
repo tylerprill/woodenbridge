@@ -212,7 +212,10 @@ export function PhotoImportReviewStep({
         )}
       </section>
 
-      <aside className={styles.journeyMap} aria-label="Detected journey map">
+      <aside
+        className={styles.journeyMap}
+        aria-label="Detected photo locations"
+      >
         {mapSuspended ? null : (
           <AtlasMap
             entries={mapEntries}

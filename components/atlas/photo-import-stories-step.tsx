@@ -209,8 +209,8 @@ export function PhotoImportStoriesStep({
           <small>{currentItem.description.length} / 1200</small>
         </div>
       </section>
-      <aside className={styles.storyRail} aria-label="Journey memories">
-        <p className="section-kicker">Journey outline</p>
+      <aside className={styles.storyRail} aria-label="Imported memories">
+        <p className="section-kicker">Memory outline</p>
         <ol>
           {items.map((item, index) => (
             <li
@@ -243,13 +243,13 @@ export function PhotoImportStoriesStep({
       <footer className={styles.actionBar}>
         <button
           type="button"
-          aria-label={storyIndex ? 'Previous memory' : 'Review journey'}
+          aria-label={storyIndex ? 'Previous memory' : 'Review memories'}
           onClick={onBack}
           disabled={locked}
         >
           <ArrowLeftIcon aria-hidden="true" />{' '}
           <span className={styles.longActionLabel}>
-            {storyIndex ? 'Previous memory' : 'Review journey'}
+            {storyIndex ? 'Previous memory' : 'Review memories'}
           </span>
           <span className={styles.shortActionLabel}>
             {storyIndex ? 'Previous' : 'Review'}

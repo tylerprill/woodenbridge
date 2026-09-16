@@ -433,7 +433,7 @@ export async function auditCurrentPage(
           return false;
         }
         const rect = effectiveRect(element);
-        return rect.width < 40 || rect.height < 40;
+        return rect.width < 43.5 || rect.height < 43.5;
       })
       .map((element) => {
         const rect = element.getBoundingClientRect();
@@ -455,6 +455,7 @@ export async function auditCurrentPage(
 
     return {
       activeMapCanvases: document.querySelectorAll('.maplibregl-canvas').length,
+      coarsePointer: window.matchMedia('(any-pointer: coarse)').matches,
       clippedControls,
       failedImages: Array.from(document.images)
         .filter((image) => image.complete && image.naturalWidth === 0)
@@ -476,14 +477,15 @@ export async function auditCurrentPage(
   expect.soft(metrics.mainLandmarks, `${label}: main landmarks`).toBe(1);
 
   const compactViewport = Boolean(
-    viewport && (viewport.width <= 480 || viewport.height <= 480),
+    (viewport && (viewport.width <= 480 || viewport.height <= 480)) ||
+    metrics.coarsePointer,
   );
   if (compactViewport) {
     expect
       .soft(metrics.smallEditableText, `${label}: editable text below 16px`)
       .toEqual([]);
     expect
-      .soft(metrics.smallTouchTargets, `${label}: controls below 40px`)
+      .soft(metrics.smallTouchTargets, `${label}: controls below 44px`)
       .toEqual([]);
   }
 
@@ -519,8 +521,24 @@ export async function auditCurrentPage(
     // Deferred images, maps, and sticky navigation can restore a scroll anchor
     // after the audit's long-page paint pass. Re-anchor every capture so the
     // evidence starts from the same visible state in every browser.
-    await page.evaluate(() => window.scrollTo(0, 0));
-    await page.waitForFunction(() => window.scrollY <= 1);
+    await page.evaluate(async () => {
+      if (document.activeElement instanceof HTMLElement) {
+        document.activeElement.blur();
+      }
+      for (let frame = 0; frame < 2; frame += 1) {
+        window.scrollTo({ behavior: 'instant', left: 0, top: 0 });
+        if (document.scrollingElement) {
+          document.scrollingElement.scrollLeft = 0;
+          document.scrollingElement.scrollTop = 0;
+        }
+        await new Promise<void>((resolve) =>
+          requestAnimationFrame(() => resolve()),
+        );
+      }
+    });
+    await expect
+      .poll(() => page.evaluate(() => window.scrollY), { timeout: 2_000 })
+      .toBeLessThanOrEqual(1);
     const screenshotPath = testInfo.outputPath(`${safeName(label)}.png`);
     // Playwright's WebKit full-page capture temporarily changes page styles,
     // which strict CSP correctly rejects. A viewport capture preserves useful

@@ -714,7 +714,7 @@
 }
 
 .placementPrompt > button {
-  min-height: 2.35rem;
+  min-height: 2.75rem;
   flex: 0 0 auto;
   padding-inline: 0.8rem;
   border: 1px solid rgba(245, 242, 233, 0.2);
@@ -871,6 +871,22 @@
 
 .emptyStateActions :is(a, button) svg {
   width: 0.9rem;
+}
+
+/* Empty accounts already have a focused pair of first actions in the card.
+   Remove duplicate map controls until the user starts placing a memory. */
+.workspace[data-atlas-empty='true']:not([data-placement='true'])
+  :is(.searchWrap, .toolDock, .filterDock) {
+  display: none;
+}
+
+.workspace[data-atlas-empty='true']:not([data-placement='true']) .emptyState {
+  left: 1.25rem;
+}
+
+.workspace[data-atlas-journeys-empty='true'][data-journey-panel-open='true']
+  :is(.searchWrap, .toolDock) {
+  display: none;
 }
 
 .memoryDrawer,
@@ -1915,6 +1931,7 @@
   .toolDock :is(button, a),
   .toolDock .addButton {
     display: flex;
+    min-width: 2.85rem;
     min-height: 3rem;
     padding-inline: 0.82rem;
     border-radius: 999px;
@@ -2165,6 +2182,16 @@
   }
 }
 
+@media (min-height: 481px) and (max-height: 640px) {
+  /* The global navigation still carries the product identity. Removing the
+     duplicate Atlas identity panel prevents it from colliding with the primary
+     first-memory actions in short browser windows. */
+  .workspace[data-atlas-empty='true']:not([data-placement='true'])
+    .atlasIdentity {
+    display: none;
+  }
+}
+
 @media (prefers-reduced-motion: reduce) {
   .photoLoading > span,
   .pinPulse::after,
@@ -2243,6 +2270,10 @@
 
 .journeyTray[data-detail='true'] {
   grid-template-rows: auto minmax(0, 1fr) auto;
+}
+
+.journeyTray[data-empty='true'] .journeyOverview {
+  display: grid;
 }
 
 .workspace[data-journey-panel-open='true']
@@ -2389,7 +2420,7 @@
 }
 
 .journeySuggestions article button {
-  min-height: 2.25rem;
+  min-height: 2.75rem;
   padding-inline: 0.75rem;
   border: 1px solid rgba(16, 35, 29, 0.12);
   border-radius: 999px;
@@ -2423,7 +2454,7 @@
 .journeyListActions :is(button, a),
 .journeyEmptyActions :is(button, a) {
   display: inline-flex;
-  min-height: 2.45rem;
+  min-height: 2.75rem;
   align-items: center;
   justify-content: center;
   padding-inline: 0.8rem;
@@ -3306,6 +3337,13 @@
     width: auto;
   }
 
+  .workspace[data-atlas-empty='true']:not([data-placement='true']) .emptyState {
+    top: 10rem;
+    right: 0.75rem;
+    bottom: auto;
+    left: 0.75rem;
+  }
+
   .toolDock {
     top: auto;
     bottom: 4.55rem;
@@ -3515,7 +3553,8 @@
 
   /* The empty-state card already names the Atlas. In short landscape, remove
      the duplicate identity card and keep the two first actions fully usable. */
-  .workspace[data-atlas-empty='true'] .atlasIdentity {
+  .workspace[data-atlas-empty='true']:not([data-placement='true'])
+    .atlasIdentity {
     display: none;
   }
 
@@ -3629,6 +3668,37 @@
     max-height: none;
   }
 
+  .journeyTray[data-empty='true'] > header {
+    padding: 0.55rem 0.75rem 0.45rem;
+  }
+
+  .journeyTray[data-empty='true'] .emptyTray {
+    min-height: 0;
+    padding: 0.55rem 0.85rem 0.7rem;
+  }
+
+  .journeyTray[data-empty='true'] .emptyTray > span {
+    display: none;
+  }
+
+  .journeyTray[data-empty='true'] .emptyTray strong {
+    font-size: 1.05rem;
+  }
+
+  .journeyTray[data-empty='true'] .emptyTray p {
+    margin-top: 0.2rem;
+    line-height: 1.35;
+  }
+
+  .journeyTray[data-empty='true'] .journeyEmptyActions {
+    flex-wrap: nowrap;
+    margin-top: 0.55rem;
+  }
+
+  .journeyTray[data-empty='true'] .journeyEmptyActions :is(a, button) {
+    min-height: 2.75rem;
+  }
+
   .workspace[data-atlas-surface='playback'] .journeyTray {
     /* Override the narrow portrait sheet's more-specific 76% height cap. */
     max-height: none;
@@ -3739,6 +3809,25 @@
     .journeyPlaybackFooter
     :is(button, a) {
     min-height: 2.75rem;
+  }
+}
+
+@media (any-pointer: coarse) {
+  .atlasModeSwitch button,
+  .journeyActions :is(button, a),
+  .journeyListActions :is(button, a),
+  .journeyEmptyActions :is(button, a),
+  .journeyPlaybackControls button,
+  .journeyPlaybackFooter :is(button, a),
+  .journeySuggestions article button,
+  .journeyError button {
+    min-height: 2.75rem;
+  }
+
+  .searchWrap:focus-within > button,
+  .searchWrap[data-expanded='true'] > button {
+    width: 2.75rem;
+    height: 2.75rem;
   }
 }
 

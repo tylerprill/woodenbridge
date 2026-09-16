@@ -60,7 +60,7 @@ describe('landing page product story', () => {
       screen.getByText('2 brought forward for review'),
     ).toBeInTheDocument();
     expect(
-      screen.getByRole('link', { name: /Upload your first journey/i }),
+      screen.getByRole('link', { name: /Upload your first photos/i }),
     ).toHaveAttribute('href', '/sign-up?intent=photo-import');
     expect(screen.getAllByRole('list').length).toBeGreaterThanOrEqual(2);
     expect(document.querySelector('#photo-upload')).not.toBeNull();
@@ -81,7 +81,7 @@ describe('landing page product story', () => {
       '/dashboard/import',
     );
     expect(
-      screen.getByRole('link', { name: /Upload another journey/i }),
+      screen.getByRole('link', { name: /Upload more photos/i }),
     ).toHaveAttribute('href', '/dashboard/import');
   });
 });

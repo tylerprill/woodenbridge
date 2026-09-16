@@ -7,6 +7,7 @@ export type RediscoveredMemory = {
 
 export type RediscoveryData = {
   date: string;
+  earliestDate: string | null;
   mode: 'anniversary' | 'recent';
   total: number;
   page: number;

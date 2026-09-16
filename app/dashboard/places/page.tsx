@@ -29,52 +29,59 @@ export default async function CollectionPage({
     page: Number.isFinite(requestedPage) ? requestedPage : 1,
   });
   const places = data.entries;
+  const hasPlaces = data.counts.total > 0;
 
   return (
-    <div className="dashboard-page collection-page">
+    <div
+      className={`dashboard-page collection-page${hasPlaces ? '' : 'collection-page-empty'}`}
+    >
       <header className="dashboard-page-heading">
         <div>
           <p className="section-kicker">Personal atlas</p>
           <h1>Your collection.</h1>
           <p>Places you have explored and those still calling you onward.</p>
         </div>
-        <div className="collection-heading-actions">
-          <Link href="/dashboard/import">
-            <PhotoIcon aria-hidden="true" /> Upload photos
-          </Link>
-          <div className="collection-count">
-            <BookmarkIcon aria-hidden="true" />
-            <span>
-              <strong>{data.counts.total}</strong>
-              saved places
-            </span>
+        {hasPlaces ? (
+          <div className="collection-heading-actions">
+            <Link href="/dashboard/import">
+              <PhotoIcon aria-hidden="true" /> Upload photos
+            </Link>
+            <div className="collection-count">
+              <BookmarkIcon aria-hidden="true" />
+              <span>
+                <strong>{data.counts.total}</strong>
+                saved places
+              </span>
+            </div>
           </div>
-        </div>
+        ) : null}
       </header>
 
-      <nav className="collection-filter" aria-label="Filter saved places">
-        <Link
-          href={collectionHref('all')}
-          data-active={filter === 'all' ? 'true' : 'false'}
-          aria-current={filter === 'all' ? 'page' : undefined}
-        >
-          All places
-        </Link>
-        <Link
-          href={collectionHref('visited')}
-          data-active={filter === 'visited' ? 'true' : 'false'}
-          aria-current={filter === 'visited' ? 'page' : undefined}
-        >
-          {data.counts.visited} remembered
-        </Link>
-        <Link
-          href={collectionHref('ahead')}
-          data-active={filter === 'ahead' ? 'true' : 'false'}
-          aria-current={filter === 'ahead' ? 'page' : undefined}
-        >
-          {data.counts.future} ahead
-        </Link>
-      </nav>
+      {hasPlaces ? (
+        <nav className="collection-filter" aria-label="Filter saved places">
+          <Link
+            href={collectionHref('all')}
+            data-active={filter === 'all' ? 'true' : 'false'}
+            aria-current={filter === 'all' ? 'page' : undefined}
+          >
+            All places
+          </Link>
+          <Link
+            href={collectionHref('visited')}
+            data-active={filter === 'visited' ? 'true' : 'false'}
+            aria-current={filter === 'visited' ? 'page' : undefined}
+          >
+            {data.counts.visited} remembered
+          </Link>
+          <Link
+            href={collectionHref('ahead')}
+            data-active={filter === 'ahead' ? 'true' : 'false'}
+            aria-current={filter === 'ahead' ? 'page' : undefined}
+          >
+            {data.counts.future} ahead
+          </Link>
+        </nav>
+      ) : null}
 
       {places.length ? (
         <section className="collection-grid" aria-label="Saved places">
@@ -97,7 +104,7 @@ export default async function CollectionPage({
           <p className="section-kicker">No places in this view</p>
           <h2 id="empty-filter-title">
             {filter === 'ahead'
-              ? 'No journeys are waiting in the wings.'
+              ? 'No future places are waiting in the wings.'
               : 'No remembered places match this view.'}
           </h2>
           <p>Your other keepsakes are still right where you left them.</p>

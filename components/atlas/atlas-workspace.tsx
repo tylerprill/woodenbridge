@@ -1154,6 +1154,11 @@ export function AtlasWorkspace({
   const mapEntries = buildingJourney ? eligibleJourneyEntries : visibleEntries;
   const mapMode = buildingJourney ? 'places' : mode;
   const playbackStopIndex = playingJourney ? experience.stopIndex : null;
+  const hasEmptyJourneyOverview =
+    mode === 'journeys' &&
+    journeyLoadState === 'ready' &&
+    journeyIndex.journeys.length === 0 &&
+    journeyIndex.suggestions.length === 0;
 
   return (
     <div
@@ -1162,6 +1167,7 @@ export function AtlasWorkspace({
       data-editor-open={selectedEntry ? 'true' : 'false'}
       data-atlas-mode={mode}
       data-atlas-empty={mode === 'places' && !entries.length ? 'true' : 'false'}
+      data-atlas-journeys-empty={hasEmptyJourneyOverview ? 'true' : 'false'}
       data-atlas-surface={experience.surface}
       data-builder-list-open={builderListOpen ? 'true' : 'false'}
       data-journey-panel-open={
@@ -1275,6 +1281,10 @@ export function AtlasWorkspace({
 
         <div
           className={styles.searchWrap}
+          hidden={
+            (mode === 'places' && !entries.length) ||
+            (hasEmptyJourneyOverview && journeyPanelOpen)
+          }
           data-expanded={query ? 'true' : 'false'}
           onClick={() => searchInputRef.current?.focus()}
         >
@@ -1450,7 +1460,11 @@ export function AtlasWorkspace({
 
       <div
         className={styles.toolDock}
-        hidden={buildingJourney}
+        hidden={
+          buildingJourney ||
+          (mode === 'places' && !entries.length && !placementMode) ||
+          (hasEmptyJourneyOverview && journeyPanelOpen)
+        }
         role="toolbar"
         aria-label={mode === 'journeys' ? 'Journey tools' : 'Atlas tools'}
         inert={selectedEntry || buildingJourney ? true : undefined}
@@ -1599,6 +1613,7 @@ export function AtlasWorkspace({
       {mode === 'places' ? (
         <div
           className={styles.filterDock}
+          hidden={!entries.length}
           role="group"
           aria-label="Filter memories"
           inert={selectedEntry ? true : undefined}

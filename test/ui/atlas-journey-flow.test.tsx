@@ -280,15 +280,11 @@ describe('Atlas Journey Lens', () => {
       within(tray).getByRole('link', { name: 'Place a memory' }),
     ).toHaveAttribute('href', '/dashboard');
 
-    const tools = screen.getByRole('toolbar', { name: 'Journey tools' });
-    expect(
-      within(tools).queryByRole('button', { name: 'Create journey' }),
-    ).not.toBeInTheDocument();
-    expect(
-      within(tools).getByRole('link', {
-        name: 'Add memories before creating a journey',
-      }),
-    ).toHaveAttribute('href', '/dashboard/import');
+    const tools = screen.getByRole('toolbar', { hidden: true });
+    expect(tools).toHaveAttribute('hidden');
+    expect(tools).toHaveAttribute('aria-label', 'Journey tools');
+    expect(tools).not.toHaveTextContent('Create journey');
+    expect(tools).toHaveTextContent('Add memories');
   });
 
   it('opens a journey, relives it, and keeps map-stop selection in sync', async () => {
