@@ -1971,24 +1971,6 @@
     font-size: 0.68rem;
   }
 
-  .emptyState {
-    top: auto;
-    right: 0.75rem;
-    bottom: 8.3rem;
-    left: 0.75rem;
-    width: auto;
-    padding: 1.3rem;
-    transform: none;
-  }
-
-  .emptyStateMark {
-    display: none;
-  }
-
-  .emptyState h2 {
-    font-size: 2rem;
-  }
-
   .placementPrompt {
     top: auto;
     right: 0.75rem;
@@ -3551,49 +3533,10 @@
     min-height: 0;
   }
 
-  /* The empty-state card already names the Atlas. In short landscape, remove
-     the duplicate identity card and keep the two first actions fully usable. */
+  /* The compact first-actions dock is enough context in short landscape. */
   .workspace[data-atlas-empty='true']:not([data-placement='true'])
     .atlasIdentity {
     display: none;
-  }
-
-  .workspace[data-atlas-empty='true'] .emptyState {
-    top: 0.55rem;
-    left: 0.55rem;
-    width: min(32rem, calc(100% - 5rem));
-    padding: 0.8rem 1rem 0.9rem;
-    border-radius: 1.1rem;
-    transform: none;
-  }
-
-  .workspace[data-atlas-empty='true'] .emptyStateMark {
-    display: none;
-  }
-
-  .workspace[data-atlas-empty='true'] .emptyState h2 {
-    max-width: none;
-    margin-top: 0.2rem;
-    font-size: 1.7rem;
-    line-height: 1;
-  }
-
-  .workspace[data-atlas-empty='true'] .emptyState > p:not(.eyebrow) {
-    max-width: 48ch;
-    margin-top: 0.4rem;
-    font-size: 0.72rem;
-    line-height: 1.35;
-  }
-
-  .workspace[data-atlas-empty='true'] .emptyStateActions {
-    display: grid;
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-    margin-top: 0.65rem;
-  }
-
-  .workspace[data-atlas-empty='true'] .emptyStateActions :is(a, button) {
-    min-height: 2.75rem;
-    justify-content: center;
   }
 
   /* Match the compact-sheet policy: a name-sized lens card must not cover
@@ -3809,6 +3752,62 @@
     .journeyPlaybackFooter
     :is(button, a) {
     min-height: 2.75rem;
+  }
+}
+
+/* On a new user's phone, let the Atlas itself be the welcome. Keep only the
+   two useful first actions in a quiet dock instead of covering the map with
+   the full desktop introduction. This rule intentionally follows every
+   container and short-landscape override above. */
+@media (max-width: 760px), (max-height: 480px) and (orientation: landscape) {
+  .workspace[data-atlas-empty='true']:not([data-placement='true']) .emptyState {
+    top: auto;
+    right: auto;
+    bottom: calc(0.75rem + env(safe-area-inset-bottom));
+    left: 50%;
+    width: min(26rem, calc(100% - 1.5rem));
+    padding: 0;
+    border: 0;
+    background: transparent;
+    box-shadow: none;
+    transform: translateX(-50%);
+    backdrop-filter: none;
+  }
+
+  .workspace[data-atlas-empty='true']:not([data-placement='true'])
+    .privacyNote {
+    display: none;
+  }
+
+  .workspace[data-atlas-empty='true']:not([data-placement='true'])
+    .emptyState
+    > :not(.emptyStateActions) {
+    display: none;
+  }
+
+  .workspace[data-atlas-empty='true']:not([data-placement='true'])
+    .emptyStateActions {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    margin-top: 0;
+    gap: 0.4rem;
+  }
+
+  .workspace[data-atlas-empty='true']:not([data-placement='true'])
+    .emptyStateActions
+    :is(a, button) {
+    min-width: 0;
+    min-height: 3rem;
+    justify-content: center;
+    padding-inline: 0.7rem;
+    box-shadow: 0 0.45rem 1.4rem rgba(16, 35, 29, 0.12);
+    white-space: nowrap;
+  }
+
+  .workspace[data-atlas-empty='true']:not([data-placement='true'])
+    .emptyStateActions
+    button {
+    background: rgba(251, 250, 245, 0.96);
   }
 }
 

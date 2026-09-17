@@ -1671,10 +1671,7 @@ export function AtlasWorkspace({
       ) : null}
 
       {mode === 'places' && !entries.length && !placementMode ? (
-        <section
-          className={styles.emptyState}
-          aria-labelledby="empty-atlas-title"
-        >
+        <section className={styles.emptyState} aria-label="Start your atlas">
           <span className={styles.emptyStateMark} aria-hidden="true" />
           <p className={styles.eyebrow}>The first page</p>
           <h2 id="empty-atlas-title">Your world is waiting.</h2>

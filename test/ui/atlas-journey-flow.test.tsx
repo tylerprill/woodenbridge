@@ -287,6 +287,26 @@ describe('Atlas Journey Lens', () => {
     expect(tools).toHaveTextContent('Add memories');
   });
 
+  it('keeps the empty Places actions in a focused start region', () => {
+    render(
+      <AtlasWorkspace
+        displayName="Explorer"
+        initialData={{ ...initialData, entries: [] }}
+      />,
+    );
+
+    const start = screen.getByRole('region', { name: 'Start your atlas' });
+    expect(
+      within(start).getByRole('heading', { name: 'Your world is waiting.' }),
+    ).toBeInTheDocument();
+    expect(
+      within(start).getByRole('link', { name: 'Upload photos' }),
+    ).toHaveAttribute('href', '/dashboard/import');
+    expect(
+      within(start).getByRole('button', { name: 'Place manually' }),
+    ).toBeEnabled();
+  });
+
   it('opens a journey, relives it, and keeps map-stop selection in sync', async () => {
     const user = userEvent.setup();
     render(

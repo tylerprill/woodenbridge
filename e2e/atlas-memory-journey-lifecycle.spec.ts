@@ -597,6 +597,7 @@ test('fresh-account actions remain usable across short desktop and exact mobile 
     { name: 'height-boundary', width: 901, height: 481 },
     { name: 'smallest-portrait', width: 320, height: 568 },
     { name: 'mobile-landscape', width: 568, height: 320 },
+    { name: 'wide-mobile-landscape', width: 844, height: 390 },
   ] as const;
 
   for (const viewport of atlasViewports) {
@@ -606,9 +607,30 @@ test('fresh-account actions remain usable across short desktop and exact mobile 
       await expect(page.locator('[data-map-state="ready"]')).toBeVisible({
         timeout: 20_000,
       });
-      await expect(
-        page.getByRole('heading', { name: 'Your world is waiting.' }),
-      ).toBeVisible();
+      const welcomeHeading = page.locator('#empty-atlas-title');
+      const compactWelcome =
+        viewport.width <= 760 ||
+        (viewport.height <= 480 && viewport.width > viewport.height);
+      if (compactWelcome) {
+        await expect(welcomeHeading).toBeHidden();
+        await expect(
+          page.getByText(
+            'Begin with the photographs already in your camera roll, or place a memory manually on the map.',
+          ),
+        ).toBeHidden();
+        const startRegion = page.getByRole('region', {
+          name: 'Start your atlas',
+        });
+        await expect(startRegion).toBeVisible();
+        const startRegionBox = await startRegion.boundingBox();
+        expect(
+          startRegionBox,
+          `${viewport.name}: compact start dock`,
+        ).not.toBeNull();
+        expect(startRegionBox?.height ?? Infinity).toBeLessThanOrEqual(72);
+      } else {
+        await expect(welcomeHeading).toBeVisible();
+      }
       const upload = page.getByRole('link', { name: 'Upload photos' });
       const manual = page.getByRole('button', {
         name: 'Place manually',
@@ -625,7 +647,7 @@ test('fresh-account actions remain usable across short desktop and exact mobile 
         { map: true },
       );
 
-      if (viewport.name === 'mobile-landscape') {
+      if (compactWelcome) {
         await manual.click();
         await expect(
           page.getByRole('region', { name: 'Place a memory' }),
@@ -634,12 +656,12 @@ test('fresh-account actions remain usable across short desktop and exact mobile 
         await expectInsideViewport(
           page,
           page.getByRole('button', { name: 'Cancel pin' }),
-          'mobile landscape: cancel placement',
+          `${viewport.name}: cancel placement`,
         );
         await auditState(
           page,
           testInfo,
-          'fresh-empty-atlas-placement-mobile-landscape',
+          `fresh-empty-atlas-placement-${viewport.name}`,
           monitor,
           { map: true },
         );
