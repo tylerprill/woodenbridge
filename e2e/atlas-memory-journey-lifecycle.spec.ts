@@ -671,10 +671,18 @@ test('fresh-account actions remain usable across short desktop and exact mobile 
 
       if (compactWelcome) {
         await manual.click();
+        const placementPrompt = page.getByRole('region', {
+          name: 'Place a memory',
+        });
+        await expectInsideViewport(
+          page,
+          placementPrompt,
+          `${viewport.name}: placement prompt`,
+        );
+        await expect(page.getByRole('heading', { level: 1 })).toHaveCount(1);
         await expect(
-          page.getByRole('region', { name: 'Place a memory' }),
-        ).toBeVisible();
-        await expect(page.getByRole('heading', { level: 1 })).toBeVisible();
+          page.locator('[aria-label="Filter memories"]'),
+        ).toBeHidden();
         await expectInsideViewport(
           page,
           page.getByRole('button', { name: 'Cancel pin' }),
@@ -705,7 +713,9 @@ test('fresh-account actions remain usable across short desktop and exact mobile 
       await page.goto('/dashboard/places');
       await expectInsideViewport(
         page,
-        page.getByRole('link', { name: 'Upload photos' }),
+        page
+          .locator('#dashboard-main')
+          .getByRole('link', { name: 'Upload photos' }),
         `${viewport.name}: places upload`,
       );
       await auditState(

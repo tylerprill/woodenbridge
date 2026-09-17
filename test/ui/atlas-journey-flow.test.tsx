@@ -296,6 +296,9 @@ describe('Atlas Journey Lens', () => {
     );
 
     const start = screen.getByRole('region', { name: 'Start your atlas' });
+    const pageHeadings = screen.getAllByRole('heading', { level: 1 });
+    expect(pageHeadings).toHaveLength(1);
+    expect(pageHeadings[0]).toHaveTextContent('Explorer’s world');
     expect(
       within(start).getByRole('heading', { name: 'Your world is waiting.' }),
     ).toBeInTheDocument();

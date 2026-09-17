@@ -1216,11 +1216,14 @@ export function AtlasWorkspace({
         hidden={buildingJourney}
         inert={selectedEntry || buildingJourney ? true : undefined}
       >
+        <h1 className={styles.atlasPageTitle}>{displayName}&rsquo;s world</h1>
         <div className={styles.atlasIdentity}>
           <p className={styles.eyebrow}>
             {mode === 'journeys' ? 'Journey lens' : 'Private field atlas'}
           </p>
-          <h1>{displayName}&rsquo;s world</h1>
+          <p className={styles.atlasIdentityTitle} aria-hidden="true">
+            {displayName}&rsquo;s world
+          </p>
           <div className={styles.atlasSummary} aria-label="Atlas summary">
             {mode === 'journeys' ? (
               <>
