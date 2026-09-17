@@ -350,6 +350,35 @@ async function expectNoOverlap(first: Locator, second: Locator, label: string) {
   expect.soft(horizontal * vertical, `${label}: overlap area`).toBe(0);
 }
 
+function usesCompactAtlasStart(viewport: ReturnType<Page['viewportSize']>) {
+  return Boolean(
+    viewport &&
+    (viewport.width <= 760 ||
+      (viewport.height <= 480 && viewport.width > viewport.height)),
+  );
+}
+
+async function expectEmptyAtlasStart(page: Page) {
+  const startRegion = page.getByRole('region', { name: 'Start your atlas' });
+  const welcomeHeading = page.locator('#empty-atlas-title');
+
+  await expect(startRegion).toBeVisible();
+  await expect(welcomeHeading).toHaveCount(1);
+  if (usesCompactAtlasStart(page.viewportSize())) {
+    await expect(welcomeHeading).toBeHidden();
+  } else {
+    await expect(welcomeHeading).toBeVisible();
+  }
+  await expect(
+    startRegion.getByRole('link', { name: 'Upload photos' }),
+  ).toBeVisible();
+  await expect(
+    startRegion.getByRole('button', { name: 'Place manually', exact: true }),
+  ).toBeVisible();
+
+  return startRegion;
+}
+
 async function signIn(page: Page) {
   const email = process.env.E2E_LIFECYCLE_TEST_EMAIL;
   const password = process.env.E2E_LIFECYCLE_TEST_PASSWORD;
@@ -607,32 +636,25 @@ test('fresh-account actions remain usable across short desktop and exact mobile 
       await expect(page.locator('[data-map-state="ready"]')).toBeVisible({
         timeout: 20_000,
       });
-      const welcomeHeading = page.locator('#empty-atlas-title');
+      const startRegion = await expectEmptyAtlasStart(page);
       const compactWelcome =
         viewport.width <= 760 ||
         (viewport.height <= 480 && viewport.width > viewport.height);
       if (compactWelcome) {
-        await expect(welcomeHeading).toBeHidden();
         await expect(
           page.getByText(
             'Begin with the photographs already in your camera roll, or place a memory manually on the map.',
           ),
         ).toBeHidden();
-        const startRegion = page.getByRole('region', {
-          name: 'Start your atlas',
-        });
-        await expect(startRegion).toBeVisible();
         const startRegionBox = await startRegion.boundingBox();
         expect(
           startRegionBox,
           `${viewport.name}: compact start dock`,
         ).not.toBeNull();
         expect(startRegionBox?.height ?? Infinity).toBeLessThanOrEqual(72);
-      } else {
-        await expect(welcomeHeading).toBeVisible();
       }
-      const upload = page.getByRole('link', { name: 'Upload photos' });
-      const manual = page.getByRole('button', {
+      const upload = startRegion.getByRole('link', { name: 'Upload photos' });
+      const manual = startRegion.getByRole('button', {
         name: 'Place manually',
         exact: true,
       });
@@ -804,9 +826,7 @@ test('an empty account can preserve memories, shape a journey, and cleanly remov
 
   await signIn(page);
   const monitor = monitorBrowserIssues(page);
-  await expect(
-    page.getByRole('heading', { name: 'Your world is waiting.' }),
-  ).toBeVisible();
+  await expectEmptyAtlasStart(page);
   await auditState(page, testInfo, 'empty-atlas', monitor, { map: true });
 
   await page.goto('/dashboard/places');
@@ -1427,9 +1447,7 @@ test('an empty account can preserve memories, shape a journey, and cleanly remov
   for (let index = 0; index < selectedMemories.length; index += 1) {
     await removeMemory(page, selectedMemories[index].title, index === 0);
   }
-  await expect(
-    page.getByRole('heading', { name: 'Your world is waiting.' }),
-  ).toBeVisible();
+  await expectEmptyAtlasStart(page);
   await expect.poll(async () => (await storedObjectNames()).length).toBe(0);
   const finalMemories = await loadPersistedMemories();
   expect(finalMemories).toHaveLength(selectedMemories.length);
