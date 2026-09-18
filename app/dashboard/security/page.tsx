@@ -60,22 +60,47 @@ export default async function SecurityPage({
     session.mfaMethod,
   );
   const returnTo = getSafeReturnPath(params.returnTo);
-  const protectionRequired = params.required === 'passkey';
+  const protectionRequired = isPrivileged && params.required === 'passkey';
+
+  const sessionControl = (
+    <section className="security-sessions">
+      <div>
+        <p className="section-kicker">Session control</p>
+        <h2>
+          {isPrivileged ? 'Sign out every device' : 'Your signed-in devices'}
+        </h2>
+        <p>
+          {isPrivileged
+            ? 'Immediately revoke every browser session connected to this account, including this one.'
+            : 'If a phone or computer no longer feels familiar, revoke every Field Atlas session—including this one.'}
+        </p>
+      </div>
+      <form action={signOutEverywhereFromForm}>
+        <button type="submit">
+          <ArrowRightOnRectangleIcon aria-hidden="true" />
+          Sign out everywhere
+        </button>
+      </form>
+    </section>
+  );
 
   return (
     <div className="dashboard-page security-page">
       <header className="dashboard-page-heading security-heading">
         <div>
-          <p className="section-kicker">Account protection</p>
-          <h1>Security.</h1>
+          <p className="section-kicker">
+            {isPrivileged ? 'Account protection' : 'Your account'}
+          </p>
+          <h1>{isPrivileged ? 'Security.' : 'Account & security.'}</h1>
           <p>
-            Keep access to your atlas anchored to devices you trust, with a
-            short verification window for sensitive actions.
+            {isPrivileged
+              ? 'Keep access to your atlas anchored to devices you trust, with a short verification window for sensitive actions.'
+              : 'Confirm which account is open and keep control of every device signed in to your atlas.'}
           </p>
         </div>
         <span className="owner-access-badge">
           <ShieldCheckIcon aria-hidden="true" />{' '}
-          {isPrivileged ? 'Protected management' : 'Standard account'}
+          {isPrivileged ? 'Protected management' : 'Personal account'}
         </span>
       </header>
 
@@ -87,32 +112,53 @@ export default async function SecurityPage({
         </p>
       ) : null}
 
-      <PasskeySecurityPanel
-        isPrivileged={isPrivileged}
-        isRecentlyVerified={isRecentlyVerified}
-        mfaVerifiedAt={session.mfaVerifiedAt}
-        passkeys={passkeys}
-        recoveryCodeSummary={recoveryCodeSummary}
-        recoveryGrant={recoveryGrant}
-        returnTo={returnTo}
-      />
+      {isPrivileged ? (
+        <>
+          <PasskeySecurityPanel
+            isPrivileged
+            isRecentlyVerified={isRecentlyVerified}
+            mfaVerifiedAt={session.mfaVerifiedAt}
+            passkeys={passkeys}
+            recoveryCodeSummary={recoveryCodeSummary}
+            recoveryGrant={recoveryGrant}
+            returnTo={returnTo}
+          />
+          {sessionControl}
+        </>
+      ) : (
+        <>
+          <div className="security-personal-grid">
+            <section className="security-account-summary">
+              <span className="security-card-icon" aria-hidden="true">
+                <ShieldCheckIcon />
+              </span>
+              <div>
+                <p className="section-kicker">Signed-in account</p>
+                <h2>Your personal atlas</h2>
+                <p className="security-account-email">{session.user.email}</p>
+                <p>
+                  Your email is verified and this private workspace is available
+                  only after sign-in.
+                </p>
+              </div>
+            </section>
+            {sessionControl}
+          </div>
 
-      <section className="security-sessions">
-        <div>
-          <p className="section-kicker">Session control</p>
-          <h2>Sign out every device</h2>
-          <p>
-            Immediately revoke every browser session connected to this account,
-            including this one.
-          </p>
-        </div>
-        <form action={signOutEverywhereFromForm}>
-          <button type="submit">
-            <ArrowRightOnRectangleIcon aria-hidden="true" />
-            Sign out everywhere
-          </button>
-        </form>
-      </section>
+          {passkeys.length ? (
+            <div className="security-legacy-credentials">
+              <PasskeySecurityPanel
+                isPrivileged={false}
+                isRecentlyVerified={false}
+                mfaVerifiedAt={null}
+                passkeys={passkeys}
+                recoveryCodeSummary={null}
+                recoveryGrant={null}
+              />
+            </div>
+          ) : null}
+        </>
+      )}
     </div>
   );
 }

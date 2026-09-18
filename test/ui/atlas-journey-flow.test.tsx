@@ -280,15 +280,34 @@ describe('Atlas Journey Lens', () => {
       within(tray).getByRole('link', { name: 'Place a memory' }),
     ).toHaveAttribute('href', '/dashboard');
 
-    const tools = screen.getByRole('toolbar', { name: 'Journey tools' });
+    const tools = screen.getByRole('toolbar', { hidden: true });
+    expect(tools).toHaveAttribute('hidden');
+    expect(tools).toHaveAttribute('aria-label', 'Journey tools');
+    expect(tools).not.toHaveTextContent('Create journey');
+    expect(tools).toHaveTextContent('Add memories');
+  });
+
+  it('keeps the empty Places actions in a focused start region', () => {
+    render(
+      <AtlasWorkspace
+        displayName="Explorer"
+        initialData={{ ...initialData, entries: [] }}
+      />,
+    );
+
+    const start = screen.getByRole('region', { name: 'Start your atlas' });
+    const pageHeadings = screen.getAllByRole('heading', { level: 1 });
+    expect(pageHeadings).toHaveLength(1);
+    expect(pageHeadings[0]).toHaveTextContent('Explorer’s world');
     expect(
-      within(tools).queryByRole('button', { name: 'Create journey' }),
-    ).not.toBeInTheDocument();
+      within(start).getByRole('heading', { name: 'Your world is waiting.' }),
+    ).toBeInTheDocument();
     expect(
-      within(tools).getByRole('link', {
-        name: 'Add memories before creating a journey',
-      }),
+      within(start).getByRole('link', { name: 'Upload photos' }),
     ).toHaveAttribute('href', '/dashboard/import');
+    expect(
+      within(start).getByRole('button', { name: 'Place manually' }),
+    ).toBeEnabled();
   });
 
   it('opens a journey, relives it, and keeps map-stop selection in sync', async () => {

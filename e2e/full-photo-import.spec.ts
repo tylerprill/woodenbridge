@@ -531,7 +531,7 @@ async function chooseAndReviewPhotos(
   await expect(
     page.getByRole('heading', {
       level: 1,
-      name: 'See where the journey took shape.',
+      name: 'See where your memories took shape.',
     }),
   ).toBeVisible();
   await expect(

@@ -88,6 +88,11 @@ export function AtlasJourneyTray({
   onDismissSuggestion: (suggestion: AtlasJourneySuggestion) => void;
 }) {
   const headingRef = useRef<HTMLHeadingElement>(null);
+  const isEmptyOverview =
+    !selectedJourney &&
+    loadState === 'ready' &&
+    journeys.length === 0 &&
+    suggestions.length === 0;
 
   useEffect(() => {
     headingRef.current?.focus({ preventScroll: true });
@@ -98,6 +103,7 @@ export function AtlasJourneyTray({
       className={`${styles.memoryTray} ${styles.journeyTray}`}
       aria-labelledby="journey-tray-title"
       data-detail={selectedJourney ? 'true' : 'false'}
+      data-empty={isEmptyOverview ? 'true' : 'false'}
     >
       <header>
         {selectedJourney ? (
@@ -226,22 +232,23 @@ export function AtlasJourneyTray({
                 </section>
               ) : null}
 
-              <div className={styles.journeyListActions}>
-                <p>
-                  {journeys.length
-                    ? `${journeys.length} ${journeys.length === 1 ? 'journey' : 'journeys'}`
-                    : 'No journeys yet'}
-                </p>
-                {availableMemoryCount >= CHAPTER_MIN_MEMORIES ? (
-                  <button type="button" onClick={() => onStartBuilder()}>
-                    <PlusIcon aria-hidden="true" /> Create journey
-                  </button>
-                ) : (
-                  <Link href="/dashboard/import">
-                    <PlusIcon aria-hidden="true" /> Add memories
-                  </Link>
-                )}
-              </div>
+              {journeys.length ? (
+                <div className={styles.journeyListActions}>
+                  <p>
+                    {journeys.length}{' '}
+                    {journeys.length === 1 ? 'journey' : 'journeys'}
+                  </p>
+                  {availableMemoryCount >= CHAPTER_MIN_MEMORIES ? (
+                    <button type="button" onClick={() => onStartBuilder()}>
+                      <PlusIcon aria-hidden="true" /> Create journey
+                    </button>
+                  ) : (
+                    <Link href="/dashboard/import">
+                      <PlusIcon aria-hidden="true" /> Add memories
+                    </Link>
+                  )}
+                </div>
+              ) : null}
               {journeys.length ? (
                 <div className={styles.journeyList}>
                   {journeys.map((journey, index) => (

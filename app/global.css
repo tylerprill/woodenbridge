@@ -2552,6 +2552,12 @@ body {
   line-height: 1.55;
 }
 
+.auth-notice strong {
+  color: var(--forest-950);
+  font-weight: 800;
+  overflow-wrap: anywhere;
+}
+
 .auth-reset-expired {
   margin-top: 2.2rem;
 }
@@ -2815,7 +2821,7 @@ body {
 
 .dashboard-account {
   display: grid;
-  grid-template-columns: auto minmax(0, 1fr) auto;
+  grid-template-columns: minmax(0, 1fr) auto;
   align-items: center;
   margin-top: auto;
   padding: 0.8rem;
@@ -2823,6 +2829,27 @@ body {
   border-radius: 1rem;
   background: rgba(255, 255, 255, 0.04);
   gap: 0.65rem;
+}
+
+.dashboard-account-profile {
+  display: grid;
+  min-width: 0;
+  min-height: 2.75rem;
+  grid-template-columns: auto minmax(0, 1fr);
+  align-items: center;
+  padding: 0.2rem;
+  border-radius: 0.8rem;
+  color: inherit;
+  gap: 0.65rem;
+  transition:
+    background 180ms ease,
+    color 180ms ease;
+}
+
+.dashboard-account-profile:hover,
+.dashboard-account-profile:focus-visible {
+  background: rgba(255, 255, 255, 0.07);
+  color: var(--paper-light);
 }
 
 .dashboard-avatar {
@@ -2857,14 +2884,62 @@ body {
 
 .dashboard-account button {
   display: grid;
-  width: 2rem;
-  height: 2rem;
+  width: 2.75rem;
+  height: 2.75rem;
   place-items: center;
   border-radius: 50%;
   color: rgba(245, 242, 233, 0.48);
   transition:
     background 180ms ease,
     color 180ms ease;
+}
+
+@media (min-width: 1241px) and (max-height: 720px) {
+  /* A full desktop sidebar must remain usable on short browser windows. Keep
+     every row touch-sized, tighten only the surrounding rhythm, and let the
+     navigation scroll without displacing the persistent account controls. */
+  .dashboard-sidebar {
+    padding-block: 0.75rem;
+  }
+
+  .dashboard-sidebar-inner {
+    padding: 0.9rem;
+  }
+
+  .dashboard-brand,
+  .dashboard-account {
+    flex-shrink: 0;
+  }
+
+  .dashboard-nav {
+    min-height: 0;
+    margin-top: 1.25rem;
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    scrollbar-width: thin;
+  }
+
+  .dashboard-nav-sections {
+    gap: 0.55rem;
+  }
+
+  .dashboard-nav-section + .dashboard-nav-section {
+    padding-top: 0.65rem;
+  }
+
+  .dashboard-nav-links {
+    margin-top: 0.45rem;
+    gap: 0.15rem;
+  }
+
+  .dashboard-nav-link {
+    min-height: 2.75rem;
+  }
+
+  .dashboard-account {
+    margin-top: 0.5rem;
+    padding: 0.55rem;
+  }
 }
 
 .dashboard-account button:hover,
@@ -2875,6 +2950,130 @@ body {
 
 .dashboard-account button svg {
   width: 1rem;
+}
+
+.dashboard-mobile-account-menu {
+  display: none;
+  position: relative;
+}
+
+.dashboard-mobile-account-menu summary {
+  display: inline-flex;
+  min-height: 2.75rem;
+  align-items: center;
+  justify-content: center;
+  padding-inline: 0.72rem;
+  border: 1px solid rgba(245, 242, 233, 0.13);
+  border-radius: 0.85rem;
+  color: rgba(245, 242, 233, 0.72);
+  cursor: pointer;
+  font-size: 0.62rem;
+  font-weight: 800;
+  gap: 0.4rem;
+  list-style: none;
+  transition:
+    border-color 180ms ease,
+    background 180ms ease,
+    color 180ms ease;
+}
+
+.dashboard-mobile-account-menu summary::-webkit-details-marker {
+  display: none;
+}
+
+.dashboard-mobile-account-menu summary:hover,
+.dashboard-mobile-account-menu summary:focus-visible,
+.dashboard-mobile-account-menu[open] summary {
+  border-color: rgba(231, 176, 129, 0.26);
+  background: rgba(231, 176, 129, 0.11);
+  color: var(--timber-light);
+}
+
+.dashboard-mobile-account-menu summary svg {
+  width: 1.15rem;
+}
+
+.dashboard-mobile-account-popover {
+  position: absolute;
+  top: calc(100% + 0.65rem);
+  right: 0;
+  z-index: 40;
+  display: grid;
+  width: min(19rem, calc(100vw - 1.5rem));
+  max-height: calc(100dvh - 5.4rem);
+  padding: 0.55rem;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  border: 1px solid rgba(245, 242, 233, 0.13);
+  border-radius: 1rem;
+  background: var(--forest-950);
+  box-shadow: 0 1.25rem 3.5rem rgba(7, 17, 14, 0.32);
+  color: var(--paper-light);
+  gap: 0.25rem;
+}
+
+.dashboard-mobile-account-identity {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  align-items: center;
+  margin-bottom: 0.25rem;
+  padding: 0.7rem;
+  border-bottom: 1px solid rgba(245, 242, 233, 0.1);
+  gap: 0.65rem;
+}
+
+.dashboard-mobile-account-popover > a,
+.dashboard-mobile-account-popover > button {
+  display: grid;
+  width: 100%;
+  min-height: 3.25rem;
+  grid-template-columns: auto minmax(0, 1fr);
+  align-items: center;
+  padding: 0.65rem 0.7rem;
+  border-radius: 0.8rem;
+  color: rgba(245, 242, 233, 0.78);
+  text-align: left;
+  gap: 0.7rem;
+  transition:
+    background 180ms ease,
+    color 180ms ease;
+}
+
+.dashboard-mobile-account-popover > a:hover,
+.dashboard-mobile-account-popover > a:focus-visible,
+.dashboard-mobile-account-popover > button:hover,
+.dashboard-mobile-account-popover > button:focus-visible {
+  background: rgba(255, 255, 255, 0.07);
+  color: var(--paper-light);
+}
+
+.dashboard-mobile-account-popover > :is(a, button) > svg {
+  width: 1.1rem;
+}
+
+.dashboard-mobile-account-popover > :is(a, button) > span {
+  display: grid;
+  min-width: 0;
+  gap: 0.15rem;
+}
+
+.dashboard-mobile-account-popover strong {
+  font-size: 0.66rem;
+}
+
+.dashboard-mobile-account-popover small {
+  overflow: hidden;
+  color: rgba(245, 242, 233, 0.46);
+  font-size: 0.54rem;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.dashboard-mobile-account-popover > .dashboard-mobile-signout {
+  margin-top: 0.15rem;
+  border-top: 1px solid rgba(245, 242, 233, 0.1);
+  border-radius: 0 0 0.8rem 0.8rem;
+  color: var(--timber-light);
 }
 
 .dashboard-main {
@@ -3275,8 +3474,8 @@ body {
 
 .atlas-carousel-dots button {
   position: relative;
-  width: 2.5rem;
-  height: 2.5rem;
+  width: 2.75rem;
+  height: 2.75rem;
   border: 0;
   border-radius: 999px;
   background: transparent;
@@ -3899,6 +4098,7 @@ body {
 
 .keepsake-page-footer a {
   display: inline-flex;
+  min-height: 2.75rem;
   align-items: center;
   gap: 0.5rem;
   padding: 0.7rem 0.95rem;
@@ -4153,6 +4353,77 @@ body {
 
 .security-heading {
   align-items: center;
+}
+
+.security-personal-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  align-items: stretch;
+  gap: 1rem;
+}
+
+.security-account-summary {
+  display: grid;
+  min-width: 0;
+  grid-template-columns: auto minmax(0, 1fr);
+  align-content: start;
+  padding: clamp(1.25rem, 3vw, 2rem);
+  border: 1px solid rgba(16, 35, 29, 0.11);
+  border-radius: 1.5rem;
+  background:
+    radial-gradient(
+      circle at 100% 0,
+      rgba(184, 200, 164, 0.2),
+      transparent 18rem
+    ),
+    rgba(251, 250, 245, 0.74);
+  gap: 1rem;
+}
+
+.security-account-summary h2 {
+  margin-top: 0.35rem;
+  font-family: Georgia, 'Times New Roman', serif;
+  font-size: clamp(1.6rem, 3vw, 2.1rem);
+  font-weight: 400;
+  letter-spacing: -0.04em;
+  line-height: 1;
+}
+
+.security-account-summary p:last-child {
+  max-width: 34rem;
+  margin-top: 0.7rem;
+  color: var(--forest-600);
+  font-size: 0.68rem;
+  line-height: 1.6;
+}
+
+.security-account-summary .security-account-email {
+  overflow-wrap: anywhere;
+  margin-top: 0.8rem;
+  color: var(--forest-950);
+  font-size: 0.7rem;
+  font-weight: 800;
+  letter-spacing: -0.015em;
+}
+
+.security-personal-grid .security-sessions {
+  align-items: flex-start;
+  flex-direction: column;
+  justify-content: space-between;
+  margin-top: 0;
+}
+
+.security-personal-grid .security-sessions form,
+.security-personal-grid .security-sessions button {
+  width: 100%;
+}
+
+.security-legacy-credentials {
+  margin-top: 1rem;
+}
+
+.security-grid.security-grid-legacy {
+  grid-template-columns: 1fr;
 }
 
 .security-gate-notice {
@@ -5422,6 +5693,10 @@ input[type='number']::-webkit-outer-spin-button {
     align-items: center;
   }
 
+  .dashboard-nav-section-account {
+    display: none;
+  }
+
   .dashboard-nav-section + .dashboard-nav-section {
     margin-left: 0.15rem;
     padding-top: 0;
@@ -5458,20 +5733,11 @@ input[type='number']::-webkit-outer-spin-button {
   }
 
   .dashboard-account {
-    margin-top: 0;
-    padding: 0;
-    border: 0;
-    background: transparent;
-  }
-
-  .dashboard-account button {
-    width: 2.7rem;
-    height: 2.7rem;
-  }
-
-  .dashboard-account-copy,
-  .dashboard-avatar {
     display: none;
+  }
+
+  .dashboard-mobile-account-menu {
+    display: block;
   }
 
   .dashboard-main {
@@ -5551,6 +5817,10 @@ input[type='number']::-webkit-outer-spin-button {
     align-items: center;
   }
 
+  .dashboard-nav-section-account {
+    display: none;
+  }
+
   .dashboard-nav-section + .dashboard-nav-section {
     margin-left: 0.15rem;
     padding-top: 0;
@@ -5587,20 +5857,11 @@ input[type='number']::-webkit-outer-spin-button {
   }
 
   .dashboard-account {
-    margin-top: 0;
-    padding: 0;
-    border: 0;
-    background: transparent;
-  }
-
-  .dashboard-account button {
-    width: 2.7rem;
-    height: 2.7rem;
-  }
-
-  .dashboard-account-copy,
-  .dashboard-avatar {
     display: none;
+  }
+
+  .dashboard-mobile-account-menu {
+    display: block;
   }
 
   .dashboard-main {
@@ -5704,8 +5965,13 @@ input[type='number']::-webkit-outer-spin-button {
     flex-direction: column;
   }
 
-  .security-grid {
+  .security-grid,
+  .security-personal-grid {
     grid-template-columns: 1fr;
+  }
+
+  .security-personal-grid .security-sessions {
+    order: -1;
   }
 
   .security-sessions form,
@@ -5889,7 +6155,8 @@ input[type='number']::-webkit-outer-spin-button {
   }
 
   .dashboard-nav,
-  .dashboard-account {
+  .dashboard-account,
+  .dashboard-mobile-account-menu {
     min-width: 0;
   }
 
@@ -6655,6 +6922,58 @@ input[type='number']::-webkit-outer-spin-button {
   }
 }
 
+@media (max-width: 480px) and (max-height: 900px) and (orientation: portrait) {
+  .auth-panel-wrap:has(#confirm-password) {
+    padding: 0.55rem 1rem 1rem;
+  }
+
+  .auth-panel-wrap:has(#confirm-password) .auth-mobile-brand {
+    margin-bottom: 0.4rem;
+  }
+
+  .auth-panel-wrap:has(#confirm-password) .auth-panel {
+    margin: 0 auto;
+    padding-block: 0.45rem 1rem;
+  }
+
+  .auth-panel-wrap:has(#confirm-password) .auth-panel-heading > p {
+    display: none;
+  }
+
+  .auth-panel-wrap:has(#confirm-password) .auth-panel-heading h1 {
+    margin-top: 0;
+    font-size: clamp(2rem, 10vw, 2.35rem);
+  }
+
+  .auth-panel-wrap:has(#confirm-password) .auth-form {
+    margin-top: 0.55rem;
+    gap: 0.5rem;
+  }
+
+  .auth-panel-wrap:has(#confirm-password) .auth-field,
+  .auth-panel-wrap:has(#confirm-password) .auth-field-row {
+    gap: 0.3rem;
+  }
+
+  .auth-panel-wrap:has(#confirm-password) .auth-input-wrap input,
+  .auth-panel-wrap:has(#confirm-password) .auth-submit {
+    min-height: 2.75rem;
+    height: 2.75rem;
+  }
+
+  .auth-panel-wrap:has(#confirm-password) .auth-submit {
+    margin-top: 0;
+  }
+
+  .auth-panel-wrap:has(#confirm-password) .auth-signup-prompt {
+    margin-top: 0.75rem;
+  }
+
+  .auth-panel-wrap:has(#confirm-password) .auth-fine-print {
+    display: none;
+  }
+}
+
 @media (max-width: 480px) and (min-height: 481px) and (max-height: 700px) and (orientation: portrait) {
   .auth-panel-wrap:has(.auth-remember-row) {
     padding: 0.75rem 1rem 1rem;
@@ -6825,6 +7144,232 @@ input[type='number']::-webkit-outer-spin-button {
   .auth-form:has(.auth-remember-row)
     > :is(.auth-notice, .auth-error, .auth-inline-help) {
     grid-column: 1 / -1;
+  }
+
+  .auth-panel-wrap:has(#confirm-password) .auth-panel {
+    width: min(100%, 50rem);
+  }
+
+  .auth-panel-wrap:has(#confirm-password) .auth-panel-heading > p {
+    display: none;
+  }
+
+  .auth-form:has(#confirm-password) {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    align-items: end;
+    margin-top: 0.4rem;
+    gap: 0.45rem 0.7rem;
+  }
+
+  .auth-form:has(#confirm-password) > .auth-field-row,
+  .auth-form:has(#confirm-password) > .auth-error {
+    grid-column: 1 / -1;
+  }
+
+  .auth-form:has(#confirm-password) .auth-field-row {
+    gap: 0.7rem;
+  }
+
+  .auth-form:has(#confirm-password) > .auth-submit {
+    align-self: end;
+  }
+}
+
+@media (max-width: 720px) and (max-height: 650px) {
+  /* On the smallest portrait screens, the verified email is already available
+     in the account menu. Lead with the only destructive security action and
+     keep it inside the first viewport. */
+  .dashboard-main:has(.security-personal-grid) {
+    padding-block: 0.75rem;
+  }
+
+  .security-page:has(.security-personal-grid) .security-heading {
+    margin-bottom: 0.7rem;
+    gap: 0.45rem;
+  }
+
+  .security-page:has(.security-personal-grid) .security-heading h1 {
+    margin-top: 0.2rem;
+    font-size: 2.15rem;
+  }
+
+  .security-page:has(.security-personal-grid)
+    .security-heading
+    > div
+    > p:last-child,
+  .security-page:has(.security-personal-grid) .owner-access-badge,
+  .security-page:has(.security-personal-grid) .security-account-summary {
+    display: none;
+  }
+
+  .security-page:has(.security-personal-grid) .security-sessions {
+    padding: 0.9rem 1rem;
+    border-radius: 1.15rem;
+    gap: 0.65rem;
+  }
+
+  .security-page:has(.security-personal-grid) .security-sessions h2 {
+    font-size: 1.5rem;
+  }
+
+  .security-page:has(.security-personal-grid) .security-sessions p:last-child {
+    margin-top: 0.3rem;
+    line-height: 1.4;
+  }
+
+  .security-page:has(.security-personal-grid) .security-sessions button {
+    min-height: 2.75rem;
+  }
+}
+
+@media (max-height: 480px) and (orientation: landscape) {
+  /* Keep the landing page's primary photo action in the first fold. The
+     illustration remains immediately below the fold at taller viewports. */
+  .site-header {
+    padding-block: 0.5rem;
+  }
+
+  .hero-section {
+    min-height: auto;
+    grid-template-columns: 1fr;
+    padding-block: 0.7rem 1.5rem;
+    gap: 0;
+  }
+
+  .hero-copy {
+    max-width: none;
+  }
+
+  .hero-copy .eyebrow {
+    margin-bottom: 0.45rem;
+    font-size: 0.6rem;
+  }
+
+  .hero-copy h1 {
+    max-width: none;
+    font-size: clamp(2.15rem, 6.5vw, 3rem);
+    line-height: 0.92;
+  }
+
+  .hero-intro {
+    max-width: 54rem;
+    margin-top: 0.65rem;
+    font-size: 0.78rem;
+    line-height: 1.4;
+  }
+
+  .hero-actions {
+    flex-direction: row;
+    margin-top: 0.7rem;
+    gap: 0.55rem;
+  }
+
+  .hero-actions :is(.primary-action, .secondary-action) {
+    width: auto;
+    min-height: 2.75rem;
+    padding-inline: 1rem;
+    font-size: 0.72rem;
+  }
+
+  .hero-highlights,
+  .hero-art {
+    display: none;
+  }
+
+  /* Empty collections need one decision, not a zero-count dashboard. */
+  .dashboard-main:has(.collection-page-empty),
+  .dashboard-main:has(.security-personal-grid) {
+    padding-block: 0.75rem;
+  }
+
+  .collection-page-empty .dashboard-page-heading {
+    margin-bottom: 0.65rem;
+    gap: 0.5rem;
+  }
+
+  .collection-page-empty .dashboard-page-heading h1 {
+    margin-top: 0.2rem;
+    font-size: 2.15rem;
+  }
+
+  .collection-page-empty .dashboard-page-heading > div > p:last-child,
+  .collection-page-empty .collection-empty > span,
+  .collection-page-empty .collection-empty > .section-kicker {
+    display: none;
+  }
+
+  .collection-page-empty .collection-empty {
+    min-height: 0;
+    justify-items: center;
+    padding: 0.85rem 1rem;
+    border-radius: 1.15rem;
+  }
+
+  .collection-page-empty .collection-empty h2 {
+    max-width: none;
+    margin-top: 0;
+    font-size: 1.55rem;
+  }
+
+  .collection-page-empty .collection-empty > p:not(.section-kicker) {
+    margin-top: 0.35rem;
+    font-size: 0.72rem;
+  }
+
+  .collection-page-empty .collection-empty-actions {
+    margin-top: 0.55rem;
+  }
+
+  .collection-page-empty .collection-empty-actions a {
+    min-height: 2.75rem;
+  }
+
+  /* A regular account's highest-value security control is session revocation.
+     Keep it visible on short phones; the account identity remains in the
+     heading and mobile account menu. */
+  .security-page:has(.security-personal-grid) .security-heading {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    align-items: end;
+    margin-bottom: 0.65rem;
+    gap: 0.5rem;
+  }
+
+  .security-page:has(.security-personal-grid) .security-heading h1 {
+    margin-top: 0.2rem;
+    font-size: 2.15rem;
+  }
+
+  .security-page:has(.security-personal-grid)
+    .security-heading
+    > div
+    > p:last-child,
+  .security-page:has(.security-personal-grid) .owner-access-badge,
+  .security-page:has(.security-personal-grid) .security-account-summary {
+    display: none;
+  }
+
+  .security-page:has(.security-personal-grid) .security-personal-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .security-page:has(.security-personal-grid) .security-sessions {
+    padding: 0.9rem 1rem;
+    border-radius: 1.15rem;
+    gap: 0.65rem;
+  }
+
+  .security-page:has(.security-personal-grid) .security-sessions h2 {
+    font-size: 1.5rem;
+  }
+
+  .security-page:has(.security-personal-grid) .security-sessions p:last-child {
+    margin-top: 0.3rem;
+    line-height: 1.4;
+  }
+
+  .security-page:has(.security-personal-grid) .security-sessions button {
+    min-height: 2.75rem;
   }
 }
 

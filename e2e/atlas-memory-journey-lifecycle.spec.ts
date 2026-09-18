@@ -7,6 +7,7 @@ import {
   test,
   type APIRequestContext,
   type Browser,
+  type Locator,
   type Page,
   type TestInfo,
 } from '@playwright/test';
@@ -296,6 +297,88 @@ async function auditState(
   );
 }
 
+async function expectInsideViewport(
+  page: Page,
+  target: Locator,
+  label: string,
+) {
+  await expect(target, `${label}: visible`).toBeVisible();
+  await page.evaluate(async () => {
+    await document.fonts.ready;
+    window.scrollTo(0, 0);
+    await new Promise<void>((resolve) => {
+      requestAnimationFrame(() => requestAnimationFrame(() => resolve()));
+    });
+  });
+
+  const viewport = page.viewportSize();
+  const box = await target.boundingBox();
+  expect(viewport, `${label}: viewport`).not.toBeNull();
+  expect(box, `${label}: bounds`).not.toBeNull();
+  if (!viewport || !box) return;
+
+  expect.soft(box.height, `${label}: touch height`).toBeGreaterThanOrEqual(44);
+  expect.soft(box.x, `${label}: left`).toBeGreaterThanOrEqual(0);
+  expect.soft(box.y, `${label}: top`).toBeGreaterThanOrEqual(0);
+  expect
+    .soft(box.x + box.width, `${label}: right`)
+    .toBeLessThanOrEqual(viewport.width);
+  expect
+    .soft(box.y + box.height, `${label}: bottom`)
+    .toBeLessThanOrEqual(viewport.height);
+}
+
+async function expectNoOverlap(first: Locator, second: Locator, label: string) {
+  const [firstBox, secondBox] = await Promise.all([
+    first.boundingBox(),
+    second.boundingBox(),
+  ]);
+  expect(firstBox, `${label}: first bounds`).not.toBeNull();
+  expect(secondBox, `${label}: second bounds`).not.toBeNull();
+  if (!firstBox || !secondBox) return;
+
+  const horizontal = Math.max(
+    0,
+    Math.min(firstBox.x + firstBox.width, secondBox.x + secondBox.width) -
+      Math.max(firstBox.x, secondBox.x),
+  );
+  const vertical = Math.max(
+    0,
+    Math.min(firstBox.y + firstBox.height, secondBox.y + secondBox.height) -
+      Math.max(firstBox.y, secondBox.y),
+  );
+  expect.soft(horizontal * vertical, `${label}: overlap area`).toBe(0);
+}
+
+function usesCompactAtlasStart(viewport: ReturnType<Page['viewportSize']>) {
+  return Boolean(
+    viewport &&
+    (viewport.width <= 760 ||
+      (viewport.height <= 480 && viewport.width > viewport.height)),
+  );
+}
+
+async function expectEmptyAtlasStart(page: Page) {
+  const startRegion = page.getByRole('region', { name: 'Start your atlas' });
+  const welcomeHeading = page.locator('#empty-atlas-title');
+
+  await expect(startRegion).toBeVisible();
+  await expect(welcomeHeading).toHaveCount(1);
+  if (usesCompactAtlasStart(page.viewportSize())) {
+    await expect(welcomeHeading).toBeHidden();
+  } else {
+    await expect(welcomeHeading).toBeVisible();
+  }
+  await expect(
+    startRegion.getByRole('link', { name: 'Upload photos' }),
+  ).toBeVisible();
+  await expect(
+    startRegion.getByRole('button', { name: 'Place manually', exact: true }),
+  ).toBeVisible();
+
+  return startRegion;
+}
+
 async function signIn(page: Page) {
   const email = process.env.E2E_LIFECYCLE_TEST_EMAIL;
   const password = process.env.E2E_LIFECYCLE_TEST_PASSWORD;
@@ -524,6 +607,209 @@ test.afterEach(async ({ page }) => {
   await seedE2ELifecycleDatabase(process.env);
 });
 
+test('fresh-account actions remain usable across short desktop and exact mobile viewports', async ({
+  page,
+}, testInfo) => {
+  requireLifecycleAuditEnvironment();
+  test.skip(
+    !canRunLifecycleAudit() || testInfo.project.name !== 'chromium',
+    'The responsive fresh-account audit runs once in Chromium against its dedicated lifecycle database.',
+  );
+  test.setTimeout(240_000);
+
+  await signIn(page);
+  const monitor = monitorBrowserIssues(page);
+  const atlasViewports = [
+    { name: 'short-desktop', width: 1440, height: 600 },
+    { name: 'sidebar-breakpoint', width: 1280, height: 600 },
+    { name: 'compact-desktop', width: 1024, height: 600 },
+    { name: 'height-boundary', width: 901, height: 481 },
+    { name: 'smallest-portrait', width: 320, height: 568 },
+    { name: 'mobile-landscape', width: 568, height: 320 },
+    { name: 'wide-mobile-landscape', width: 844, height: 390 },
+  ] as const;
+
+  for (const viewport of atlasViewports) {
+    await test.step(`empty Atlas — ${viewport.name}`, async () => {
+      await page.setViewportSize(viewport);
+      await page.goto('/dashboard');
+      await expect(page.locator('[data-map-state="ready"]')).toBeVisible({
+        timeout: 20_000,
+      });
+      const startRegion = await expectEmptyAtlasStart(page);
+      const compactWelcome =
+        viewport.width <= 760 ||
+        (viewport.height <= 480 && viewport.width > viewport.height);
+      if (compactWelcome) {
+        await expect(
+          page.getByText(
+            'Begin with the photographs already in your camera roll, or place a memory manually on the map.',
+          ),
+        ).toBeHidden();
+        const startRegionBox = await startRegion.boundingBox();
+        expect(
+          startRegionBox,
+          `${viewport.name}: compact start dock`,
+        ).not.toBeNull();
+        expect(startRegionBox?.height ?? Infinity).toBeLessThanOrEqual(72);
+      }
+      const upload = startRegion.getByRole('link', { name: 'Upload photos' });
+      const manual = startRegion.getByRole('button', {
+        name: 'Place manually',
+        exact: true,
+      });
+      await expectInsideViewport(page, upload, `${viewport.name}: upload`);
+      await expectInsideViewport(page, manual, `${viewport.name}: manual`);
+      await expectNoOverlap(upload, manual, `${viewport.name}: empty actions`);
+      await auditState(
+        page,
+        testInfo,
+        `fresh-empty-atlas-${viewport.name}`,
+        monitor,
+        { map: true },
+      );
+
+      if (compactWelcome) {
+        await manual.click();
+        const placementPrompt = page.getByRole('region', {
+          name: 'Place a memory',
+        });
+        await expectInsideViewport(
+          page,
+          placementPrompt,
+          `${viewport.name}: placement prompt`,
+        );
+        await expect(page.getByRole('heading', { level: 1 })).toHaveCount(1);
+        await expect(
+          page.locator('[aria-label="Filter memories"]'),
+        ).toBeHidden();
+        await expectInsideViewport(
+          page,
+          page.getByRole('button', { name: 'Cancel pin' }),
+          `${viewport.name}: cancel placement`,
+        );
+        await auditState(
+          page,
+          testInfo,
+          `fresh-empty-atlas-placement-${viewport.name}`,
+          monitor,
+          { map: true },
+        );
+        await page.getByRole('button', { name: 'Cancel pin' }).click();
+      }
+    });
+  }
+
+  const compactViewports = [
+    { name: 'smallest-portrait', width: 320, height: 568 },
+    { name: 'mobile-landscape', width: 568, height: 320 },
+  ] as const;
+  const today = new Date().toISOString().slice(0, 10);
+
+  for (const viewport of compactViewports) {
+    await page.setViewportSize(viewport);
+
+    await test.step(`empty routes — ${viewport.name}`, async () => {
+      await page.goto('/dashboard/places');
+      await expectInsideViewport(
+        page,
+        page
+          .locator('#dashboard-main')
+          .getByRole('link', { name: 'Upload photos' }),
+        `${viewport.name}: places upload`,
+      );
+      await auditState(
+        page,
+        testInfo,
+        `fresh-empty-places-${viewport.name}`,
+        monitor,
+        { mapTeardown: true },
+      );
+
+      await page.goto('/dashboard/chapters');
+      await expectInsideViewport(
+        page,
+        page.getByRole('link', { name: 'Add memories' }),
+        `${viewport.name}: journeys add memories`,
+      );
+      await auditState(
+        page,
+        testInfo,
+        `fresh-empty-journeys-${viewport.name}`,
+        monitor,
+      );
+
+      await page.goto('/dashboard/chapters/new');
+      await expectInsideViewport(
+        page,
+        page.getByRole('link', { name: 'Upload photos' }),
+        `${viewport.name}: workshop upload`,
+      );
+      await auditState(
+        page,
+        testInfo,
+        `fresh-empty-workshop-${viewport.name}`,
+        monitor,
+      );
+
+      await page.goto(`/dashboard/on-this-day?date=${today}`);
+      await expectInsideViewport(
+        page,
+        page.getByRole('link', { name: 'Upload photos' }),
+        `${viewport.name}: rediscovery upload`,
+      );
+      await auditState(
+        page,
+        testInfo,
+        `fresh-empty-rediscovery-${viewport.name}`,
+        monitor,
+      );
+
+      await page.goto('/dashboard/import');
+      await expectInsideViewport(
+        page,
+        page.getByText('Choose photos', { exact: true }),
+        `${viewport.name}: choose photos`,
+      );
+      await auditState(
+        page,
+        testInfo,
+        `fresh-empty-import-${viewport.name}`,
+        monitor,
+      );
+
+      await page.goto('/dashboard/security');
+      await expectInsideViewport(
+        page,
+        page.getByRole('button', { name: 'Sign out everywhere' }),
+        `${viewport.name}: session control`,
+      );
+      await auditState(
+        page,
+        testInfo,
+        `fresh-security-${viewport.name}`,
+        monitor,
+      );
+
+      const accountMenu = page.locator('.dashboard-mobile-account-menu');
+      await accountMenu.locator('summary').click();
+      const popover = accountMenu.locator('.dashboard-mobile-account-popover');
+      await expectInsideViewport(
+        page,
+        popover,
+        `${viewport.name}: account popover`,
+      );
+      const securityLink = popover.getByRole('link', {
+        name: /account & security/i,
+      });
+      await securityLink.click();
+      await expect(accountMenu).not.toHaveAttribute('open');
+    });
+  }
+
+  monitor.stop();
+});
+
 test('an empty account can preserve memories, shape a journey, and cleanly remove both', async ({
   browser,
   page,
@@ -550,9 +836,7 @@ test('an empty account can preserve memories, shape a journey, and cleanly remov
 
   await signIn(page);
   const monitor = monitorBrowserIssues(page);
-  await expect(
-    page.getByRole('heading', { name: 'Your world is waiting.' }),
-  ).toBeVisible();
+  await expectEmptyAtlasStart(page);
   await auditState(page, testInfo, 'empty-atlas', monitor, { map: true });
 
   await page.goto('/dashboard/places');
@@ -1173,9 +1457,7 @@ test('an empty account can preserve memories, shape a journey, and cleanly remov
   for (let index = 0; index < selectedMemories.length; index += 1) {
     await removeMemory(page, selectedMemories[index].title, index === 0);
   }
-  await expect(
-    page.getByRole('heading', { name: 'Your world is waiting.' }),
-  ).toBeVisible();
+  await expectEmptyAtlasStart(page);
   await expect.poll(async () => (await storedObjectNames()).length).toBe(0);
   const finalMemories = await loadPersistedMemories();
   expect(finalMemories).toHaveLength(selectedMemories.length);

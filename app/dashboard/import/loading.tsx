@@ -3,7 +3,7 @@ import { DashboardRouteLoading } from '@/components/clean/dashboard-route-loadin
 export default function AtlasPhotoImportLoading() {
   return (
     <DashboardRouteLoading
-      eyebrow="Photo journey"
+      eyebrow="Photo upload"
       title="Opening the photo workshop…"
       cards={4}
       compact

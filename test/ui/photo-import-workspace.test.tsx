@@ -460,7 +460,7 @@ async function reachStories(user: ReturnType<typeof userEvent.setup>) {
   expect(
     screen.getByRole('heading', {
       level: 1,
-      name: 'See where the journey took shape.',
+      name: 'See where your memories took shape.',
     }),
   ).toBeVisible();
   await user.click(
@@ -481,6 +481,38 @@ async function titleCurrentStory(
   const input = screen.getByRole('textbox', { name: /^Title/ });
   await user.clear(input);
   await user.type(input, title);
+  await waitFor(() => expect(input).toHaveValue(title));
+}
+
+async function advanceToStory(
+  user: ReturnType<typeof userEvent.setup>,
+  storyNumber: number,
+  storyCount: number,
+) {
+  await user.click(screen.getByRole('button', { name: 'Next memory' }));
+  expect(
+    await screen.findByText(`Memory ${storyNumber} of ${storyCount}`),
+  ).toBeVisible();
+  await waitFor(() =>
+    expect(
+      screen.getByRole('heading', {
+        level: 1,
+        name: 'Give every place its voice.',
+      }),
+    ).toHaveFocus(),
+  );
+}
+
+async function advanceToJourney(user: ReturnType<typeof userEvent.setup>) {
+  await user.click(screen.getByRole('button', { name: 'Shape the journey' }));
+  await waitFor(() =>
+    expect(
+      screen.getByRole('heading', {
+        level: 1,
+        name: 'Bring the journey together.',
+      }),
+    ).toHaveFocus(),
+  );
 }
 
 describe('bulk photo import workspace', () => {
@@ -547,6 +579,24 @@ describe('bulk photo import workspace', () => {
     expect(finalizeAtlasImportBatchAction).toHaveBeenCalledWith(
       expect.objectContaining({ createChapter: false, coverMediaId: null }),
     );
+  });
+
+  it('keeps rejected-file feedback outside pristine landscape styling', async () => {
+    const { container } = render(<PhotoImportWorkspace />);
+
+    fireEvent.change(screen.getByLabelText('Choose photos'), {
+      target: {
+        files: [new File(['notes'], 'notes.txt', { type: 'text/plain' })],
+      },
+    });
+
+    expect(await screen.findByRole('alert')).toHaveTextContent(
+      'Some photographs need attention.',
+    );
+    expect(container.querySelector('[data-step="choose"]')).not.toHaveAttribute(
+      'data-pristine',
+    );
+    expect(screen.getByLabelText('Choose photos')).toBeVisible();
   });
 
   it('blocks finalization until a filesystem fallback date is explicitly accepted', async () => {
@@ -775,9 +825,9 @@ describe('bulk photo import workspace', () => {
     ]);
     await reachStories(user);
     await titleCurrentStory(user, 'First light');
-    await user.click(screen.getByRole('button', { name: 'Next memory' }));
+    await advanceToStory(user, 2, 2);
     await titleCurrentStory(user, 'The path home');
-    await user.click(screen.getByRole('button', { name: 'Shape the journey' }));
+    await advanceToJourney(user);
 
     expect(
       await screen.findByRole('textbox', { name: /^Journey title/ }),
@@ -824,9 +874,9 @@ describe('bulk photo import workspace', () => {
     ]);
     await reachStories(user);
     await titleCurrentStory(user, 'First light');
-    await user.click(screen.getByRole('button', { name: 'Next memory' }));
+    await advanceToStory(user, 2, 2);
     await titleCurrentStory(user, 'Lanterns after rain');
-    await user.click(screen.getByRole('button', { name: 'Shape the journey' }));
+    await advanceToJourney(user);
     await user.click(
       await screen.findByRole('button', {
         name: 'Use Lanterns after rain as journey cover',
@@ -906,9 +956,9 @@ describe('bulk photo import workspace', () => {
     ]);
     await reachStories(user);
     await titleCurrentStory(user, 'First light');
-    await user.click(screen.getByRole('button', { name: 'Next memory' }));
+    await advanceToStory(user, 2, 2);
     await titleCurrentStory(user, 'The road home');
-    await user.click(screen.getByRole('button', { name: 'Shape the journey' }));
+    await advanceToJourney(user);
     const memoriesOnly = await screen.findByRole('button', {
       name: 'Create memories only',
     });
@@ -948,9 +998,9 @@ describe('bulk photo import workspace', () => {
     ]);
     await reachStories(user);
     await titleCurrentStory(user, 'First light');
-    await user.click(screen.getByRole('button', { name: 'Next memory' }));
+    await advanceToStory(user, 2, 2);
     await titleCurrentStory(user, 'The road home');
-    await user.click(screen.getByRole('button', { name: 'Shape the journey' }));
+    await advanceToJourney(user);
     await user.type(
       await screen.findByRole('textbox', { name: /^Journey title/ }),
       'Two roads north',
@@ -992,13 +1042,18 @@ describe('bulk photo import workspace', () => {
         shareId: 'share-recovered',
       },
     });
-    render(<PhotoImportWorkspace recoveredBatch={recoveredBatch('ready')} />);
+    const { container } = render(
+      <PhotoImportWorkspace recoveredBatch={recoveredBatch('ready')} />,
+    );
 
     expect(
       screen.getByRole('heading', {
         name: 'An interrupted private upload is waiting.',
       }),
     ).toBeVisible();
+    expect(container.querySelector('[data-step="choose"]')).not.toHaveAttribute(
+      'data-pristine',
+    );
     expect(screen.queryByLabelText('Choose photos')).not.toBeInTheDocument();
     expect(screen.getByText('Lanterns after rain')).toBeVisible();
     await user.click(screen.getByRole('button', { name: 'Finish journey' }));
@@ -1535,7 +1590,7 @@ describe('bulk photo import workspace', () => {
 
     expect(
       screen.getByRole('heading', {
-        name: 'See where the journey took shape.',
+        name: 'See where your memories took shape.',
       }),
     ).toBeVisible();
     expect(

@@ -122,6 +122,7 @@ export function OnThisDay({
   });
   const selectedYear = Number(data.date.slice(0, 4));
   const anniversary = data.mode === 'anniversary';
+  const hasDatedMemories = data.earliestDate !== null;
   const groups = new Map<string, RediscoveredMemory[]>();
 
   if (anniversary) {
@@ -134,7 +135,10 @@ export function OnThisDay({
   }
 
   return (
-    <div className={`dashboard-page ${styles.page}`}>
+    <div
+      className={`dashboard-page ${styles.page}`}
+      data-empty-account={!hasDatedMemories ? 'true' : undefined}
+    >
       <header className={styles.header}>
         <div className={styles.headingCopy}>
           <p className="section-kicker">Your atlas, revisited</p>
@@ -147,20 +151,24 @@ export function OnThisDay({
             Only you can see these memories.
           </p>
         </div>
-        <div className={styles.controls}>{controls}</div>
+        {hasDatedMemories ? (
+          <div className={styles.controls}>{controls}</div>
+        ) : null}
       </header>
 
-      <section className={styles.dayNote} aria-label="Selected memory date">
-        <CalendarDaysIcon aria-hidden="true" />
-        <div>
-          <time dateTime={data.date}>{formatCalendarDate(data.date)}</time>
-          <p>
-            {anniversary && data.total > 0
-              ? `${data.total} ${data.total === 1 ? 'memory' : 'memories'} from ${day} in earlier years.`
-              : `No memories from ${day} in earlier years.`}
-          </p>
-        </div>
-      </section>
+      {hasDatedMemories ? (
+        <section className={styles.dayNote} aria-label="Selected memory date">
+          <CalendarDaysIcon aria-hidden="true" />
+          <div>
+            <time dateTime={data.date}>{formatCalendarDate(data.date)}</time>
+            <p>
+              {anniversary && data.total > 0
+                ? `${data.total} ${data.total === 1 ? 'memory' : 'memories'} from ${day} in earlier years.`
+                : `No memories from ${day} in earlier years.`}
+            </p>
+          </div>
+        </section>
+      ) : null}
 
       {data.memories.length ? (
         anniversary ? (
@@ -227,19 +235,26 @@ export function OnThisDay({
         )
       ) : (
         <section
-          className={styles.empty}
+          className={`${styles.empty} ${!hasDatedMemories ? styles.emptyAccount : ''}`}
           aria-labelledby="rediscovery-empty-title"
         >
           <span className={styles.emptyIcon} aria-hidden="true">
             <PhotoIcon />
           </span>
-          <p className="section-kicker">A collection waiting to grow</p>
+          <p className="section-kicker">
+            {hasDatedMemories
+              ? 'Nothing on this date yet'
+              : 'A collection waiting to grow'}
+          </p>
           <h2 id="rediscovery-empty-title">
-            Your memories will meet you here.
+            {hasDatedMemories
+              ? 'Try another day in your atlas.'
+              : 'Your memories will meet you here.'}
           </h2>
           <p>
-            Upload photographs from a past visit and add its date. As your atlas
-            grows, this page brings those days back into view.
+            {hasDatedMemories
+              ? 'Choose another date above, or add more dated memories to bring new days back into view.'
+              : 'Upload photographs from a past visit and add its date. Once your atlas has a dated memory, this page will bring that day back into view.'}
           </p>
           <div className={styles.emptyActions}>
             <Link href="/dashboard/import" className={styles.primaryAction}>
