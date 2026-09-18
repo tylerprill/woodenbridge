@@ -493,6 +493,26 @@ async function advanceToStory(
   expect(
     await screen.findByText(`Memory ${storyNumber} of ${storyCount}`),
   ).toBeVisible();
+  await waitFor(() =>
+    expect(
+      screen.getByRole('heading', {
+        level: 1,
+        name: 'Give every place its voice.',
+      }),
+    ).toHaveFocus(),
+  );
+}
+
+async function advanceToJourney(user: ReturnType<typeof userEvent.setup>) {
+  await user.click(screen.getByRole('button', { name: 'Shape the journey' }));
+  await waitFor(() =>
+    expect(
+      screen.getByRole('heading', {
+        level: 1,
+        name: 'Bring the journey together.',
+      }),
+    ).toHaveFocus(),
+  );
 }
 
 describe('bulk photo import workspace', () => {
@@ -807,7 +827,7 @@ describe('bulk photo import workspace', () => {
     await titleCurrentStory(user, 'First light');
     await advanceToStory(user, 2, 2);
     await titleCurrentStory(user, 'The path home');
-    await user.click(screen.getByRole('button', { name: 'Shape the journey' }));
+    await advanceToJourney(user);
 
     expect(
       await screen.findByRole('textbox', { name: /^Journey title/ }),
@@ -856,7 +876,7 @@ describe('bulk photo import workspace', () => {
     await titleCurrentStory(user, 'First light');
     await advanceToStory(user, 2, 2);
     await titleCurrentStory(user, 'Lanterns after rain');
-    await user.click(screen.getByRole('button', { name: 'Shape the journey' }));
+    await advanceToJourney(user);
     await user.click(
       await screen.findByRole('button', {
         name: 'Use Lanterns after rain as journey cover',
@@ -938,7 +958,7 @@ describe('bulk photo import workspace', () => {
     await titleCurrentStory(user, 'First light');
     await advanceToStory(user, 2, 2);
     await titleCurrentStory(user, 'The road home');
-    await user.click(screen.getByRole('button', { name: 'Shape the journey' }));
+    await advanceToJourney(user);
     const memoriesOnly = await screen.findByRole('button', {
       name: 'Create memories only',
     });
@@ -980,7 +1000,7 @@ describe('bulk photo import workspace', () => {
     await titleCurrentStory(user, 'First light');
     await advanceToStory(user, 2, 2);
     await titleCurrentStory(user, 'The road home');
-    await user.click(screen.getByRole('button', { name: 'Shape the journey' }));
+    await advanceToJourney(user);
     await user.type(
       await screen.findByRole('textbox', { name: /^Journey title/ }),
       'Two roads north',
