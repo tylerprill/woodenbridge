@@ -481,6 +481,18 @@ async function titleCurrentStory(
   const input = screen.getByRole('textbox', { name: /^Title/ });
   await user.clear(input);
   await user.type(input, title);
+  await waitFor(() => expect(input).toHaveValue(title));
+}
+
+async function advanceToStory(
+  user: ReturnType<typeof userEvent.setup>,
+  storyNumber: number,
+  storyCount: number,
+) {
+  await user.click(screen.getByRole('button', { name: 'Next memory' }));
+  expect(
+    await screen.findByText(`Memory ${storyNumber} of ${storyCount}`),
+  ).toBeVisible();
 }
 
 describe('bulk photo import workspace', () => {
@@ -793,7 +805,7 @@ describe('bulk photo import workspace', () => {
     ]);
     await reachStories(user);
     await titleCurrentStory(user, 'First light');
-    await user.click(screen.getByRole('button', { name: 'Next memory' }));
+    await advanceToStory(user, 2, 2);
     await titleCurrentStory(user, 'The path home');
     await user.click(screen.getByRole('button', { name: 'Shape the journey' }));
 
@@ -842,7 +854,7 @@ describe('bulk photo import workspace', () => {
     ]);
     await reachStories(user);
     await titleCurrentStory(user, 'First light');
-    await user.click(screen.getByRole('button', { name: 'Next memory' }));
+    await advanceToStory(user, 2, 2);
     await titleCurrentStory(user, 'Lanterns after rain');
     await user.click(screen.getByRole('button', { name: 'Shape the journey' }));
     await user.click(
@@ -924,7 +936,7 @@ describe('bulk photo import workspace', () => {
     ]);
     await reachStories(user);
     await titleCurrentStory(user, 'First light');
-    await user.click(screen.getByRole('button', { name: 'Next memory' }));
+    await advanceToStory(user, 2, 2);
     await titleCurrentStory(user, 'The road home');
     await user.click(screen.getByRole('button', { name: 'Shape the journey' }));
     const memoriesOnly = await screen.findByRole('button', {
@@ -966,7 +978,7 @@ describe('bulk photo import workspace', () => {
     ]);
     await reachStories(user);
     await titleCurrentStory(user, 'First light');
-    await user.click(screen.getByRole('button', { name: 'Next memory' }));
+    await advanceToStory(user, 2, 2);
     await titleCurrentStory(user, 'The road home');
     await user.click(screen.getByRole('button', { name: 'Shape the journey' }));
     await user.type(
