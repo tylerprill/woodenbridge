@@ -742,7 +742,9 @@ test('fresh-account actions remain usable across short desktop and exact mobile 
       await page.goto('/dashboard/chapters/new');
       await expectInsideViewport(
         page,
-        page.getByRole('link', { name: 'Upload photos' }),
+        page
+          .locator('#dashboard-main')
+          .getByRole('link', { name: 'Upload photos' }),
         `${viewport.name}: workshop upload`,
       );
       await auditState(
@@ -755,7 +757,9 @@ test('fresh-account actions remain usable across short desktop and exact mobile 
       await page.goto(`/dashboard/on-this-day?date=${today}`);
       await expectInsideViewport(
         page,
-        page.getByRole('link', { name: 'Upload photos' }),
+        page
+          .locator('#dashboard-main')
+          .getByRole('link', { name: 'Upload photos' }),
         `${viewport.name}: rediscovery upload`,
       );
       await auditState(

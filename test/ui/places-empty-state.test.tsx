@@ -55,7 +55,15 @@ describe('Places empty-state disclosure', () => {
       totalPages: 1,
     });
 
-    render(await CollectionPage({ searchParams: Promise.resolve({}) }));
+    const { container } = render(
+      await CollectionPage({ searchParams: Promise.resolve({}) }),
+    );
+
+    expect(container.firstElementChild).toHaveClass(
+      'dashboard-page',
+      'collection-page',
+      'collection-page-empty',
+    );
 
     expect(
       screen.getByRole('heading', {
@@ -81,7 +89,17 @@ describe('Places empty-state disclosure', () => {
       totalPages: 1,
     });
 
-    render(await CollectionPage({ searchParams: Promise.resolve({}) }));
+    const { container } = render(
+      await CollectionPage({ searchParams: Promise.resolve({}) }),
+    );
+
+    expect(container.firstElementChild).toHaveClass(
+      'dashboard-page',
+      'collection-page',
+    );
+    expect(container.firstElementChild).not.toHaveClass(
+      'collection-page-empty',
+    );
 
     expect(screen.getByText('saved places')).toBeInTheDocument();
     expect(

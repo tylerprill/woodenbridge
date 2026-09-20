@@ -33,7 +33,11 @@ export default async function CollectionPage({
 
   return (
     <div
-      className={`dashboard-page collection-page${hasPlaces ? '' : 'collection-page-empty'}`}
+      className={
+        hasPlaces
+          ? 'dashboard-page collection-page'
+          : 'dashboard-page collection-page collection-page-empty'
+      }
     >
       <header className="dashboard-page-heading">
         <div>

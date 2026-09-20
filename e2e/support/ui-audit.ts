@@ -490,6 +490,18 @@ export async function auditCurrentPage(
   }
 
   if (options.accessibility) {
+    const documentTitle = page.locator('head > title');
+    await expect(
+      documentTitle,
+      `${label}: single document title ready`,
+    ).toHaveCount(1, { timeout: 10_000 });
+    await expect
+      .poll(() => page.title(), {
+        message: `${label}: document title ready`,
+        timeout: 10_000,
+      })
+      .toMatch(/\S/);
+
     const accessibility = await new AxeBuilder({ page })
       .withTags(['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa', 'best-practice'])
       .analyze();
