@@ -71,6 +71,22 @@ type AtlasWorkspaceProps = {
 
 type JourneyLoadState = 'idle' | 'loading' | 'ready' | 'error';
 
+type AtlasNotice = {
+  message: string;
+  sequence: number;
+};
+
+function atlasNoticeReducer(
+  current: AtlasNotice | null,
+  message: string,
+): AtlasNotice | null {
+  if (!message) return null;
+  return {
+    message,
+    sequence: (current?.sequence ?? 0) + 1,
+  };
+}
+
 function initialAtlasExperience({
   mode,
   memoryId,
@@ -181,7 +197,7 @@ export function AtlasWorkspace({
     id: initialSelectedId,
     nonce: initialSelectedId ? 1 : 0,
   });
-  const [notice, setNotice] = useState('');
+  const [notice, setNotice] = useReducer(atlasNoticeReducer, null);
   const [drawerDirty, setDrawerDirty] = useState(false);
   const [mediaLoadingId, setMediaLoadingId] = useState<string | null>(null);
   const [placeResolvingId, setPlaceResolvingId] = useState<string | null>(null);
@@ -1879,9 +1895,9 @@ export function AtlasWorkspace({
       ) : null}
 
       {notice ? (
-        <div className={styles.toast} role="status">
+        <div className={styles.toast} key={notice.sequence} role="status">
           <span aria-hidden="true" />
-          {notice}
+          {notice.message}
         </div>
       ) : null}
 
