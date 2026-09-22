@@ -474,6 +474,21 @@
   }
 }
 
+@media (max-height: 480px) and (orientation: landscape) {
+  .page[data-empty-account='true'] .header {
+    margin-bottom: 0.25rem;
+  }
+
+  .page[data-empty-account='true'] .headingCopy > :global(.section-kicker),
+  .page[data-empty-account='true'] .introduction {
+    display: none;
+  }
+
+  .emptyAccount .emptyActions {
+    margin-top: 0.25rem;
+  }
+}
+
 @media (prefers-reduced-motion: reduce) {
   .artwork > img {
     transition: none;

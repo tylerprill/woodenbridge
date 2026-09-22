@@ -3611,9 +3611,24 @@
     line-height: 1.35;
   }
 
+  .chaptersPage:has(.chaptersEmpty) .chaptersHeader {
+    margin-bottom: 0.25rem;
+  }
+
+  .chaptersPage:has(.chaptersEmpty)
+    .chaptersHeader
+    > div:first-child
+    > p:last-child {
+    display: none;
+  }
+
   .chaptersEmpty {
     min-height: 0;
     padding: 1rem 1.25rem;
+  }
+
+  .chaptersPage:has(.chaptersEmpty) .chaptersEmpty {
+    padding-block: 0.55rem;
   }
 
   .emptyChapterArt,

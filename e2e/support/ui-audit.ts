@@ -490,11 +490,9 @@ export async function auditCurrentPage(
   }
 
   if (options.accessibility) {
-    const documentTitle = page.locator('head > title');
-    await expect(
-      documentTitle,
-      `${label}: single document title ready`,
-    ).toHaveCount(1, { timeout: 10_000 });
+    // Next.js can stream dynamic route metadata into the body for JavaScript-
+    // capable user agents. document.title is authoritative regardless of
+    // where the framework mounts the streamed <title> element.
     await expect
       .poll(() => page.title(), {
         message: `${label}: document title ready`,
