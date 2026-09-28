@@ -572,7 +572,7 @@ test('an empty account can preserve memories, shape a journey, and cleanly remov
     }),
   ).toBeVisible();
   await expect(
-    page.getByRole('link', { name: /Add memories/i }).first(),
+    page.getByRole('link', { name: 'New journey' }).first(),
   ).toBeVisible();
   await auditState(page, testInfo, 'empty-journeys', monitor);
 
