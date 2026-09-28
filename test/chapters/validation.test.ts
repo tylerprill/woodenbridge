@@ -143,6 +143,63 @@ describe('chapter validation', () => {
     expect(parsed.success).toBe(false);
   });
 
+  it('validates editable Segment definitions and their Memory assignments', () => {
+    const firstSegmentId = 'e8ef6529-4961-4847-8272-e0da4aebf38b';
+    const secondSegmentId = 'c47412f0-b990-421d-9321-693f153bd2d1';
+    const parsed = atlasChapterUpdateSchema.parse(
+      chapterInput({
+        id: 'c202ab58-61c3-455d-8cee-6bd9f29a7e94',
+        version: 4,
+        segments: [
+          { id: firstSegmentId, title: '  Day 1 · Desert  ' },
+          { id: secondSegmentId, title: 'Day 2 · Coast' },
+        ],
+        memories: [
+          {
+            entryId: memoryIds[0],
+            transitionNote: '',
+            segmentId: firstSegmentId,
+          },
+          {
+            entryId: memoryIds[1],
+            transitionNote: '',
+            segmentId: secondSegmentId,
+          },
+        ],
+      }),
+    );
+
+    expect(parsed.segments?.[0].title).toBe('Day 1 · Desert');
+  });
+
+  it('rejects Memory assignments to Segments omitted from the update', () => {
+    const parsed = atlasChapterUpdateSchema.safeParse(
+      chapterInput({
+        id: 'c202ab58-61c3-455d-8cee-6bd9f29a7e94',
+        version: 4,
+        segments: [],
+        memories: [
+          {
+            entryId: memoryIds[0],
+            transitionNote: '',
+            segmentId: 'e8ef6529-4961-4847-8272-e0da4aebf38b',
+          },
+          { entryId: memoryIds[1], transitionNote: '' },
+        ],
+      }),
+    );
+
+    expect(parsed.success).toBe(false);
+    if (parsed.success) throw new Error('An omitted Segment was accepted.');
+    expect(parsed.error.issues).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          message: 'Every assigned segment must be included in the journey.',
+        }),
+      ]),
+    );
+  });
+
   it('requires the reviewed version when deleting a journey', () => {
     expect(
       atlasChapterDeleteSchema.safeParse({

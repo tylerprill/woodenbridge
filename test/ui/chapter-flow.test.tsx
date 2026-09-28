@@ -274,8 +274,12 @@ describe('chapter creation and sharing UI', () => {
     await user.type(title, 'Wonders in two days');
     await user.click(screen.getByRole('button', { name: /Arrange & share/i }));
 
-    expect(screen.getByText(firstSegment.title)).toBeVisible();
-    expect(screen.getByText(secondSegment.title)).toBeVisible();
+    expect(screen.getByLabelText('Name for segment 1')).toHaveValue(
+      firstSegment.title,
+    );
+    expect(screen.getByLabelText('Name for segment 2')).toHaveValue(
+      secondSegment.title,
+    );
     expect(
       screen.getByRole('button', { name: 'Move Kyoto lanterns earlier' }),
     ).toBeDisabled();
@@ -285,6 +289,10 @@ describe('chapter creation and sharing UI', () => {
     await waitFor(() =>
       expect(updateAtlasChapterAction).toHaveBeenCalledWith(
         expect.objectContaining({
+          segments: [
+            { id: firstSegment.id, title: firstSegment.title },
+            { id: secondSegment.id, title: secondSegment.title },
+          ],
           memories: [
             {
               entryId: memories[0].id,
@@ -299,6 +307,169 @@ describe('chapter creation and sharing UI', () => {
           ],
         }),
       ),
+    );
+  });
+
+  it('divides an existing Journey into scalable, editable Segments', async () => {
+    const user = userEvent.setup();
+    const addedMemories: AtlasChapterMemoryOption[] = [
+      {
+        id: 'memory-3',
+        title: 'Coast overlook',
+        placeLabel: 'Big Sur, California',
+        placeName: 'Big Sur',
+        visitedOn: '2026-02-13',
+        journeyState: 'visited',
+        coverMediaId: null,
+        thumbnailUrl: null,
+      },
+      {
+        id: 'memory-4',
+        title: 'Redwood camp',
+        placeLabel: 'Humboldt County, California',
+        placeName: 'Humboldt County',
+        visitedOn: '2026-02-14',
+        journeyState: 'visited',
+        coverMediaId: null,
+        thumbnailUrl: null,
+      },
+    ];
+    const journeyMemories = [...memories, ...addedMemories];
+    const journey: AtlasChapterEditorChapter = {
+      ...existingJourney,
+      memories: journeyMemories.map((memory) => ({
+        entryId: memory.id,
+        transitionNote: '',
+      })),
+    };
+    jest.mocked(updateAtlasChapterAction).mockResolvedValue({
+      ok: true,
+      data: {
+        id: journey.id,
+        version: journey.version + 1,
+        shareId: journey.shareId,
+      },
+    });
+
+    render(
+      <ChapterEditor chapter={journey} availableEntries={journeyMemories} />,
+    );
+    await user.click(screen.getByRole('button', { name: /Arrange & share/i }));
+    await user.click(
+      screen.getByRole('button', { name: 'Divide into segments' }),
+    );
+    await user.click(
+      screen.getByRole('button', {
+        name: 'Start a segment here before Coast overlook',
+      }),
+    );
+
+    const firstSegmentId = (
+      screen.getByLabelText('Segment for Petra at dawn') as HTMLSelectElement
+    ).value;
+    const secondSegmentId = (
+      screen.getByLabelText('Segment for Coast overlook') as HTMLSelectElement
+    ).value;
+    expect(firstSegmentId).not.toBe(secondSegmentId);
+    expect(screen.getByLabelText('Name for segment 1')).toHaveValue(
+      'Segment 1',
+    );
+    const secondSegmentName = screen.getByLabelText('Name for segment 2');
+    await user.clear(secondSegmentName);
+    await user.type(secondSegmentName, 'Day 2 · Coast');
+    await user.selectOptions(
+      screen.getByLabelText('Segment for Kyoto lanterns'),
+      secondSegmentId,
+    );
+    await user.click(screen.getByRole('button', { name: 'Save changes' }));
+
+    await waitFor(() =>
+      expect(updateAtlasChapterAction).toHaveBeenCalledWith(
+        expect.objectContaining({
+          segments: [
+            { id: firstSegmentId, title: 'Segment 1' },
+            { id: secondSegmentId, title: 'Day 2 · Coast' },
+          ],
+          memories: [
+            {
+              entryId: 'memory-1',
+              transitionNote: '',
+              segmentId: firstSegmentId,
+            },
+            {
+              entryId: 'memory-3',
+              transitionNote: '',
+              segmentId: secondSegmentId,
+            },
+            {
+              entryId: 'memory-4',
+              transitionNote: '',
+              segmentId: secondSegmentId,
+            },
+            {
+              entryId: 'memory-2',
+              transitionNote: '',
+              segmentId: secondSegmentId,
+            },
+          ],
+        }),
+      ),
+    );
+  });
+
+  it('removes a Segment without removing its Memories', async () => {
+    const user = userEvent.setup();
+    const firstSegment = {
+      id: 'e8ef6529-4961-4847-8272-e0da4aebf38b',
+      title: 'Day 1 · Petra',
+      position: 0,
+      memoryCount: 1,
+      startDate: '2026-01-03',
+      endDate: '2026-01-03',
+    };
+    const secondSegment = {
+      id: 'c47412f0-b990-421d-9321-693f153bd2d1',
+      title: 'Day 2 · Kyoto',
+      position: 1,
+      memoryCount: 1,
+      startDate: '2026-02-12',
+      endDate: '2026-02-12',
+    };
+    const journey: AtlasChapterEditorChapter = {
+      ...existingJourney,
+      segments: [firstSegment, secondSegment],
+      memories: memories.map((memory, index) => ({
+        entryId: memory.id,
+        transitionNote: '',
+        segmentId: index === 0 ? firstSegment.id : secondSegment.id,
+      })),
+    };
+    jest.mocked(updateAtlasChapterAction).mockResolvedValue({
+      ok: true,
+      data: {
+        id: journey.id,
+        version: journey.version + 1,
+        shareId: journey.shareId,
+      },
+    });
+
+    render(<ChapterEditor chapter={journey} availableEntries={memories} />);
+    await user.click(screen.getByRole('button', { name: /Arrange & share/i }));
+    await user.click(
+      screen.getByRole('button', { name: 'Remove Day 1 · Petra segment' }),
+    );
+
+    expect(
+      screen.queryByLabelText('Name for segment 2'),
+    ).not.toBeInTheDocument();
+    expect(screen.getByLabelText('Name for segment 1')).toHaveValue(
+      secondSegment.title,
+    );
+    expect(screen.getByLabelText('Segment for Petra at dawn')).toHaveValue(
+      secondSegment.id,
+    );
+    expect(screen.getByText(/memories selected/)).toHaveTextContent(
+      /02\s*memories selected/,
     );
   });
 

@@ -24,10 +24,14 @@ import { revalidatePath } from 'next/cache';
 import {
   createAtlasChapterAction,
   deleteAtlasChapterAction,
+  updateAtlasChapterAction,
 } from '@/app/lib/actions/chapters';
 import { requireVerifiedSession } from '@/app/lib/auth/session';
 import { loadAtlasJourneySuggestions } from '@/app/lib/atlas/journeys/data';
-import type { AtlasChapterInput } from '@/app/lib/chapters/definitions';
+import type {
+  AtlasChapterInput,
+  AtlasChapterUpdateInput,
+} from '@/app/lib/chapters/definitions';
 
 const { __testMocks } = jest.requireMock('@vercel/postgres') as {
   __testMocks: {
@@ -362,6 +366,102 @@ describe('Atlas Chapter creation idempotency', () => {
       ok: true,
       data: chapter,
     });
+  });
+});
+
+describe('Atlas Chapter Segment editing', () => {
+  beforeEach(() => {
+    __testMocks.clientQuery.mockReset();
+    __testMocks.release.mockReset();
+    __testMocks.connect.mockClear();
+    jest.mocked(revalidatePath).mockReset();
+    jest.mocked(requireVerifiedSession).mockResolvedValue({
+      user: { id: userId },
+    } as Awaited<ReturnType<typeof requireVerifiedSession>>);
+  });
+
+  it('synchronizes Segment definitions before replacing Memory assignments', async () => {
+    const firstSegmentId = 'e8ef6529-4961-4847-8272-e0da4aebf38b';
+    const secondSegmentId = 'c47412f0-b990-421d-9321-693f153bd2d1';
+    const updateInput: AtlasChapterUpdateInput = {
+      ...input,
+      id: chapter.id,
+      version: chapter.version,
+      segments: [
+        { id: firstSegmentId, title: 'Day 1 · Desert' },
+        { id: secondSegmentId, title: 'Day 2 · Coast' },
+      ],
+      memories: [
+        {
+          entryId: firstEntryId,
+          transitionNote: '',
+          segmentId: firstSegmentId,
+        },
+        {
+          entryId: secondEntryId,
+          transitionNote: 'Then we headed east.',
+          segmentId: secondSegmentId,
+        },
+      ],
+    };
+    __testMocks.clientQuery.mockImplementation(
+      async (query: unknown, values?: unknown[]) => {
+        const text = normalizeQuery(query);
+        if (text.startsWith('SELECT version, visibility, share_id')) {
+          return {
+            rows: [
+              {
+                version: chapter.version,
+                visibility: 'private',
+                share_id: chapter.shareId,
+              },
+            ],
+          };
+        }
+        if (text.startsWith('SELECT id FROM atlas_entries')) {
+          return { rows: [{ id: firstEntryId }, { id: secondEntryId }] };
+        }
+        if (text.startsWith('SELECT id, chapter_id AS')) return { rows: [] };
+        if (text.startsWith('INSERT INTO atlas_chapter_segments')) {
+          expect(values).toEqual([
+            chapter.id,
+            userId,
+            [firstSegmentId, secondSegmentId],
+            ['Day 1 · Desert', 'Day 2 · Coast'],
+          ]);
+          return { rows: [] };
+        }
+        if (text.startsWith('WITH selected AS')) {
+          return { rows: [{ id: firstSegmentId }, { id: secondSegmentId }] };
+        }
+        if (text.startsWith('SELECT id FROM atlas_chapter_segments')) {
+          return { rows: [{ id: firstSegmentId }, { id: secondSegmentId }] };
+        }
+        if (text.startsWith('UPDATE atlas_chapters SET')) {
+          return { rows: [{ ...chapter, version: chapter.version + 1 }] };
+        }
+        return { rows: [] };
+      },
+    );
+
+    await expect(updateAtlasChapterAction(updateInput)).resolves.toEqual({
+      ok: true,
+      data: { ...chapter, version: chapter.version + 1 },
+    });
+
+    const queries = __testMocks.clientQuery.mock.calls.map(([query]) =>
+      normalizeQuery(query),
+    );
+    expect(
+      queries.findIndex((query) =>
+        query.startsWith('INSERT INTO atlas_chapter_segments'),
+      ),
+    ).toBeLessThan(
+      queries.findIndex((query) =>
+        query.startsWith('INSERT INTO atlas_chapter_entries'),
+      ),
+    );
+    expect(queries.at(-1)).toBe('COMMIT');
   });
 });
 

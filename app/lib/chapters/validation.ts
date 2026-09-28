@@ -47,6 +47,30 @@ const chapterMemoriesSchema = z
     },
   );
 
+const journeySegmentsSchema = z
+  .array(
+    z.object({
+      id: z.string().uuid(),
+      title: z
+        .string()
+        .trim()
+        .min(1, 'Give each segment a name.')
+        .max(
+          CHAPTER_SEGMENT_TITLE_MAX_LENGTH,
+          `Keep each segment name under ${CHAPTER_SEGMENT_TITLE_MAX_LENGTH} characters.`,
+        ),
+    }),
+  )
+  .max(
+    CHAPTER_MAX_SEGMENTS,
+    `A journey can hold up to ${CHAPTER_MAX_SEGMENTS} segments.`,
+  )
+  .refine(
+    (segments) =>
+      new Set(segments.map((segment) => segment.id)).size === segments.length,
+    { message: 'Each segment can appear only once in a journey.' },
+  );
+
 const atlasChapterInputFields = {
   title: z
     .string()
@@ -103,6 +127,21 @@ export const atlasChapterUpdateSchema = z
     ...atlasChapterInputFields,
     id: atlasChapterIdSchema,
     version: z.number().int().positive(),
+    segments: journeySegmentsSchema.optional(),
+  })
+  .superRefine((chapter, context) => {
+    if (!chapter.segments) return;
+    const segmentIds = new Set(chapter.segments.map((segment) => segment.id));
+    for (const memory of chapter.memories) {
+      if (memory.segmentId && !segmentIds.has(memory.segmentId)) {
+        context.addIssue({
+          code: 'custom',
+          message: 'Every assigned segment must be included in the journey.',
+          path: ['memories'],
+        });
+        return;
+      }
+    }
   })
   .transform(enforceEffectiveSharePrecision);
 

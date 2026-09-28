@@ -10,6 +10,7 @@ import type {
   AtlasChapterInput,
   AtlasChapterMemoryInput,
   AtlasChapterUpdateInput,
+  AtlasJourneySegmentInput,
   ChapterActionResult,
 } from '@/app/lib/chapters/definitions';
 import {
@@ -17,6 +18,7 @@ import {
   atlasChapterInputSchema,
   atlasChapterUpdateSchema,
   CHAPTER_MAX_MEMORIES,
+  CHAPTER_MAX_SEGMENTS,
 } from '@/app/lib/chapters/validation';
 import { loadAtlasJourneySuggestions } from '@/app/lib/atlas/journeys/data';
 import type { AtlasJourneySuggestion } from '@/app/lib/atlas/journeys/definitions';
@@ -162,6 +164,109 @@ async function ownsEverySegment(
     [chapterId, userId, segmentIds],
   );
   return result.rows.length === segmentIds.length;
+}
+
+async function syncChapterSegments(
+  client: VercelPoolClient,
+  chapterId: string,
+  userId: string,
+  segments: AtlasJourneySegmentInput[],
+) {
+  const segmentIds = segments.map((segment) => segment.id);
+  if (segmentIds.length) {
+    const existing = await client.query<{
+      id: string;
+      chapterId: string;
+      userId: string;
+    }>(
+      `
+        SELECT
+          id,
+          chapter_id AS "chapterId",
+          user_id AS "userId"
+        FROM atlas_chapter_segments
+        WHERE id = ANY($1::uuid[])
+        FOR UPDATE
+      `,
+      [segmentIds],
+    );
+    if (
+      existing.rows.some(
+        (segment) =>
+          segment.chapterId !== chapterId || segment.userId !== userId,
+      )
+    ) {
+      return false;
+    }
+  }
+
+  await client.query(
+    `
+      UPDATE atlas_chapter_segments
+      SET position = position + $3
+      WHERE chapter_id = $1 AND user_id = $2
+    `,
+    [chapterId, userId, CHAPTER_MAX_SEGMENTS + 1],
+  );
+  await client.query(
+    `
+      DELETE FROM atlas_chapter_segments
+      WHERE chapter_id = $1
+        AND user_id = $2
+        AND id <> ALL($3::uuid[])
+    `,
+    [chapterId, userId, segmentIds],
+  );
+
+  if (!segments.length) return true;
+
+  const segmentTitles = segments.map((segment) => segment.title);
+  await client.query(
+    `
+      INSERT INTO atlas_chapter_segments (
+        id,
+        chapter_id,
+        user_id,
+        title,
+        position
+      )
+      SELECT
+        selected.id,
+        $1,
+        $2,
+        selected.title,
+        (selected.ordinality - 1)::smallint
+      FROM unnest($3::uuid[], $4::text[])
+        WITH ORDINALITY AS selected(id, title, ordinality)
+      WHERE NOT EXISTS (
+        SELECT 1
+        FROM atlas_chapter_segments AS current
+        WHERE current.id = selected.id
+      )
+    `,
+    [chapterId, userId, segmentIds, segmentTitles],
+  );
+  const synchronized = await client.query<{ id: string }>(
+    `
+      WITH selected AS (
+        SELECT id, title, ordinality
+        FROM unnest($3::uuid[], $4::text[])
+          WITH ORDINALITY AS input(id, title, ordinality)
+      )
+      UPDATE atlas_chapter_segments AS segment
+      SET
+        title = selected.title,
+        position = (selected.ordinality - 1)::smallint,
+        updated_at = NOW()
+      FROM selected
+      WHERE segment.id = selected.id
+        AND segment.chapter_id = $1
+        AND segment.user_id = $2
+      RETURNING segment.id
+    `,
+    [chapterId, userId, segmentIds, segmentTitles],
+  );
+  return synchronized.rows.length === segments.length;
 }
 
 async function ownsCoverMedia(
@@ -553,6 +658,22 @@ export async function updateAtlasChapterAction(
         ok: false,
         error: 'invalid',
         message: 'One of those memories is no longer available.',
+      };
+    }
+    if (
+      parsed.data.segments &&
+      !(await syncChapterSegments(
+        client,
+        parsed.data.id,
+        session.user.id,
+        parsed.data.segments,
+      ))
+    ) {
+      await client.query('ROLLBACK');
+      return {
+        ok: false,
+        error: 'invalid',
+        message: 'One of those journey segments is no longer available.',
       };
     }
     const segmentIds = Array.from(
