@@ -3,8 +3,8 @@
 This runbook covers the controls that live outside the authentication code:
 database identities, migrations, deployment gates, scheduled retention, and
 security-event operations. Treat every database credential, authentication
-secret, maintenance secret, Blob token, and email-provider key as a production
-credential.
+secret, maintenance secret, Blob credential, and email-provider key as a
+production credential.
 
 ## Database identities
 
@@ -134,13 +134,27 @@ are pinned to immutable commits; Dependabot proposes controlled updates.
 Vercel production should deploy only from protected `main`. Give preview
 deployments a separate Neon branch/database and separate `AUTH_SECRET`,
 `AUTH_HMAC_SECRET`, `MEDIA_GRANT_SECRET`, `CRON_SECRET`, Server Action key,
-Resend key, and Blob token. Never connect an untrusted pull request preview to
-production data or production credentials.
+Resend key, and Blob store connection. Never connect an untrusted pull request
+preview to production data or production credentials.
 
 Secret scanning, push protection, Dependabot security updates, restricted
 GitHub Actions publishers, and immutable action-SHA enforcement should remain
 enabled. These controls supplement branch protection; they do not replace
 required pull-request checks.
+
+## Private Blob authentication
+
+Production and preview deployments use Vercel's short-lived OIDC credential,
+which Vercel injects as `VERCEL_OIDC_TOKEN`. Scope every Atlas operation to the
+connected private store with `ATLAS_BLOB_STORE_ID`. Browser uploads use a
+server-issued, path-scoped presigned URL; upload-completion callbacks are
+verified with `ATLAS_BLOB_WEBHOOK_PUBLIC_KEY` before application state changes.
+
+Do not copy `VERCEL_OIDC_TOKEN` into project settings or expose it to the
+browser. Vercel rotates it automatically. `ATLAS_BLOB_READ_WRITE_TOKEN` is an
+optional local or non-Vercel fallback only. If that fallback is used, it must
+belong to the same store declared by `ATLAS_BLOB_STORE_ID`, and the webhook
+public key is still required for completion callbacks.
 
 ## Scheduled security and upload retention
 
@@ -228,8 +242,9 @@ Before production release:
 4. Verify production contains `APP_URL`, independent `AUTH_SECRET`,
    `AUTH_HMAC_SECRET`, and `MEDIA_GRANT_SECRET` values, `DATABASE_URL`,
    `CRON_SECRET`, `NEXT_SERVER_ACTIONS_ENCRYPTION_KEY`, exact WebAuthn
-   RP/origin configuration, Resend configuration, and Blob configuration in the
-   correct Vercel environment scope.
+   RP/origin configuration, Resend configuration,
+   `ATLAS_BLOB_STORE_ID`, `ATLAS_BLOB_WEBHOOK_PUBLIC_KEY`, and the connected
+   Blob OIDC credential in the correct Vercel environment scope.
 5. Exercise signup, verification, login, logout, password reset, session
    revocation, passkey enrollment/step-up, recovery-code replacement, one
    privileged action, and the cleanup endpoint in production.

@@ -1,4 +1,8 @@
-import { handleUpload, type HandleUploadBody } from '@vercel/blob/client';
+import { issueSignedToken } from '@vercel/blob';
+import {
+  handleUploadPresigned,
+  type HandleUploadPresignedBody,
+} from '@vercel/blob/client';
 import { getVerifiedSession } from '@/app/lib/auth/session';
 import {
   ATLAS_MEDIA_ALLOWED_TYPES,
@@ -13,7 +17,8 @@ import {
   isAtlasThumbnailPath,
 } from '@/app/lib/atlas/media-policy';
 import {
-  getAtlasBlobToken,
+  getAtlasBlobAuthOptions,
+  getAtlasBlobWebhookPublicKey,
   getE2EAtlasMediaStorageConfiguration,
   isE2EAtlasMediaStorageEnabled,
   putE2EAtlasMediaObject,
@@ -212,21 +217,21 @@ export async function POST(request: Request) {
   }
 
   try {
-    const body = (await request.json()) as HandleUploadBody;
+    const body = (await request.json()) as HandleUploadPresignedBody;
     const session =
-      body.type === 'blob.generate-client-token'
+      body.type === 'blob.generate-presigned-url'
         ? await getVerifiedSession()
         : null;
 
-    if (body.type === 'blob.generate-client-token' && !session) {
+    if (body.type === 'blob.generate-presigned-url' && !session) {
       return Response.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    const response = await handleUpload({
+    const response = await handleUploadPresigned({
       body,
       request,
-      token: getAtlasBlobToken(),
-      onBeforeGenerateToken: async (pathname, clientPayload) => {
+      webhookPublicKey: getAtlasBlobWebhookPublicKey(),
+      getSignedToken: async (pathname, clientPayload) => {
         if (!session) throw new Error('Unauthorized upload request.');
 
         let payload: unknown;
@@ -246,24 +251,38 @@ export async function POST(request: Request) {
           variant: upload.variant,
         });
 
-        return {
-          allowedContentTypes:
-            upload.variant === 'thumbnail' && upload.contentType
-              ? [upload.contentType]
-              : [...ATLAS_MEDIA_ALLOWED_TYPES],
+        const allowedContentTypes =
+          upload.variant === 'thumbnail' && upload.contentType
+            ? [upload.contentType]
+            : [...ATLAS_MEDIA_ALLOWED_TYPES];
+        const tokenPayload = JSON.stringify({
+          userId: session.user.id,
+          entryId: upload.entryId,
+          mediaId: upload.mediaId,
+          pathname: upload.pathname,
+          thumbnailPathname: upload.thumbnailPathname,
+          variant: upload.variant,
+        });
+        const token = await issueSignedToken({
+          ...getAtlasBlobAuthOptions(),
+          pathname,
+          operations: ['put'],
+          allowedContentTypes,
           maximumSizeInBytes: upload.maximumSizeInBytes,
           validUntil: reservation.validUntil,
-          addRandomSuffix: false,
-          allowOverwrite: false,
-          cacheControlMaxAge: 30 * 24 * 60 * 60,
-          tokenPayload: JSON.stringify({
-            userId: session.user.id,
-            entryId: upload.entryId,
-            mediaId: upload.mediaId,
-            pathname: upload.pathname,
-            thumbnailPathname: upload.thumbnailPathname,
-            variant: upload.variant,
-          }),
+        });
+
+        return {
+          token,
+          urlOptions: {
+            allowedContentTypes,
+            maximumSizeInBytes: upload.maximumSizeInBytes,
+            validUntil: reservation.validUntil,
+            addRandomSuffix: false,
+            allowOverwrite: false,
+            cacheControlMaxAge: 30 * 24 * 60 * 60,
+            tokenPayload,
+          },
         };
       },
       onUploadCompleted: async ({ blob, tokenPayload }) => {
