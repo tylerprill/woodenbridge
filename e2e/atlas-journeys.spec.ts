@@ -301,10 +301,11 @@ test('Journey Lens connects the Atlas, playback, and Journey workshop', async ({
   await expect(
     page.getByRole('heading', { level: 1, name: 'Begin a new journey.' }),
   ).toBeVisible();
-  await expect(page.getByRole('link', { name: 'Journeys' })).toHaveAttribute(
-    'href',
-    '/dashboard/chapters',
-  );
+  await expect(
+    page
+      .locator('.dashboard-nav-links')
+      .getByRole('link', { name: 'Journeys' }),
+  ).toHaveAttribute('href', '/dashboard/chapters');
   await auditJourneyState(page, testInfo, 'journey-workshop', monitor);
 
   if (testInfo.project.name === 'chromium') {
