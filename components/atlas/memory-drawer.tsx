@@ -53,6 +53,8 @@ type MemoryDrawerProps = {
   onArchive: (id: string) => void;
   mediaLoading: boolean;
   placeResolving: boolean;
+  initialPhotoFiles?: File[];
+  onInitialPhotoFilesConsumed?: () => void;
   continuationJourney?: AtlasJourneyContinuation | null;
   onContinuationSaved?: (entry: AtlasEntry) => void;
   surface?: 'atlas' | 'journey-editor';
@@ -101,6 +103,8 @@ export function MemoryDrawer({
   onArchive,
   mediaLoading,
   placeResolving,
+  initialPhotoFiles,
+  onInitialPhotoFilesConsumed,
   continuationJourney = null,
   onContinuationSaved,
   surface = 'atlas',
@@ -881,6 +885,8 @@ export function MemoryDrawer({
           onChange={handleMediaChange}
           onBusyChange={handleMediaBusyChange}
           onCaptureSuggestion={handleCaptureSuggestion}
+          initialFiles={initialPhotoFiles}
+          onInitialFilesConsumed={onInitialPhotoFilesConsumed}
         />
 
         <div className={styles.coordinateNote}>

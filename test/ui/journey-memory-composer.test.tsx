@@ -10,6 +10,7 @@ import {
   resolveAtlasPlaceAction,
 } from '@/app/lib/actions/atlas';
 import type { AtlasEntry, AtlasView } from '@/app/lib/atlas/definitions';
+import { analyzeAtlasImportPhoto } from '@/app/lib/atlas/photo-import-client';
 import type { AtlasJourneyContinuation } from '@/app/lib/chapters/definitions';
 import { JourneyMemoryComposer } from '@/components/chapters/journey-memory-composer';
 
@@ -22,6 +23,11 @@ jest.mock('next/navigation', () => ({
 jest.mock('@/app/lib/actions/atlas', () => ({
   createAtlasDraftAction: jest.fn(),
   resolveAtlasPlaceAction: jest.fn(),
+}));
+
+jest.mock('@/app/lib/atlas/photo-import-client', () => ({
+  ...jest.requireActual('@/app/lib/atlas/photo-import-client'),
+  analyzeAtlasImportPhoto: jest.fn(),
 }));
 
 jest.mock('@/components/atlas/atlas-map-loader', () => ({
@@ -68,17 +74,20 @@ jest.mock('@/components/atlas/memory-drawer', () => ({
     continuationJourney,
     onArchive,
     onContinuationSaved,
+    initialPhotoFiles,
     surface,
   }: {
     continuationJourney: AtlasJourneyContinuation;
     onArchive: (id: string) => void;
     onContinuationSaved: (entry: AtlasEntry) => void;
+    initialPhotoFiles?: File[];
     surface: string;
   }) => (
     <div role="dialog" aria-label="Create memory">
       <span>{continuationJourney.title}</span>
       <span>{continuationJourney.selectedSegmentId}</span>
       <span>{surface}</span>
+      <span>{initialPhotoFiles?.length ?? 0} photos ready</span>
       <button type="button" onClick={() => onContinuationSaved(entry)}>
         Finish memory
       </button>
@@ -154,6 +163,11 @@ beforeEach(() => {
       },
     },
   });
+  jest.mocked(analyzeAtlasImportPhoto).mockResolvedValue({
+    canPrepare: true,
+    location: null,
+    issues: [],
+  } as unknown as Awaited<ReturnType<typeof analyzeAtlasImportPhoto>>);
 });
 
 it('starts at the latest Journey stop and opens the scoped Memory editor', async () => {
@@ -196,4 +210,61 @@ it('returns to the Journey when a new Memory is cancelled', async () => {
   await user.click(screen.getByRole('button', { name: 'Cancel memory' }));
 
   expect(mockPush).toHaveBeenCalledWith(`/dashboard/chapters/${journey.id}`);
+});
+
+it('starts from page-level photos and uses their GPS location when available', async () => {
+  const user = userEvent.setup();
+  const first = new File(['first'], 'coast.png', { type: 'image/png' });
+  const second = new File(['second'], 'lunch.png', { type: 'image/png' });
+  jest.mocked(analyzeAtlasImportPhoto).mockResolvedValue({
+    canPrepare: true,
+    location: {
+      latitude: 44.975,
+      longitude: -85.64,
+      accuracyMeters: 8,
+      altitudeMeters: null,
+      source: 'exif-gps',
+      confidence: 'high',
+    },
+    issues: [],
+  } as unknown as Awaited<ReturnType<typeof analyzeAtlasImportPhoto>>);
+
+  render(<JourneyMemoryComposer journey={journey} />);
+
+  await user.upload(screen.getByLabelText('Start memory with photos'), [
+    first,
+    second,
+  ]);
+
+  await waitFor(() =>
+    expect(createAtlasDraftAction).toHaveBeenCalledWith({
+      clientRequestId: expect.any(String),
+      latitude: 44.975,
+      longitude: -85.64,
+    }),
+  );
+  expect(
+    await screen.findByRole('dialog', { name: 'Create memory' }),
+  ).toHaveTextContent('2 photos ready');
+});
+
+it('rejects more than six page-level photos before creating a draft', async () => {
+  const user = userEvent.setup();
+  render(<JourneyMemoryComposer journey={journey} />);
+
+  await user.upload(
+    screen.getByLabelText('Start memory with photos'),
+    Array.from(
+      { length: 7 },
+      (_, index) =>
+        new File([`photo-${index}`], `photo-${index}.png`, {
+          type: 'image/png',
+        }),
+    ),
+  );
+
+  expect(await screen.findByRole('alert')).toHaveTextContent(
+    'Choose up to 6 photos for one Memory.',
+  );
+  expect(createAtlasDraftAction).not.toHaveBeenCalled();
 });

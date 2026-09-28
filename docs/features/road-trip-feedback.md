@@ -164,6 +164,9 @@ the afternoon.
 - [x] Add **Continue journey** to the Journey detail experience.
 - [x] Route **Continue journey** into a dedicated **Add a memory** step in the
       Journey workshop instead of returning to Atlas.
+- [x] Let the **Add a memory** step start directly from one or more photographs,
+      use the first photograph's GPS when available, and carry the selection
+      into the Memory editor without asking the traveler to choose it again.
 - [x] Start the placement map near the Journey's latest stop and retain the
       requested Segment as the default target.
 - [x] Open a new-Memory flow that accepts photographs, title, description,
