@@ -5,7 +5,7 @@ import { useEffect, useState } from 'react';
 
 import styles from './chapters.module.css';
 
-export type ChapterSaveNoticeKind = 'created' | 'updated';
+export type ChapterSaveNoticeKind = 'created' | 'updated' | 'continued';
 
 export function ChapterSaveNotice({
   chapterId,
@@ -50,9 +50,17 @@ export function ChapterSaveNotice({
       </span>
       <div>
         <strong>
-          {kind === 'created' ? 'Journey created.' : 'Changes saved.'}
+          {kind === 'created'
+            ? 'Journey created.'
+            : kind === 'continued'
+              ? 'Memory added.'
+              : 'Changes saved.'}
         </strong>
-        <p>Your latest journey is safely in your atlas.</p>
+        <p>
+          {kind === 'continued'
+            ? 'Your new memory is now part of this journey.'
+            : 'Your latest journey is safely in your atlas.'}
+        </p>
       </div>
       <button
         type="button"

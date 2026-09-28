@@ -35,6 +35,7 @@ import {
   ATLAS_PLACE_MAX_LENGTH,
   ATLAS_TITLE_MAX_LENGTH,
 } from '@/app/lib/atlas/validation';
+import type { AtlasJourneyContinuation } from '@/app/lib/chapters/definitions';
 import {
   getAtlasPlaceContextLabel,
   getAtlasPlaceInputLabel,
@@ -51,6 +52,8 @@ type MemoryDrawerProps = {
   onArchive: (id: string) => void;
   mediaLoading: boolean;
   placeResolving: boolean;
+  continuationJourney?: AtlasJourneyContinuation | null;
+  onContinuationSaved?: (entry: AtlasEntry) => void;
 };
 
 type FormState = Pick<
@@ -85,6 +88,8 @@ export function MemoryDrawer({
   onArchive,
   mediaLoading,
   placeResolving,
+  continuationJourney = null,
+  onContinuationSaved,
 }: MemoryDrawerProps) {
   const [form, setForm] = useState<FormState>(() => formFromEntry(entry));
   const [dirty, setDirty] = useState(false);
@@ -242,6 +247,7 @@ export function MemoryDrawer({
         version: versionRef.current,
         ...form,
         placeLabel: placeValue,
+        appendToJourneyId: continuationJourney?.id,
       });
 
       if (result.ok) {
@@ -249,7 +255,12 @@ export function MemoryDrawer({
         setSaveState(
           editRevisionRef.current === savingRevision ? 'saved' : 'idle',
         );
-        onUpdate({ ...result.data, media: mediaRef.current });
+        const updatedEntry = { ...result.data, media: mediaRef.current };
+        onUpdate(updatedEntry);
+        if (continuationJourney) {
+          markLeaving();
+          onContinuationSaved?.(updatedEntry);
+        }
         return;
       }
 
@@ -264,7 +275,57 @@ export function MemoryDrawer({
     } finally {
       savingRef.current = false;
     }
-  }, [entry.id, form, mediaBusy, onUpdate, placeValue]);
+  }, [
+    continuationJourney,
+    entry.id,
+    form,
+    markLeaving,
+    mediaBusy,
+    onContinuationSaved,
+    onUpdate,
+    placeValue,
+  ]);
+
+  const cancelContinuation = async () => {
+    if (savingRef.current || mediaBusy) {
+      setMessage(
+        'Wait for the current changes to finish before canceling this memory.',
+      );
+      return;
+    }
+    if (!discardArmed) {
+      setDiscardArmed(true);
+      setMessage(
+        `Discard this new memory and return to ${continuationJourney?.title ?? 'the journey'}?`,
+      );
+      return;
+    }
+
+    savingRef.current = true;
+    setSaveState('saving');
+    setMessage('');
+    let archived = false;
+    try {
+      const result = await archiveAtlasEntryAction(entry.id);
+      if (result.ok) {
+        archived = true;
+        markLeaving();
+        onDirtyChange(false);
+        onArchive(entry.id);
+        return;
+      }
+
+      setSaveState('error');
+      setMessage(result.message);
+    } catch (error) {
+      console.error('Journey memory cancellation failed:', error);
+      setSaveState('error');
+      setMessage('The new memory could not be discarded. Please try again.');
+    } finally {
+      savingRef.current = false;
+      if (!archived) setDiscardArmed(false);
+    }
+  };
 
   const archive = async () => {
     if (savingRef.current || mediaBusy) {
@@ -312,6 +373,13 @@ export function MemoryDrawer({
     if (savingRef.current || saveState === 'saving') {
       setMessage(
         'This memory is still saving. Keep it open until it finishes.',
+      );
+      return;
+    }
+    if (continuationJourney) {
+      setDiscardArmed(true);
+      setMessage(
+        `Discard this new memory and return to ${continuationJourney.title}?`,
       );
       return;
     }
@@ -490,9 +558,11 @@ export function MemoryDrawer({
                 ? 'Wait for photo changes before closing'
                 : dirty
                   ? 'Review unsaved field changes'
-                  : entry.recordState === 'draft'
-                    ? 'Close saved draft'
-                    : 'Close memory'
+                  : continuationJourney
+                    ? 'Cancel new journey memory'
+                    : entry.recordState === 'draft'
+                      ? 'Close saved draft'
+                      : 'Close memory'
             }
           >
             <XMarkIcon aria-hidden="true" />
@@ -510,6 +580,14 @@ export function MemoryDrawer({
       </header>
 
       <div className={styles.drawerBody}>
+        {continuationJourney ? (
+          <div className={styles.journeyContinuation} role="status">
+            <span>Continuing journey</span>
+            <strong>{continuationJourney.title}</strong>
+            <small>This memory will be added as the next stop.</small>
+          </div>
+        ) : null}
+
         <label className={styles.titleField}>
           <span>Title</span>
           <textarea
@@ -684,7 +762,18 @@ export function MemoryDrawer({
       </div>
 
       <footer className={styles.drawerFooter}>
-        {dirty ? (
+        {continuationJourney ? (
+          <button
+            type="button"
+            className={styles.archiveButton}
+            data-armed={discardArmed ? 'true' : 'false'}
+            onClick={() => void cancelContinuation()}
+            disabled={saveState === 'saving' || mediaBusy}
+          >
+            <XMarkIcon aria-hidden="true" />
+            {discardArmed ? 'Discard memory?' : 'Cancel'}
+          </button>
+        ) : dirty ? (
           <button
             type="button"
             className={styles.archiveButton}
@@ -720,9 +809,11 @@ export function MemoryDrawer({
           >
             {saveState === 'saving'
               ? 'Saving…'
-              : entry.recordState === 'draft'
-                ? 'Keep memory'
-                : 'Save changes'}
+              : continuationJourney
+                ? 'Add to journey'
+                : entry.recordState === 'draft'
+                  ? 'Keep memory'
+                  : 'Save changes'}
           </button>
         </div>
       </footer>

@@ -487,4 +487,98 @@ describe('memory capture UI', () => {
     expect(screen.getByRole('button', { name: 'Remove' })).toBeEnabled();
     consoleError.mockRestore();
   });
+
+  it('adds a new memory to its Journey and reports the completed continuation', async () => {
+    const user = userEvent.setup();
+    const onUpdate = jest.fn();
+    const onContinuationSaved = jest.fn();
+    const journey = {
+      id: '78daf767-13e6-4f2f-a7bf-8a087824c005',
+      title: 'Leelanau weekend',
+      memoryCount: 2,
+    };
+    const saved = {
+      ...entry,
+      title: 'Lunch beside the lake',
+      recordState: 'saved' as const,
+      version: 2,
+    };
+    jest.mocked(updateAtlasEntryAction).mockResolvedValue({
+      ok: true,
+      data: saved,
+    });
+
+    render(
+      <MemoryDrawer
+        entry={entry}
+        onClose={jest.fn()}
+        onDirtyChange={jest.fn()}
+        onUpdate={onUpdate}
+        onMediaChange={jest.fn()}
+        onArchive={jest.fn()}
+        mediaLoading={false}
+        placeResolving={false}
+        continuationJourney={journey}
+        onContinuationSaved={onContinuationSaved}
+      />,
+    );
+
+    expect(screen.getByText('Continuing journey')).toBeVisible();
+    expect(screen.getByText(journey.title)).toBeVisible();
+    await user.type(
+      screen.getByRole('textbox', { name: 'Title' }),
+      saved.title,
+    );
+    await user.click(screen.getByRole('button', { name: 'Add to journey' }));
+
+    await waitFor(() =>
+      expect(updateAtlasEntryAction).toHaveBeenCalledWith(
+        expect.objectContaining({
+          id: entry.id,
+          title: saved.title,
+          appendToJourneyId: journey.id,
+        }),
+      ),
+    );
+    expect(onUpdate).toHaveBeenCalledWith(saved);
+    expect(onContinuationSaved).toHaveBeenCalledWith(saved);
+  });
+
+  it('discards a cancelled Journey memory before returning', async () => {
+    const user = userEvent.setup();
+    const onArchive = jest.fn();
+    jest.mocked(archiveAtlasEntryAction).mockResolvedValue({
+      ok: true,
+      data: { id: entry.id },
+    });
+
+    render(
+      <MemoryDrawer
+        entry={entry}
+        onClose={jest.fn()}
+        onDirtyChange={jest.fn()}
+        onUpdate={jest.fn()}
+        onMediaChange={jest.fn()}
+        onArchive={onArchive}
+        mediaLoading={false}
+        placeResolving={false}
+        continuationJourney={{
+          id: '78daf767-13e6-4f2f-a7bf-8a087824c005',
+          title: 'Leelanau weekend',
+          memoryCount: 2,
+        }}
+      />,
+    );
+
+    await user.click(screen.getByRole('button', { name: 'Cancel' }));
+    expect(screen.getByRole('alert')).toHaveTextContent(
+      'Discard this new memory and return to Leelanau weekend?',
+    );
+    await user.click(screen.getByRole('button', { name: 'Discard memory?' }));
+
+    await waitFor(() =>
+      expect(archiveAtlasEntryAction).toHaveBeenCalledWith(entry.id),
+    );
+    expect(onArchive).toHaveBeenCalledWith(entry.id);
+  });
 });

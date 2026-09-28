@@ -47,6 +47,7 @@ export const atlasEntryUpdateSchema = z
       .optional()
       .transform((value) => value ?? null),
     journeyState: z.enum(JOURNEY_STATES),
+    appendToJourneyId: z.string().uuid().optional(),
   })
   .superRefine((memory, context) => {
     if (memory.occurredTime && !memory.visitedOn) {

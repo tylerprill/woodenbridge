@@ -5,6 +5,7 @@ import {
   GlobeAltIcon,
   MapPinIcon,
   PencilIcon,
+  PlusIcon,
 } from '@heroicons/react/24/outline';
 import Image from 'next/image';
 import Link from 'next/link';
@@ -96,6 +97,12 @@ export function ChapterReader({
             <Link href={`/dashboard/chapters/${chapter.id}/edit`}>
               <PencilIcon aria-hidden="true" />
               Edit journey
+            </Link>
+            <Link
+              href={`/dashboard?new=memory&continueJourney=${encodeURIComponent(chapter.id)}`}
+            >
+              <PlusIcon aria-hidden="true" />
+              Continue journey
             </Link>
           </div>
         ) : (

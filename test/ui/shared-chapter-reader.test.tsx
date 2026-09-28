@@ -194,6 +194,12 @@ describe('shared Chapter reader', () => {
       'href',
       '/dashboard?view=journeys&journey=chapter-1',
     );
+    expect(
+      screen.getByRole('link', { name: 'Continue journey' }),
+    ).toHaveAttribute(
+      'href',
+      '/dashboard?new=memory&continueJourney=chapter-1',
+    );
     expect(screen.getByRole('link', { name: 'Read journey' })).toHaveAttribute(
       'href',
       '#chapter-story',
@@ -241,6 +247,9 @@ describe('shared Chapter reader', () => {
 
     expect(
       screen.queryByRole('link', { name: 'View on Atlas' }),
+    ).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole('link', { name: 'Continue journey' }),
     ).not.toBeInTheDocument();
   });
 });

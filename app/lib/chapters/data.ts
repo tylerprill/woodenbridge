@@ -18,6 +18,7 @@ import type {
   AtlasChapterEntry,
   AtlasChapterEditorData,
   AtlasChapterSummary,
+  AtlasJourneyContinuation,
 } from './definitions';
 import { toSharedAtlasChapter } from './shared';
 import { CHAPTER_MAX_MEMORIES, atlasChapterIdSchema } from './validation';
@@ -389,6 +390,41 @@ export async function getAtlasChapter(chapterId: string) {
     chapterId: parsed.data,
     shareId: null,
   });
+}
+
+export async function getAtlasJourneyContinuation(
+  chapterId: string,
+): Promise<AtlasJourneyContinuation | null> {
+  const parsed = atlasChapterIdSchema.safeParse(chapterId);
+  if (!parsed.success) return null;
+
+  const session = await requireVerifiedSession();
+  const result = await sql<{
+    id: string;
+    title: string;
+    memory_count: number | string;
+  }>`
+    SELECT
+      chapter.id,
+      chapter.title,
+      COUNT(chapter_entry.entry_id)::int AS memory_count
+    FROM atlas_chapters AS chapter
+    LEFT JOIN atlas_chapter_entries AS chapter_entry
+      ON chapter_entry.chapter_id = chapter.id
+      AND chapter_entry.user_id = chapter.user_id
+    WHERE chapter.id = ${parsed.data}
+      AND chapter.user_id = ${session.user.id}
+    GROUP BY chapter.id
+    LIMIT 1
+  `;
+  const journey = result.rows[0];
+  return journey
+    ? {
+        id: journey.id,
+        title: journey.title,
+        memoryCount: Number(journey.memory_count),
+      }
+    : null;
 }
 
 export const getSharedAtlasChapter = cache(async (shareId: string) => {

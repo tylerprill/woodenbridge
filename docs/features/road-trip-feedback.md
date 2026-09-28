@@ -150,23 +150,28 @@ open or edit each Journey independently.
 
 ### 4. Continue an existing Journey
 
-**Status:** Not started. This is the next planned capture-workflow improvement
-after the multi-photo Memory flow is deployed.
+**Status:** Implemented and browser-verified; deployment remains.
 
 Add a **Continue journey** action to a Journey. It should open the Memory
 creation experience with the Journey association already selected, supporting
 the common pattern of adding a lunch Memory and then another Memory later in
 the afternoon.
 
-- [ ] Add **Continue journey** to the Journey detail experience.
-- [ ] Open a new-Memory flow that accepts photographs, title, description,
+- [x] Add **Continue journey** to the Journey detail experience.
+- [x] Open a new-Memory flow that accepts photographs, title, description,
       date, and location.
-- [ ] Associate the saved Memory with the source Journey automatically.
-- [ ] Append the Memory in a predictable position and allow the user to reorder
+- [x] Associate the saved Memory with the source Journey automatically.
+- [x] Append the Memory in a predictable position and allow the user to reorder
       it using the existing Journey tools.
-- [ ] Return the user to a clear Journey context after saving or cancelling.
-- [ ] Avoid leaving an orphaned Journey item when creation is cancelled or an
+- [x] Return the user to a clear Journey context after saving or cancelling.
+- [x] Avoid leaving an orphaned Journey item when creation is cancelled or an
       upload fails.
+
+The new Memory is appended as the final Journey stop with an empty transition
+note; the existing Journey editor remains the place to reorder it or add that
+transition. Saving the Memory and adding its Journey membership happen in one
+transaction. Cancelling after placing a pin archives the unkept draft and its
+uploaded media before returning to the Journey.
 
 **Acceptance criteria:** Starting from a Journey, a user can create a Memory
 and see it added to that Journey without reopening the Journey editor or
