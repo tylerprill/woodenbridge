@@ -201,7 +201,7 @@ describe('shared Chapter reader', () => {
       screen.getByRole('link', { name: 'Continue journey' }),
     ).toHaveAttribute(
       'href',
-      '/dashboard?new=memory&continueJourney=chapter-1',
+      '/dashboard/chapters/chapter-1/edit?step=continue',
     );
     expect(screen.getByRole('link', { name: 'Read journey' })).toHaveAttribute(
       'href',
@@ -270,7 +270,7 @@ describe('shared Chapter reader', () => {
       screen.getByRole('link', { name: 'Continue journey' }),
     ).toHaveAttribute(
       'href',
-      `/dashboard?new=memory&continueJourney=chapter-1&continueSegment=${secondSegment.id}`,
+      `/dashboard/chapters/chapter-1/edit?step=continue&continueSegment=${secondSegment.id}`,
     );
     expect(
       screen.getByRole('heading', { name: firstSegment.title }),

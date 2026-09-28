@@ -55,6 +55,7 @@ type MemoryDrawerProps = {
   placeResolving: boolean;
   continuationJourney?: AtlasJourneyContinuation | null;
   onContinuationSaved?: (entry: AtlasEntry) => void;
+  surface?: 'atlas' | 'journey-editor';
 };
 
 type FormState = Pick<
@@ -102,6 +103,7 @@ export function MemoryDrawer({
   placeResolving,
   continuationJourney = null,
   onContinuationSaved,
+  surface = 'atlas',
 }: MemoryDrawerProps) {
   const [form, setForm] = useState<FormState>(() => formFromEntry(entry));
   const [dirty, setDirty] = useState(false);
@@ -524,6 +526,7 @@ export function MemoryDrawer({
     <div
       ref={drawerRef}
       className={styles.memoryDrawer}
+      data-surface={surface}
       role="dialog"
       aria-modal="true"
       aria-labelledby="memory-drawer-heading"

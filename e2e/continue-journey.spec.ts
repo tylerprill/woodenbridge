@@ -72,13 +72,36 @@ async function expectViewportFits(page: Page, label: string) {
   }
 }
 
-async function openContinuation(page: Page) {
+async function openContinuation(page: Page, testInfo?: TestInfo) {
   await page.getByRole('link', { name: 'Continue journey' }).click();
+  await expect(page).toHaveURL(
+    /\/dashboard\/chapters\/[0-9a-f-]+\/edit\?step=continue(?:&|$)/i,
+  );
   await expect(page.locator('[data-map-state="ready"]')).toBeVisible({
     timeout: 20_000,
   });
   const placement = page.getByRole('region', { name: 'Place a memory' });
   await expect(placement).toBeVisible();
+  await expect(
+    page.getByRole('heading', { name: 'Place the next memory.' }),
+  ).toBeVisible();
+  if (testInfo) {
+    for (const viewport of viewports) {
+      await page.setViewportSize({
+        width: viewport.width,
+        height: viewport.height,
+      });
+      await placement.scrollIntoViewIfNeeded();
+      await expect(placement).toBeVisible();
+      await expectViewportFits(page, `Journey workshop ${viewport.label}`);
+      await capture(
+        page,
+        testInfo,
+        `continue-journey-workshop-${viewport.label}`,
+      );
+    }
+    await page.setViewportSize({ width: 1440, height: 900 });
+  }
   await placement.getByRole('button', { name: 'Use map center' }).click();
   const editor = page.getByRole('dialog', { name: 'Create memory' });
   await expect(editor).toBeVisible({ timeout: 20_000 });
@@ -182,7 +205,7 @@ test('a Journey can be continued with a new Memory', async ({
       { timeout: 30_000 },
     );
 
-    const editor = await openContinuation(page);
+    const editor = await openContinuation(page, testInfo);
     draftOpen = true;
     monitor = monitorBrowserIssues(page);
     await editor.getByLabel('Journey segment').selectOption('new');
