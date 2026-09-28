@@ -880,6 +880,8 @@ export function AtlasWorkspace({
         placeGeocoder: null,
         placeGeocodedAt: null,
         visitedOn: null,
+        occurredTime: null,
+        occurredUtcOffsetMinutes: null,
         recordState: 'draft',
         journeyState: 'visited',
         latitude,

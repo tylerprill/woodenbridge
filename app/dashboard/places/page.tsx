@@ -7,13 +7,19 @@ import Link from 'next/link';
 
 import {
   type AtlasCollectionFilter,
+  type AtlasCollectionSort,
   getAtlasCollectionData,
 } from '@/app/lib/atlas/data';
 import { KeepsakeCard } from '@/components/atlas/keepsake-card';
 
-function collectionHref(filter: AtlasCollectionFilter, page = 1) {
+function collectionHref(
+  filter: AtlasCollectionFilter,
+  sort: AtlasCollectionSort,
+  page = 1,
+) {
   const params = new URLSearchParams();
   if (filter !== 'all') params.set('view', filter);
+  if (sort !== 'newest') params.set('sort', sort);
   if (page > 1) params.set('page', String(page));
   const query = params.toString();
   return query ? `/dashboard/places?${query}` : '/dashboard/places';
@@ -22,14 +28,17 @@ function collectionHref(filter: AtlasCollectionFilter, page = 1) {
 export default async function CollectionPage({
   searchParams,
 }: {
-  searchParams: Promise<{ view?: string; page?: string }>;
+  searchParams: Promise<{ view?: string; sort?: string; page?: string }>;
 }) {
   const query = await searchParams;
   const filter: AtlasCollectionFilter =
     query.view === 'visited' || query.view === 'ahead' ? query.view : 'all';
+  const sort: AtlasCollectionSort =
+    query.sort === 'oldest' ? 'oldest' : 'newest';
   const requestedPage = Number.parseInt(query.page ?? '1', 10);
   const data = await getAtlasCollectionData({
     filter,
+    sort,
     page: Number.isFinite(requestedPage) ? requestedPage : 1,
   });
   const memories = data.entries;
@@ -59,29 +68,48 @@ export default async function CollectionPage({
         </div>
       </header>
 
-      <nav className="collection-filter" aria-label="Filter memories">
-        <Link
-          href={collectionHref('all')}
-          data-active={filter === 'all' ? 'true' : 'false'}
-          aria-current={filter === 'all' ? 'page' : undefined}
-        >
-          All memories
-        </Link>
-        <Link
-          href={collectionHref('visited')}
-          data-active={filter === 'visited' ? 'true' : 'false'}
-          aria-current={filter === 'visited' ? 'page' : undefined}
-        >
-          {data.counts.visited} remembered
-        </Link>
-        <Link
-          href={collectionHref('ahead')}
-          data-active={filter === 'ahead' ? 'true' : 'false'}
-          aria-current={filter === 'ahead' ? 'page' : undefined}
-        >
-          {data.counts.future} ahead
-        </Link>
-      </nav>
+      <div className="collection-controls">
+        <nav className="collection-filter" aria-label="Filter memories">
+          <Link
+            href={collectionHref('all', sort)}
+            data-active={filter === 'all' ? 'true' : 'false'}
+            aria-current={filter === 'all' ? 'page' : undefined}
+          >
+            All memories
+          </Link>
+          <Link
+            href={collectionHref('visited', sort)}
+            data-active={filter === 'visited' ? 'true' : 'false'}
+            aria-current={filter === 'visited' ? 'page' : undefined}
+          >
+            {data.counts.visited} remembered
+          </Link>
+          <Link
+            href={collectionHref('ahead', sort)}
+            data-active={filter === 'ahead' ? 'true' : 'false'}
+            aria-current={filter === 'ahead' ? 'page' : undefined}
+          >
+            {data.counts.future} ahead
+          </Link>
+        </nav>
+        <nav className="collection-sort" aria-label="Sort memories">
+          <span>Sort</span>
+          <Link
+            href={collectionHref(filter, 'newest')}
+            data-active={sort === 'newest' ? 'true' : 'false'}
+            aria-current={sort === 'newest' ? 'page' : undefined}
+          >
+            Newest
+          </Link>
+          <Link
+            href={collectionHref(filter, 'oldest')}
+            data-active={sort === 'oldest' ? 'true' : 'false'}
+            aria-current={sort === 'oldest' ? 'page' : undefined}
+          >
+            Oldest
+          </Link>
+        </nav>
+      </div>
 
       {memories.length ? (
         <section className="collection-grid" aria-label="Memories">
@@ -108,7 +136,7 @@ export default async function CollectionPage({
               : 'No memories match this view.'}
           </h2>
           <p>Your other memories are still right where you left them.</p>
-          <Link href="/dashboard/places">View all memories</Link>
+          <Link href={collectionHref('all', sort)}>View all memories</Link>
         </section>
       ) : (
         <section
@@ -131,7 +159,9 @@ export default async function CollectionPage({
       {memories.length && data.totalPages > 1 ? (
         <nav className="collection-pagination" aria-label="Memory pages">
           {data.page > 1 ? (
-            <Link href={collectionHref(filter, data.page - 1)}>Previous</Link>
+            <Link href={collectionHref(filter, sort, data.page - 1)}>
+              Previous
+            </Link>
           ) : (
             <span aria-hidden="true" />
           )}
@@ -139,7 +169,7 @@ export default async function CollectionPage({
             Page {data.page} of {data.totalPages}
           </p>
           {data.page < data.totalPages ? (
-            <Link href={collectionHref(filter, data.page + 1)}>Next</Link>
+            <Link href={collectionHref(filter, sort, data.page + 1)}>Next</Link>
           ) : (
             <span aria-hidden="true" />
           )}

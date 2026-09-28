@@ -55,6 +55,8 @@ async function loadSavedEntries(userId: string, requestedLimit: number) {
         place_geocoder,
         place_geocoded_at,
         visited_on,
+        occurred_time,
+        occurred_utc_offset_minutes,
         record_state,
         journey_state,
         ST_Y(location::geometry)::float8 AS latitude,
@@ -123,6 +125,8 @@ export async function getAtlasData(): Promise<AtlasData> {
         place_geocoder,
         place_geocoded_at,
         visited_on,
+        occurred_time,
+        occurred_utc_offset_minutes,
         record_state,
         journey_state,
         ST_Y(location::geometry)::float8 AS latitude,
@@ -162,13 +166,16 @@ export async function getAtlasData(): Promise<AtlasData> {
 }
 
 export type AtlasCollectionFilter = 'all' | 'visited' | 'ahead';
+export type AtlasCollectionSort = 'newest' | 'oldest';
 
 export async function getAtlasCollectionData({
   filter,
+  sort,
   page,
   pageSize = 24,
 }: {
   filter: AtlasCollectionFilter;
+  sort: AtlasCollectionSort;
   page: number;
   pageSize?: number;
 }) {
@@ -199,6 +206,8 @@ export async function getAtlasCollectionData({
         place_geocoder,
         place_geocoded_at,
         visited_on,
+        occurred_time,
+        occurred_utc_offset_minutes,
         record_state,
         journey_state,
         ST_Y(location::geometry)::float8 AS latitude,
@@ -214,7 +223,15 @@ export async function getAtlasCollectionData({
           ${journeyState}::atlas_journey_state IS NULL
           OR journey_state = ${journeyState}::atlas_journey_state
         )
-      ORDER BY updated_at DESC
+      ORDER BY
+        CASE WHEN ${sort} = 'newest' THEN visited_on END DESC NULLS LAST,
+        CASE WHEN ${sort} = 'oldest' THEN visited_on END ASC NULLS LAST,
+        (occurred_time IS NULL) ASC,
+        CASE WHEN ${sort} = 'newest' THEN occurred_time END DESC,
+        CASE WHEN ${sort} = 'oldest' THEN occurred_time END ASC,
+        CASE WHEN ${sort} = 'newest' THEN created_at END DESC,
+        CASE WHEN ${sort} = 'oldest' THEN created_at END ASC,
+        id ASC
       LIMIT ${limit}
       OFFSET ${offset}
     `,
@@ -229,7 +246,15 @@ export async function getAtlasCollectionData({
             ${journeyState}::atlas_journey_state IS NULL
             OR journey_state = ${journeyState}::atlas_journey_state
           )
-        ORDER BY updated_at DESC
+        ORDER BY
+          CASE WHEN ${sort} = 'newest' THEN visited_on END DESC NULLS LAST,
+          CASE WHEN ${sort} = 'oldest' THEN visited_on END ASC NULLS LAST,
+          (occurred_time IS NULL) ASC,
+          CASE WHEN ${sort} = 'newest' THEN occurred_time END DESC,
+          CASE WHEN ${sort} = 'oldest' THEN occurred_time END ASC,
+          CASE WHEN ${sort} = 'newest' THEN created_at END DESC,
+          CASE WHEN ${sort} = 'oldest' THEN created_at END ASC,
+          id ASC
         LIMIT ${limit}
         OFFSET ${offset}
       )
@@ -341,6 +366,8 @@ export async function getSavedAtlasEntry(entryId: string) {
         place_geocoder,
         place_geocoded_at,
         visited_on,
+        occurred_time,
+        occurred_utc_offset_minutes,
         record_state,
         journey_state,
         ST_Y(location::geometry)::float8 AS latitude,

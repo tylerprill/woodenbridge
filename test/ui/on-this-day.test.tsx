@@ -46,6 +46,8 @@ function memory(
       placeGeocoder: 'test',
       placeGeocodedAt: null,
       visitedOn: '2025-09-15',
+      occurredTime: null,
+      occurredUtcOffsetMinutes: null,
       recordState: 'saved',
       journeyState: 'visited',
       version: 1,

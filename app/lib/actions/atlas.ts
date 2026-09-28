@@ -35,6 +35,8 @@ const ENTRY_COLUMNS = `
   place_geocoder,
   place_geocoded_at,
   visited_on,
+  occurred_time,
+  occurred_utc_offset_minutes,
   record_state,
   journey_state,
   ST_Y(location::geometry)::float8 AS latitude,
@@ -209,13 +211,15 @@ export async function updateAtlasEntryAction(
           description = $2,
           place_label = NULLIF($3, ''),
           visited_on = $4::date,
-          journey_state = $5::atlas_journey_state,
+          occurred_time = $5::time,
+          occurred_utc_offset_minutes = $6,
+          journey_state = $7::atlas_journey_state,
           record_state = 'saved',
           version = version + 1,
           updated_at = NOW()
-        WHERE id = $6
-          AND user_id = $7
-          AND version = $8
+        WHERE id = $8
+          AND user_id = $9
+          AND version = $10
           AND deleted_at IS NULL
         RETURNING ${ENTRY_COLUMNS}
       `,
@@ -224,6 +228,8 @@ export async function updateAtlasEntryAction(
         entry.description,
         entry.placeLabel,
         entry.visitedOn,
+        entry.occurredTime,
+        entry.occurredUtcOffsetMinutes,
         entry.journeyState,
         entry.id,
         session.user.id,

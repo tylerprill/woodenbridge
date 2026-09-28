@@ -1054,6 +1054,20 @@
   margin-top: 1.35rem;
 }
 
+.occurrenceFields {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 0.8fr);
+  gap: 0 0.75rem;
+}
+
+.occurrenceHint {
+  grid-column: 1 / -1;
+  margin-top: 0.38rem;
+  color: rgba(76, 106, 91, 0.68);
+  font-size: 0.62rem;
+  line-height: 1.35;
+}
+
 .fieldGroup {
   min-width: 0;
   padding: 0;
@@ -1157,6 +1171,11 @@
   border-color: var(--forest-600);
   background: rgba(255, 255, 255, 0.7);
   box-shadow: 0 0 0 3px rgba(184, 200, 164, 0.2);
+}
+
+.inputField input:disabled {
+  cursor: not-allowed;
+  opacity: 0.5;
 }
 
 .inputField input::placeholder,
@@ -2091,6 +2110,14 @@
   .photoHeading {
     align-items: flex-start;
     flex-direction: column;
+  }
+
+  .occurrenceFields {
+    grid-template-columns: 1fr;
+  }
+
+  .occurrenceHint {
+    grid-column: auto;
   }
 
   .archiveButton,

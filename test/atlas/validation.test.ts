@@ -29,6 +29,8 @@ describe('atlas validation', () => {
       description: 'The torii gates were quiet just after sunrise.',
       placeLabel: 'Kyoto, Japan',
       visitedOn: '2026-04-19',
+      occurredTime: '06:42',
+      occurredUtcOffsetMinutes: 540,
       journeyState: 'visited',
     };
 
@@ -36,6 +38,16 @@ describe('atlas validation', () => {
     expect(
       atlasEntryUpdateSchema.safeParse({ ...memory, title: '   ' }).success,
     ).toBe(false);
+    expect(
+      atlasEntryUpdateSchema.parse({
+        ...memory,
+        occurredTime: undefined,
+        occurredUtcOffsetMinutes: undefined,
+      }),
+    ).toMatchObject({
+      occurredTime: null,
+      occurredUtcOffsetMinutes: null,
+    });
   });
 
   it('normalizes an empty visit date and constrains camera state', () => {
@@ -46,10 +58,13 @@ describe('atlas validation', () => {
       description: '',
       placeLabel: '',
       visitedOn: '',
+      occurredTime: '',
+      occurredUtcOffsetMinutes: null,
       journeyState: 'want_to_visit',
     });
 
     expect(memory.visitedOn).toBeNull();
+    expect(memory.occurredTime).toBeNull();
     expect(
       atlasViewSchema.safeParse({
         latitude: 20,
@@ -66,6 +81,35 @@ describe('atlas validation', () => {
         zoom: 25,
         bearing: 0,
         pitch: 45,
+      }).success,
+    ).toBe(false);
+  });
+
+  it('requires a calendar date for a local occurrence time', () => {
+    const memory = {
+      id: 'f7c0bf19-59fc-49df-9bd7-ae405a69e49c',
+      version: 1,
+      title: 'Sunrise at the pass',
+      description: '',
+      placeLabel: '',
+      visitedOn: null,
+      occurredTime: '06:42',
+      occurredUtcOffsetMinutes: null,
+      journeyState: 'visited' as const,
+    };
+
+    expect(atlasEntryUpdateSchema.safeParse(memory).success).toBe(false);
+    expect(
+      atlasEntryUpdateSchema.safeParse({
+        ...memory,
+        visitedOn: '2026-04-19',
+      }).success,
+    ).toBe(true);
+    expect(
+      atlasEntryUpdateSchema.safeParse({
+        ...memory,
+        visitedOn: '2026-04-19',
+        occurredUtcOffsetMinutes: 900,
       }).success,
     ).toBe(false);
   });

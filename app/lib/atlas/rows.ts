@@ -22,6 +22,8 @@ export type AtlasEntryRow = {
   place_geocoder: string | null;
   place_geocoded_at: Date | string | null;
   visited_on: Date | string | null;
+  occurred_time: string | null;
+  occurred_utc_offset_minutes: number | string | null;
   record_state: AtlasRecordState;
   journey_state: JourneyState;
   latitude: number | string;
@@ -59,6 +61,12 @@ function toDateString(value: Date | string | null) {
   return String(value).slice(0, 10);
 }
 
+function toTimeString(value: string | null) {
+  if (!value) return null;
+  const match = String(value).match(/^(?:[01]\d|2[0-3]):[0-5]\d/);
+  return match?.[0] ?? null;
+}
+
 function toIsoString(value: Date | string) {
   return value instanceof Date
     ? value.toISOString()
@@ -86,6 +94,11 @@ export function toAtlasEntry(
     placeGeocoder: row.place_geocoder ?? null,
     placeGeocodedAt: toNullableIsoString(row.place_geocoded_at),
     visitedOn: toDateString(row.visited_on),
+    occurredTime: toTimeString(row.occurred_time),
+    occurredUtcOffsetMinutes:
+      row.occurred_utc_offset_minutes == null
+        ? null
+        : Number(row.occurred_utc_offset_minutes),
     recordState: row.record_state,
     journeyState: row.journey_state,
     latitude: Number(row.latitude),

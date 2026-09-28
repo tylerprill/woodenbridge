@@ -75,6 +75,8 @@ describe('Atlas entry active-import mutation guard', () => {
         description: '',
         placeLabel: 'Twin Lakes, Colorado',
         visitedOn: '2023-06-18',
+        occurredTime: null,
+        occurredUtcOffsetMinutes: null,
         journeyState: 'visited',
       }),
     ).resolves.toMatchObject({ ok: false, error: 'conflict' });
@@ -106,5 +108,88 @@ describe('Atlas entry active-import mutation guard', () => {
         normalizeQuery(query).includes('SELECT storage_path, thumbnail_path'),
       ),
     ).toBe(false);
+  });
+
+  it('persists local occurrence time and its photo offset in the owner-scoped update', async () => {
+    __testMocks.clientQuery.mockImplementation(
+      async (query: string, values?: unknown[]) => {
+        const text = normalizeQuery(query);
+        if (text.includes('FROM atlas_import_items')) {
+          return { rows: [], rowCount: 0 };
+        }
+        if (text.includes('SELECT version FROM atlas_entries')) {
+          return { rows: [{ version: 1 }], rowCount: 1 };
+        }
+        if (text.startsWith('UPDATE atlas_entries')) {
+          return {
+            rows: [
+              {
+                id: entryId,
+                title: String(values?.[0]),
+                description: String(values?.[1]),
+                place_label: String(values?.[2]),
+                place_name: null,
+                place_locality: null,
+                place_region: null,
+                place_country: null,
+                place_country_code: null,
+                place_geocoder: null,
+                place_geocoded_at: null,
+                visited_on: values?.[3],
+                occurred_time: `${values?.[4]}:00`,
+                occurred_utc_offset_minutes: values?.[5],
+                record_state: 'saved',
+                journey_state: values?.[6],
+                latitude: 39.082,
+                longitude: -106.382,
+                version: 2,
+                created_at: '2026-04-20T00:00:00.000Z',
+                updated_at: '2026-04-20T00:00:00.000Z',
+              },
+            ],
+            rowCount: 1,
+          };
+        }
+        return { rows: [], rowCount: 0 };
+      },
+    );
+
+    const result = await updateAtlasEntryAction({
+      id: entryId,
+      version: 1,
+      title: 'Clouds over the pass',
+      description: '',
+      placeLabel: 'Twin Lakes, Colorado',
+      visitedOn: '2023-06-18',
+      occurredTime: '06:42',
+      occurredUtcOffsetMinutes: -360,
+      journeyState: 'visited',
+    });
+
+    expect(result).toMatchObject({
+      ok: true,
+      data: {
+        occurredTime: '06:42',
+        occurredUtcOffsetMinutes: -360,
+      },
+    });
+    const updateCall = __testMocks.clientQuery.mock.calls.find(([query]) =>
+      normalizeQuery(query).startsWith('UPDATE atlas_entries'),
+    );
+    expect(normalizeQuery(updateCall?.[0])).toContain(
+      'occurred_time = $5::time',
+    );
+    expect(updateCall?.[1]).toEqual([
+      'Clouds over the pass',
+      '',
+      'Twin Lakes, Colorado',
+      '2023-06-18',
+      '06:42',
+      -360,
+      'visited',
+      entryId,
+      userId,
+      1,
+    ]);
   });
 });

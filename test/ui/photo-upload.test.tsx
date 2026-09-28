@@ -44,6 +44,7 @@ describe('photo upload UI', () => {
     const user = userEvent.setup();
     const onChange = jest.fn();
     const onBusyChange = jest.fn();
+    const onCaptureSuggestion = jest.fn();
     Object.defineProperty(window.crypto, 'randomUUID', {
       configurable: true,
       value: jest.fn(() => '00000000-0000-4000-8000-000000000001'),
@@ -60,7 +61,14 @@ describe('photo upload UI', () => {
       canPrepare: true,
       orientation: 1,
       location: null,
-      capture: null,
+      capture: {
+        localDate: '2026-04-19',
+        localDateTime: '2026-04-19T06:42:11',
+        offset: '+09:00',
+        instant: '2026-04-18T21:42:11.000Z',
+        source: 'date-time-original' as const,
+        confidence: 'high' as const,
+      },
       issues: [],
     };
     const master = new Blob(['private-metadata-removed'], {
@@ -120,6 +128,7 @@ describe('photo upload UI', () => {
         loading={false}
         onChange={onChange}
         onBusyChange={onBusyChange}
+        onCaptureSuggestion={onCaptureSuggestion}
       />,
     );
 
@@ -155,10 +164,107 @@ describe('photo upload UI', () => {
       }),
     );
     expect(onChange).toHaveBeenCalledWith([media]);
+    expect(onCaptureSuggestion).toHaveBeenCalledWith({
+      visitedOn: '2026-04-19',
+      occurredTime: '06:42',
+      occurredUtcOffsetMinutes: 540,
+    });
     expect(onBusyChange).toHaveBeenCalledWith(true);
     await waitFor(() => expect(onBusyChange).toHaveBeenLastCalledWith(false));
     expect(screen.getByRole('status')).toHaveTextContent(
       '1 photo was added and saved privately.',
+    );
+  });
+
+  it('adds multiple selected photographs to one Memory', async () => {
+    const user = userEvent.setup();
+    const onChange = jest.fn();
+    const first = new File(['first'], 'morning.png', { type: 'image/png' });
+    const second = new File(['second'], 'afternoon.png', {
+      type: 'image/png',
+    });
+    const files = [first, second];
+    Object.defineProperty(window.crypto, 'randomUUID', {
+      configurable: true,
+      value: jest
+        .fn()
+        .mockReturnValueOnce('00000000-0000-4000-8000-000000000001')
+        .mockReturnValueOnce('00000000-0000-4000-8000-000000000002'),
+    });
+    jest.mocked(analyzeAtlasImportPhoto).mockImplementation(async (file) => ({
+      file,
+      name: file.name,
+      byteSize: file.size,
+      sourceHash: `hash-${file.name}`,
+      declaredMimeType: file.type,
+      format: 'png',
+      isHeic: false,
+      canPrepare: true,
+      orientation: 1,
+      location: null,
+      capture: null,
+      issues: [],
+    }));
+    jest
+      .mocked(prepareAtlasImportPhoto)
+      .mockImplementation(async (file, options) => ({
+        analysis: options?.analysis ?? (await analyzeAtlasImportPhoto(file)),
+        master: new Blob([`master-${file.name}`], { type: 'image/jpeg' }),
+        thumbnail: new Blob([`thumb-${file.name}`], { type: 'image/webp' }),
+        dimensions: {
+          sourceWidth: 1600,
+          sourceHeight: 1200,
+          masterWidth: 1200,
+          masterHeight: 900,
+          thumbnailWidth: 600,
+          thumbnailHeight: 450,
+        },
+      }));
+    jest.mocked(uploadAtlasMedia).mockImplementation(
+      async (pathname) =>
+        ({
+          pathname,
+        }) as never,
+    );
+    const registered = files.map((file, index) => ({
+      id: `photo-${index + 1}`,
+      entryId: 'memory-1',
+      mimeType: 'image/jpeg',
+      width: 1200,
+      height: 900,
+      byteSize: file.size,
+      altText: 'Road-trip memory',
+      sortOrder: index,
+      createdAt: `2026-08-17T12:0${index}:00.000Z`,
+      deliveryUrl: `/api/atlas/media/photo-${index + 1}`,
+      thumbnailUrl: `/api/atlas/media/photo-${index + 1}?variant=thumbnail`,
+    }));
+    jest
+      .mocked(registerAtlasMediaAction)
+      .mockResolvedValueOnce({ ok: true, data: registered[0] })
+      .mockResolvedValueOnce({ ok: true, data: registered[1] });
+
+    render(
+      <MemoryPhotos
+        entryId="memory-1"
+        title="Road-trip memory"
+        placeLabel="Colorado"
+        placeName={null}
+        media={[]}
+        loading={false}
+        onChange={onChange}
+        onBusyChange={jest.fn()}
+      />,
+    );
+
+    await user.upload(screen.getByLabelText('Upload photos'), files);
+
+    expect(analyzeAtlasImportPhoto).toHaveBeenCalledTimes(2);
+    expect(uploadAtlasMedia).toHaveBeenCalledTimes(4);
+    expect(registerAtlasMediaAction).toHaveBeenCalledTimes(2);
+    expect(onChange).toHaveBeenLastCalledWith(registered);
+    expect(screen.getByRole('status')).toHaveTextContent(
+      '2 photos were added and saved privately.',
     );
   });
 

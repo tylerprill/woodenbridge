@@ -38,6 +38,8 @@ const baseEntry: AtlasEntryPresentation = {
   placeGeocoder: 'test',
   placeGeocodedAt: '2026-01-03T00:00:00.000Z',
   visitedOn: '2026-01-03',
+  occurredTime: null,
+  occurredUtcOffsetMinutes: null,
   recordState: 'saved',
   journeyState: 'visited',
   version: 1,

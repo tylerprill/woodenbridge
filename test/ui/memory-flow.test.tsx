@@ -10,11 +10,13 @@ import {
   updateAtlasEntryAction,
 } from '@/app/lib/actions/atlas';
 import type { AtlasEntry, AtlasMedia } from '@/app/lib/atlas/definitions';
+import type { AtlasOccurrenceSuggestion } from '@/app/lib/atlas/definitions';
 import { MemoryDrawer } from '@/components/atlas/memory-drawer';
 
 type MockMemoryPhotosProps = {
   onChange: (media: AtlasMedia[]) => void;
   onBusyChange: (busy: boolean) => void;
+  onCaptureSuggestion: (suggestion: AtlasOccurrenceSuggestion) => void;
 };
 
 const mockMemoryPhotosRender = jest.fn<void, [MockMemoryPhotosProps]>();
@@ -44,6 +46,8 @@ const entry: AtlasEntry = {
   placeGeocoder: 'test',
   placeGeocodedAt: '2026-08-17T12:00:00.000Z',
   visitedOn: null,
+  occurredTime: null,
+  occurredUtcOffsetMinutes: null,
   recordState: 'draft',
   journeyState: 'visited',
   latitude: 35.0116,
@@ -258,6 +262,69 @@ describe('memory capture UI', () => {
 
     expect(onMediaChange).toHaveBeenCalledWith(entry.id, [photo]);
     expect(onUpdate).not.toHaveBeenCalled();
+  });
+
+  it('prefills the earliest reliable photo capture time and keeps it editable', async () => {
+    const user = userEvent.setup();
+    jest.mocked(updateAtlasEntryAction).mockResolvedValue({
+      ok: true,
+      data: {
+        ...entry,
+        title: 'Kyoto morning',
+        visitedOn: '2026-04-19',
+        occurredTime: '06:42',
+        occurredUtcOffsetMinutes: 540,
+        recordState: 'saved',
+        version: 2,
+      },
+    });
+
+    render(
+      <MemoryDrawer
+        entry={entry}
+        onClose={jest.fn()}
+        onDirtyChange={jest.fn()}
+        onUpdate={jest.fn()}
+        onMediaChange={jest.fn()}
+        onArchive={jest.fn()}
+        mediaLoading={false}
+        placeResolving={false}
+      />,
+    );
+
+    const photoProps = mockMemoryPhotosRender.mock.calls.at(-1)?.[0];
+    act(() =>
+      photoProps?.onCaptureSuggestion({
+        visitedOn: '2026-04-19',
+        occurredTime: '08:15',
+        occurredUtcOffsetMinutes: 540,
+      }),
+    );
+    act(() =>
+      photoProps?.onCaptureSuggestion({
+        visitedOn: '2026-04-19',
+        occurredTime: '06:42',
+        occurredUtcOffsetMinutes: 540,
+      }),
+    );
+
+    expect(screen.getByLabelText('Date visited')).toHaveValue('2026-04-19');
+    expect(screen.getByLabelText('Time visited')).toHaveValue('06:42');
+    await user.type(
+      screen.getByRole('textbox', { name: 'Title' }),
+      'Kyoto morning',
+    );
+    await user.click(screen.getByRole('button', { name: 'Keep memory' }));
+
+    await waitFor(() =>
+      expect(updateAtlasEntryAction).toHaveBeenCalledWith(
+        expect.objectContaining({
+          visitedOn: '2026-04-19',
+          occurredTime: '06:42',
+          occurredUtcOffsetMinutes: 540,
+        }),
+      ),
+    );
   });
 
   it('protects pending field and photo work from navigation or closing', async () => {

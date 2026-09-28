@@ -31,6 +31,8 @@ const chapter: AtlasChapter = {
       placeGeocoder: null,
       placeGeocodedAt: null,
       visitedOn: '2026-08-17',
+      occurredTime: null,
+      occurredUtcOffsetMinutes: null,
       recordState: 'saved',
       journeyState: 'visited',
       latitude: 44.987654,

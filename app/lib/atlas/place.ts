@@ -114,3 +114,20 @@ export function formatAtlasDate(
     year: 'numeric',
   }).format(new Date(`${entry.visitedOn}T12:00:00`));
 }
+
+export function formatAtlasTime(entry: Pick<AtlasEntry, 'occurredTime'>) {
+  if (!entry.occurredTime) return null;
+  const match = entry.occurredTime.match(/^([01]\d|2[0-3]):([0-5]\d)$/);
+  if (!match) return null;
+  const hour = Number(match[1]);
+  const displayHour = hour % 12 || 12;
+  return `${displayHour}:${match[2]} ${hour < 12 ? 'AM' : 'PM'}`;
+}
+
+export function formatAtlasDateTime(
+  entry: Pick<AtlasEntry, 'visitedOn' | 'occurredTime' | 'journeyState'>,
+) {
+  const date = formatAtlasDate(entry);
+  const time = formatAtlasTime(entry);
+  return time ? `${date} · ${time}` : date;
+}

@@ -53,6 +53,11 @@ function toRediscoveredMemory(
       ? toIsoString(row.place_geocoded_at)
       : null,
     visitedOn: toCalendarDate(row.visited_on),
+    occurredTime: row.occurred_time?.slice(0, 5) ?? null,
+    occurredUtcOffsetMinutes:
+      row.occurred_utc_offset_minutes == null
+        ? null
+        : Number(row.occurred_utc_offset_minutes),
     recordState: row.record_state,
     journeyState: row.journey_state,
     version: row.version,
@@ -165,6 +170,8 @@ export async function getRediscoveryData({
       entry.place_geocoder,
       entry.place_geocoded_at,
       entry.visited_on::text AS visited_on,
+      entry.occurred_time::text AS occurred_time,
+      entry.occurred_utc_offset_minutes,
       entry.record_state,
       entry.journey_state,
       entry.version,

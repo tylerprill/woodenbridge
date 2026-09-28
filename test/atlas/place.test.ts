@@ -1,5 +1,6 @@
 import {
   formatAtlasDate,
+  formatAtlasDateTime,
   getAtlasPlaceContextLabel,
   getAtlasPlaceInputLabel,
   withAtlasPlaceContext,
@@ -29,6 +30,8 @@ describe('withAtlasPlaceContext', () => {
         placeGeocoder: null,
         placeGeocodedAt: null,
         visitedOn: null,
+        occurredTime: null,
+        occurredUtcOffsetMinutes: null,
         recordState: 'draft',
         journeyState: 'visited',
         latitude: 43.42,
@@ -137,5 +140,22 @@ describe('formatAtlasDate', () => {
     expect(
       formatAtlasDate({ visitedOn: null, journeyState: 'want_to_visit' }),
     ).toBe('No date set');
+  });
+
+  it('adds a local wall-clock time without timezone conversion', () => {
+    expect(
+      formatAtlasDateTime({
+        visitedOn: '2026-04-19',
+        occurredTime: '06:42',
+        journeyState: 'visited',
+      }),
+    ).toBe('Apr 19, 2026 · 6:42 AM');
+    expect(
+      formatAtlasDateTime({
+        visitedOn: '2026-04-19',
+        occurredTime: '18:05',
+        journeyState: 'visited',
+      }),
+    ).toBe('Apr 19, 2026 · 6:05 PM');
   });
 });
