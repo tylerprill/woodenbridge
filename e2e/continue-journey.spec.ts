@@ -155,11 +155,18 @@ async function auditJourneyEditor(
     new RegExp(`/dashboard/chapters/${journeyId}/edit\\?step=continue$`),
   );
   await expect(
-    page.getByRole('heading', { name: 'Place the next memory.' }),
+    page.getByRole('heading', {
+      level: 2,
+      name: 'Start with photos or a place.',
+    }),
   ).toBeVisible();
 }
 
-async function openContinuation(page: Page, testInfo?: TestInfo) {
+async function openContinuation(
+  page: Page,
+  testInfo?: TestInfo,
+  startWithPhoto = false,
+) {
   await page.getByRole('link', { name: 'Continue journey' }).click();
   await expect(page).toHaveURL(
     /\/dashboard\/chapters\/[0-9a-f-]+\/edit\?step=continue(?:&|$)/i,
@@ -170,12 +177,20 @@ async function openContinuation(page: Page, testInfo?: TestInfo) {
   const placement = page.getByRole('region', { name: 'Place a memory' });
   await expect(placement).toBeVisible();
   await expect(
-    page.getByRole('heading', { name: 'Place the next memory.' }),
+    page.getByRole('heading', {
+      level: 2,
+      name: 'Start with photos or a place.',
+    }),
   ).toBeVisible();
+  await expect(page.getByText('Upload photos', { exact: true })).toBeVisible();
   if (testInfo) {
     await captureStepAtViewports(page, testInfo, 'continue-journey-workshop');
   }
-  await placement.getByRole('button', { name: 'Use map center' }).click();
+  if (startWithPhoto) {
+    await page.getByLabel('Start memory with photos').setInputFiles(photo);
+  } else {
+    await placement.getByRole('button', { name: 'Use map center' }).click();
+  }
   const editor = page.getByRole('dialog', { name: 'Create memory' });
   await expect(editor).toBeVisible({ timeout: 20_000 });
   return editor;
@@ -282,7 +297,7 @@ test('a Journey can be continued with a new Memory', async ({
       { timeout: 30_000 },
     );
 
-    const editor = await openContinuation(page, testInfo);
+    const editor = await openContinuation(page, testInfo, true);
     draftOpen = true;
     await editor.getByLabel('Journey segment').selectOption('new');
     await editor.getByLabel('New segment name').fill(segmentTitle);
@@ -293,7 +308,6 @@ test('a Journey can be continued with a new Memory', async ({
     await editor
       .getByRole('textbox', { name: 'Field note' })
       .fill('A second stop added directly from the Journey reader.');
-    await editor.locator('input[type="file"]').setInputFiles(photo);
     await expect(
       editor.getByText(/1 photo was added and saved privately\./i),
     ).toBeVisible({ timeout: 90_000 });
@@ -329,9 +343,10 @@ test('a Journey can be continued with a new Memory', async ({
         false,
       );
 
-      const uploadedPhoto = editor.getByRole('img', { name: title });
+      const uploadedPhoto = editor.locator('figure img').first();
       await uploadedPhoto.scrollIntoViewIfNeeded();
       await expect(uploadedPhoto).toBeVisible();
+      await expect(uploadedPhoto).toHaveAttribute('alt', /\S/);
       await expect(editor.getByText('Upload photos')).toBeVisible();
       await expect(
         editor.getByRole('button', { name: 'Add to journey' }),

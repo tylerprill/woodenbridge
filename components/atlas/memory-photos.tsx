@@ -41,6 +41,8 @@ type MemoryPhotosProps = {
   onChange: (media: AtlasMedia[]) => void;
   onBusyChange: (busy: boolean) => void;
   onCaptureSuggestion?: (suggestion: AtlasOccurrenceSuggestion) => void;
+  initialFiles?: File[];
+  onInitialFilesConsumed?: () => void;
 };
 
 function fileError(file: File) {
@@ -81,8 +83,11 @@ export function MemoryPhotos({
   onChange,
   onBusyChange,
   onCaptureSuggestion,
+  initialFiles,
+  onInitialFilesConsumed,
 }: MemoryPhotosProps) {
   const inputRef = useRef<HTMLInputElement>(null);
+  const initialFilesRef = useRef(initialFiles);
   const [uploading, setUploading] = useState(false);
   const [progress, setProgress] = useState(0);
   const [message, setMessage] = useState('');
@@ -268,6 +273,16 @@ export function MemoryPhotos({
       if (inputRef.current) inputRef.current.value = '';
     }
   };
+
+  useEffect(() => {
+    const files = initialFilesRef.current;
+    if (!files?.length) return;
+    initialFilesRef.current = undefined;
+    onInitialFilesConsumed?.();
+    void uploadPhotos(files);
+    // The handoff is intentionally consumed once when this photo field mounts.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const removePhoto = async (photo: AtlasMedia) => {
     if (uploading || (removingId && removingId !== photo.id)) return;

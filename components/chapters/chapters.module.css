@@ -617,6 +617,72 @@
   line-height: 1.65;
 }
 
+.continuePhotoStart {
+  position: relative;
+  display: grid;
+  width: min(100%, 28rem);
+  min-height: 4.25rem;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  margin-top: 1.2rem;
+  padding: 0.8rem 0.9rem;
+  border: 1px solid var(--forest-950);
+  border-radius: 1rem;
+  background: var(--forest-950);
+  color: var(--paper-light);
+  box-shadow: 0 0.75rem 1.8rem rgba(16, 35, 29, 0.14);
+  cursor: pointer;
+  gap: 0.75rem;
+  transition:
+    background 180ms ease,
+    transform 180ms ease,
+    box-shadow 180ms ease;
+}
+
+.continuePhotoStart:hover,
+.continuePhotoStart:focus-within {
+  background: var(--timber);
+  box-shadow: 0 0.9rem 2rem rgba(16, 35, 29, 0.18);
+  transform: translateY(-1px);
+}
+
+.continuePhotoStart[data-disabled='true'] {
+  cursor: wait;
+  opacity: 0.62;
+  transform: none;
+}
+
+.continuePhotoStart > svg {
+  width: 1.25rem;
+}
+
+.continuePhotoStart > svg:last-of-type {
+  width: 1rem;
+}
+
+.continuePhotoStart > span {
+  display: grid;
+  gap: 0.14rem;
+}
+
+.continuePhotoStart strong {
+  font-size: 0.72rem;
+}
+
+.continuePhotoStart small {
+  color: rgba(251, 250, 245, 0.72);
+  font-size: 0.6rem;
+  line-height: 1.45;
+}
+
+.continuePhotoStart input {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  opacity: 0;
+}
+
 .continueTarget {
   display: grid;
   padding: 1rem 1.1rem;
