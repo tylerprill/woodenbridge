@@ -160,6 +160,8 @@ export function toImportMapEntry(
     latitude: item.latitude,
     longitude: item.longitude,
     visitedOn: item.visitedOn || null,
+    occurredTime: item.analysis?.capture?.localDateTime?.slice(11, 16) ?? null,
+    occurredUtcOffsetMinutes: null,
     recordState: 'saved',
     journeyState: 'visited',
     version: 1,

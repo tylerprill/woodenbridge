@@ -295,6 +295,8 @@ function createEntry(
     placeGeocoder: null,
     placeGeocodedAt: null,
     visitedOn: '2026-09-10',
+    occurredTime: null,
+    occurredUtcOffsetMinutes: null,
     recordState: 'saved',
     journeyState: 'visited',
     latitude: 42.3314,

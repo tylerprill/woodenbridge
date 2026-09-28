@@ -39,10 +39,9 @@ are not part of this product-navigation constraint.
 
 ### 1. Create a multi-photo Memory from Memories
 
-**Status:** In progress. The Memories-page entry point now opens Atlas directly
-in new-Memory placement mode, and the existing Memory drawer accepts multiple
-photographs. End-to-end browser verification and the six-photo product decision
-remain.
+**Status:** Implemented and browser-verified; deployment remains. The
+Memories-page entry point opens Atlas directly in new-Memory placement mode,
+and the Memory drawer accepts multiple photographs in one or more selections.
 
 The current code supports adding multiple photographs to one Memory. The
 Memory drawer accepts multiple files in one selection, supports repeated
@@ -64,7 +63,8 @@ The flow is now exposed from **Memories**:
 - [x] Let the user enter the title, description, date, and location once for
       the entire Memory.
 - [x] Preserve clear per-photo progress, failure, retry, and removal behavior.
-- [ ] Decide whether the existing six-photo limit remains appropriate.
+- [x] Keep the existing six-photo limit for now so the first version preserves
+      the established upload, retry, and card-display constraints.
 
 **Acceptance criteria:** A user can begin on Memories, create one Memory, add
 multiple photographs to it in one or more selections, save it, and see exactly
@@ -150,9 +150,8 @@ open or edit each Journey independently.
 
 ### 4. Continue an existing Journey
 
-**Status:** In progress. The four-destination navigation, Memories/Journeys
-language, list-page CTAs, and Adventure route shell are implemented. Adventure
-creation remains disabled until the data model in item 3 exists.
+**Status:** Not started. This is the next planned capture-workflow improvement
+after the multi-photo Memory flow is deployed.
 
 Add a **Continue journey** action to a Journey. It should open the Memory
 creation experience with the Journey association already selected, supporting
@@ -175,7 +174,8 @@ manually selecting the Journey.
 
 ### 5. Simplify navigation and align the language
 
-**Status:** Not started.
+**Status:** Implemented except for Adventure creation, which remains disabled
+until the item 3 data model exists.
 
 Use the agreed four-part product navigation: **Atlas**, **Memories**,
 **Journeys**, and **Adventures**.
@@ -253,27 +253,34 @@ controls, broken layout, or repeated permission loop.
 
 ### 8. Display Memory times for quick chronological sorting
 
-**Status:** Not started.
+**Status:** Implemented and browser-verified; deployment remains.
 
 Add an optional time-of-day to each Memory so travelers can quickly understand
 and sort the order of several Memories from the same date. This should represent
 when the Memory happened, not merely when its database record was created.
 
-- [ ] Add an optional occurrence time to the Memory data model and creation and
+- [x] Add an optional occurrence time to the Memory data model and creation and
       editing flows.
-- [ ] Prefill the time from reliable photograph capture metadata when available,
+- [x] Prefill the time from reliable photograph capture metadata when available,
       while keeping it editable.
-- [ ] Display the occurrence time alongside the date on the Memories list and
+- [x] Display the occurrence time alongside the date on the Memories list and
       other compact Memory cards where chronology matters.
-- [ ] Let the Memories list sort chronologically using the occurrence date and
+- [x] Let the Memories list sort chronologically using the occurrence date and
       time, in both newest-first and oldest-first order.
-- [ ] Keep Memories without a known time usable and place them predictably among
+- [x] Keep Memories without a known time usable and place them predictably among
       timed Memories from the same date.
-- [ ] Preserve a stable order when two Memories have the same timestamp.
-- [ ] Handle the trip's local time and timezone offset without silently shifting
+- [x] Preserve a stable order when two Memories have the same timestamp.
+- [x] Handle the trip's local time and timezone offset without silently shifting
       a Memory to another calendar date.
-- [ ] Keep record-created and record-updated timestamps available for internal
+- [x] Keep record-created and record-updated timestamps available for internal
       auditing, but do not present them as the Memory's occurrence time.
+
+**Scope decisions:** Use the earliest reliable capture time among the
+successfully uploaded photographs as the editable default. If no reliable
+capture time exists, keep the occurrence time unknown rather than substituting
+the record-creation time. Store and display the local wall-clock time, with the
+capture timezone offset when available, so travel across timezones does not
+silently change the Memory's calendar date.
 
 **Acceptance criteria:** If a traveler records several Memories on one day, the
 Memories page displays each known time and can sort them into the order they
@@ -283,18 +290,12 @@ happened. Memories with no known time remain visible in a consistent position.
 
 - Retire the existing Atlas bulk importer completely, or reuse parts of it
   behind the Memories **New memory** flow?
-- Keep the current six-photograph limit per Memory, or change it?
 - Can one Journey belong to multiple Adventures?
 - Should On this day live within Memories or on Atlas?
 - Should Atlas request location on first load, or wait for an explicit
   location action before triggering the browser permission prompt?
 - When both exist, should the user's current approximate location or their
   previously saved Atlas view determine the initial camera?
-- When a multi-photo Memory contains conflicting capture times, should its
-  default time come from the first selected photo, the earliest photo, or a
-  manually chosen primary photo?
-- Should a Memory without capture-time metadata default to the time it is
-  created, or remain explicitly time-unknown until the traveler supplies one?
 
 ## Prioritized delivery sequence
 

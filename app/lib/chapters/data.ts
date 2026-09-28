@@ -179,6 +179,8 @@ async function loadChapter({
         entry.place_geocoder,
         entry.place_geocoded_at,
         entry.visited_on,
+        entry.occurred_time,
+        entry.occurred_utc_offset_minutes,
         entry.record_state,
         entry.journey_state,
         ST_Y(entry.location::geometry)::float8 AS latitude,

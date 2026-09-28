@@ -13,7 +13,10 @@ import {
   deleteAtlasMediaAction,
   registerAtlasMediaAction,
 } from '@/app/lib/actions/atlas-media';
-import type { AtlasMedia } from '@/app/lib/atlas/definitions';
+import type {
+  AtlasMedia,
+  AtlasOccurrenceSuggestion,
+} from '@/app/lib/atlas/definitions';
 import {
   ATLAS_MEDIA_MAX_FILES,
   createAtlasMediaPath,
@@ -37,10 +40,35 @@ type MemoryPhotosProps = {
   loading: boolean;
   onChange: (media: AtlasMedia[]) => void;
   onBusyChange: (busy: boolean) => void;
+  onCaptureSuggestion?: (suggestion: AtlasOccurrenceSuggestion) => void;
 };
 
 function fileError(file: File) {
   return getImportFileProblem(file);
+}
+
+function offsetMinutes(offset: string | null) {
+  if (!offset) return null;
+  if (offset === 'Z') return 0;
+  const match = offset.match(/^([+-])(\d{2}):(\d{2})$/);
+  if (!match) return null;
+  const minutes = Number(match[2]) * 60 + Number(match[3]);
+  return match[1] === '-' ? -minutes : minutes;
+}
+
+function occurrenceSuggestion(
+  capture: Awaited<ReturnType<typeof analyzeAtlasImportPhoto>>['capture'],
+): AtlasOccurrenceSuggestion | null {
+  if (!capture?.localDateTime || capture.source === 'file-last-modified') {
+    return null;
+  }
+  const time = capture.localDateTime.slice(11, 16);
+  if (!/^([01]\d|2[0-3]):[0-5]\d$/.test(time)) return null;
+  return {
+    visitedOn: capture.localDate,
+    occurredTime: time,
+    occurredUtcOffsetMinutes: offsetMinutes(capture.offset),
+  };
 }
 
 export function MemoryPhotos({
@@ -52,6 +80,7 @@ export function MemoryPhotos({
   loading,
   onChange,
   onBusyChange,
+  onCaptureSuggestion,
 }: MemoryPhotosProps) {
   const inputRef = useRef<HTMLInputElement>(null);
   const [uploading, setUploading] = useState(false);
@@ -209,6 +238,8 @@ export function MemoryPhotos({
 
         nextMedia = [...nextMedia, result.data];
         onChange(nextMedia);
+        const suggestion = occurrenceSuggestion(analysis.capture);
+        if (suggestion) onCaptureSuggestion?.(suggestion);
         pendingUpload = null;
       }
 

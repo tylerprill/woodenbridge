@@ -69,6 +69,8 @@ const initialData: AtlasData = {
       placeGeocoder: 'test',
       placeGeocodedAt: '2026-08-17T12:00:00.000Z',
       visitedOn: '2026-08-17',
+      occurredTime: null,
+      occurredUtcOffsetMinutes: null,
       recordState: 'saved',
       journeyState: 'visited',
       latitude: 35.0116,

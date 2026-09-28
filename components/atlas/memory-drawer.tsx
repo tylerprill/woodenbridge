@@ -5,6 +5,7 @@ import {
   ArrowUpRightIcon,
   CalendarDaysIcon,
   CheckIcon,
+  ClockIcon,
   MapPinIcon,
   XMarkIcon,
 } from '@heroicons/react/24/outline';
@@ -26,6 +27,7 @@ import type {
   AtlasEntry,
   AtlasEntryUpdateInput,
   AtlasMedia,
+  AtlasOccurrenceSuggestion,
   JourneyState,
 } from '@/app/lib/atlas/definitions';
 import {
@@ -53,7 +55,13 @@ type MemoryDrawerProps = {
 
 type FormState = Pick<
   AtlasEntryUpdateInput,
-  'title' | 'description' | 'placeLabel' | 'visitedOn' | 'journeyState'
+  | 'title'
+  | 'description'
+  | 'placeLabel'
+  | 'visitedOn'
+  | 'occurredTime'
+  | 'occurredUtcOffsetMinutes'
+  | 'journeyState'
 >;
 
 function formFromEntry(entry: AtlasEntry): FormState {
@@ -62,6 +70,8 @@ function formFromEntry(entry: AtlasEntry): FormState {
     description: entry.description,
     placeLabel: entry.placeLabel,
     visitedOn: entry.visitedOn,
+    occurredTime: entry.occurredTime,
+    occurredUtcOffsetMinutes: entry.occurredUtcOffsetMinutes,
     journeyState: entry.journeyState,
   };
 }
@@ -93,6 +103,10 @@ export function MemoryDrawer({
   const mediaRef = useRef(entry.media);
   const savingRef = useRef(false);
   const editRevisionRef = useRef(0);
+  const occurrenceEditedRef = useRef(
+    Boolean(entry.visitedOn || entry.occurredTime),
+  );
+  const captureOccurrenceKeyRef = useRef<string | null>(null);
   const navigationGuardId = useId();
   const didLeaveRef = useRef(false);
 
@@ -338,6 +352,33 @@ export function MemoryDrawer({
     setMediaBusy(busy);
   }, []);
 
+  const handleCaptureSuggestion = useCallback(
+    (suggestion: AtlasOccurrenceSuggestion) => {
+      if (occurrenceEditedRef.current) return;
+      const suggestionKey = `${suggestion.visitedOn}T${suggestion.occurredTime}`;
+      if (
+        captureOccurrenceKeyRef.current &&
+        captureOccurrenceKeyRef.current <= suggestionKey
+      ) {
+        return;
+      }
+
+      captureOccurrenceKeyRef.current = suggestionKey;
+      editRevisionRef.current += 1;
+      setForm((current) => ({
+        ...current,
+        visitedOn: suggestion.visitedOn,
+        occurredTime: suggestion.occurredTime,
+        occurredUtcOffsetMinutes: suggestion.occurredUtcOffsetMinutes,
+      }));
+      setDirty(true);
+      setDiscardArmed(false);
+      setSaveState('idle');
+      setMessage('');
+    },
+    [],
+  );
+
   return (
     <div
       ref={drawerRef}
@@ -546,20 +587,64 @@ export function MemoryDrawer({
           ) : null}
         </label>
 
-        <label className={styles.inputField}>
-          <span className={styles.fieldLabel}>
-            <CalendarDaysIcon aria-hidden="true" />
-            {form.journeyState === 'visited' ? 'Date visited' : 'Planned date'}
-          </span>
-          <input
-            type="date"
-            name="visitedOn"
-            value={form.visitedOn ?? ''}
-            onChange={(event) =>
-              setField('visitedOn', event.target.value || null)
-            }
-          />
-        </label>
+        <div className={styles.occurrenceFields}>
+          <label className={styles.inputField}>
+            <span className={styles.fieldLabel}>
+              <CalendarDaysIcon aria-hidden="true" />
+              {form.journeyState === 'visited'
+                ? 'Date visited'
+                : 'Planned date'}
+            </span>
+            <input
+              type="date"
+              name="visitedOn"
+              value={form.visitedOn ?? ''}
+              onChange={(event) => {
+                occurrenceEditedRef.current = true;
+                captureOccurrenceKeyRef.current = null;
+                const visitedOn = event.target.value || null;
+                editRevisionRef.current += 1;
+                setForm((current) => ({
+                  ...current,
+                  visitedOn,
+                  occurredTime: visitedOn ? current.occurredTime : null,
+                  occurredUtcOffsetMinutes: null,
+                }));
+                setDirty(true);
+                setDiscardArmed(false);
+                setSaveState('idle');
+                setMessage('');
+              }}
+            />
+          </label>
+          <label className={styles.inputField}>
+            <span className={styles.fieldLabel}>
+              <ClockIcon aria-hidden="true" />
+              {form.journeyState === 'visited'
+                ? 'Time visited'
+                : 'Planned time'}
+            </span>
+            <input
+              type="time"
+              name="occurredTime"
+              value={form.occurredTime ?? ''}
+              disabled={!form.visitedOn}
+              onChange={(event) => {
+                occurrenceEditedRef.current = true;
+                captureOccurrenceKeyRef.current = null;
+                setField('occurredTime', event.target.value || null);
+                setForm((current) => ({
+                  ...current,
+                  occurredUtcOffsetMinutes: null,
+                }));
+              }}
+            />
+          </label>
+          <small className={styles.occurrenceHint}>
+            Local time · Photo capture details fill this automatically when
+            available.
+          </small>
+        </div>
 
         <label className={styles.descriptionField}>
           <span className={styles.fieldLabel}>Field note</span>
@@ -587,6 +672,7 @@ export function MemoryDrawer({
           loading={mediaLoading}
           onChange={handleMediaChange}
           onBusyChange={handleMediaBusyChange}
+          onCaptureSuggestion={handleCaptureSuggestion}
         />
 
         <div className={styles.coordinateNote}>

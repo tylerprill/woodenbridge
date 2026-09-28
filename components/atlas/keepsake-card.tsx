@@ -7,7 +7,7 @@ import Link from 'next/link';
 
 import type { AtlasEntryPresentation } from '@/app/lib/atlas/definitions';
 import {
-  formatAtlasDate,
+  formatAtlasDateTime,
   getAtlasPlaceContextLabel,
 } from '@/app/lib/atlas/place';
 import { MemoryArtwork } from './memory-artwork';
@@ -56,7 +56,7 @@ function CardContents({
   variant: KeepsakeVariant;
 }) {
   const place = getAtlasPlaceContextLabel(entry);
-  const date = formatAtlasDate(entry);
+  const date = formatAtlasDateTime(entry);
   const title = entry.title || 'Untitled memory';
   const description =
     entry.description || 'A place held quietly in your atlas.';

@@ -17,6 +17,8 @@ export type AtlasEntry = {
   placeGeocoder: string | null;
   placeGeocodedAt: string | null;
   visitedOn: string | null;
+  occurredTime: string | null;
+  occurredUtcOffsetMinutes: number | null;
   recordState: AtlasRecordState;
   journeyState: JourneyState;
   latitude: number;
@@ -82,10 +84,18 @@ export type AtlasEntryUpdateInput = {
   description: string;
   placeLabel: string;
   visitedOn: string | null;
+  occurredTime: string | null;
+  occurredUtcOffsetMinutes: number | null;
   journeyState: JourneyState;
 };
 
 export type AtlasViewInput = AtlasView;
+
+export type AtlasOccurrenceSuggestion = {
+  visitedOn: string;
+  occurredTime: string;
+  occurredUtcOffsetMinutes: number | null;
+};
 
 export type AtlasMediaRegistrationInput = {
   entryId: string;

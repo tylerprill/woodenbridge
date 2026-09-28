@@ -16,21 +16,54 @@ export const atlasDraftSchema = z.object({
   longitude,
 });
 
-export const atlasEntryUpdateSchema = z.object({
-  id: z.string().uuid(),
-  version: z.number().int().positive(),
-  title: z
-    .string()
-    .trim()
-    .min(1, 'Give this memory a title.')
-    .max(ATLAS_TITLE_MAX_LENGTH),
-  description: z.string().trim().max(ATLAS_DESCRIPTION_MAX_LENGTH),
-  placeLabel: z.string().trim().max(ATLAS_PLACE_MAX_LENGTH),
-  visitedOn: z
-    .union([z.string().regex(/^\d{4}-\d{2}-\d{2}$/), z.literal(''), z.null()])
-    .transform((value) => value || null),
-  journeyState: z.enum(JOURNEY_STATES),
-});
+export const atlasEntryUpdateSchema = z
+  .object({
+    id: z.string().uuid(),
+    version: z.number().int().positive(),
+    title: z
+      .string()
+      .trim()
+      .min(1, 'Give this memory a title.')
+      .max(ATLAS_TITLE_MAX_LENGTH),
+    description: z.string().trim().max(ATLAS_DESCRIPTION_MAX_LENGTH),
+    placeLabel: z.string().trim().max(ATLAS_PLACE_MAX_LENGTH),
+    visitedOn: z
+      .union([z.string().regex(/^\d{4}-\d{2}-\d{2}$/), z.literal(''), z.null()])
+      .transform((value) => value || null),
+    occurredTime: z
+      .union([
+        z.string().regex(/^([01]\d|2[0-3]):[0-5]\d$/),
+        z.literal(''),
+        z.null(),
+      ])
+      .optional()
+      .transform((value) => value || null),
+    occurredUtcOffsetMinutes: z
+      .number()
+      .int()
+      .min(-840)
+      .max(840)
+      .nullable()
+      .optional()
+      .transform((value) => value ?? null),
+    journeyState: z.enum(JOURNEY_STATES),
+  })
+  .superRefine((memory, context) => {
+    if (memory.occurredTime && !memory.visitedOn) {
+      context.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ['occurredTime'],
+        message: 'Choose a date before adding a time.',
+      });
+    }
+    if (memory.occurredUtcOffsetMinutes !== null && !memory.occurredTime) {
+      context.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ['occurredUtcOffsetMinutes'],
+        message: 'A photo timezone requires an occurrence time.',
+      });
+    }
+  });
 
 export const atlasEntryIdSchema = z.string().uuid();
 
