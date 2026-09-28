@@ -2,6 +2,7 @@
 
 import { db, sql, type VercelPoolClient } from '@/app/lib/db';
 import { revalidatePath } from 'next/cache';
+import { redirect, RedirectType } from 'next/navigation';
 
 import { requireVerifiedSession } from '@/app/lib/auth/session';
 import type {
@@ -683,6 +684,15 @@ export async function archiveAtlasEntryAction(
   } finally {
     client.release();
   }
+}
+
+export async function archiveAtlasEntryFromKeepsakeAction(entryId: string) {
+  const result = await archiveAtlasEntryAction(entryId);
+  if (!result.ok) return result;
+
+  // A server-side redirect prevents the now-deleted detail route from being
+  // streamed back to the client as a transient not-found page.
+  redirect('/dashboard/places', RedirectType.replace);
 }
 
 export async function saveAtlasViewAction(

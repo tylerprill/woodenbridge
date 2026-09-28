@@ -1,6 +1,12 @@
 import path from 'node:path';
 
-import { expect, test, type Page, type TestInfo } from '@playwright/test';
+import {
+  expect,
+  test,
+  type Locator,
+  type Page,
+  type TestInfo,
+} from '@playwright/test';
 
 import { E2E_FIXTURE } from '../scripts/seed-e2e.js';
 import {
@@ -45,6 +51,7 @@ function auditedViewports(testInfo: TestInfo): AuditViewport[] {
   if (testInfo.project.name === 'chromium') {
     return [
       { name: 'small-phone', width: 320, height: 568 },
+      { name: 'mobile-landscape', width: 568, height: 320 },
       { name: 'tablet', width: 901, height: 900 },
       { name: 'desktop', width: 1440, height: 900 },
     ];
@@ -96,10 +103,92 @@ async function signIn(page: Page) {
   });
 }
 
+async function auditMemoryActions(
+  page: Page,
+  testInfo: TestInfo,
+  monitor: ReturnType<typeof monitorBrowserIssues>,
+  {
+    accessibility,
+    deleteButton,
+    editLink,
+    expectedEditHref,
+    label,
+    scope,
+  }: {
+    accessibility: boolean;
+    deleteButton: Locator;
+    editLink: Locator;
+    expectedEditHref: string;
+    label: string;
+    scope: Locator;
+  },
+) {
+  await expect(editLink, `${label}: edit control`).toBeVisible();
+  await expect(editLink, `${label}: edit destination`).toHaveAttribute(
+    'href',
+    expectedEditHref,
+  );
+  await editLink.click({ trial: true });
+
+  await expect(deleteButton, `${label}: delete control`).toBeVisible();
+  const startingUrl = page.url();
+  await deleteButton.click();
+  await expect(
+    page,
+    `${label}: opening delete confirmation stays in place`,
+  ).toHaveURL(startingUrl);
+
+  const confirmation = scope.getByRole('alertdialog');
+  const keepButton = confirmation.getByRole('button', {
+    name: 'Keep memory',
+    exact: true,
+  });
+  const confirmButton = confirmation.getByRole('button', {
+    name: /^Delete .+ permanently$/,
+  });
+  await expect(confirmation, `${label}: confirmation`).toBeVisible();
+  await expect(confirmation).toContainText('Delete this memory?');
+  await expect(confirmation).toContainText(
+    'It disappears from journeys, and its photos are deleted. This can’t be undone.',
+  );
+  await expect(
+    confirmButton,
+    `${label}: destructive confirmation`,
+  ).toBeEnabled();
+  await expect(
+    keepButton,
+    `${label}: safe action receives focus`,
+  ).toBeFocused();
+
+  await page.keyboard.press('Escape');
+  await expect(
+    confirmation,
+    `${label}: Escape closes confirmation`,
+  ).toBeHidden();
+  await expect(
+    deleteButton,
+    `${label}: Escape restores delete-trigger focus`,
+  ).toBeFocused();
+
+  await deleteButton.click();
+  await expect(confirmation).toBeVisible();
+  await auditCurrentPage(page, testInfo, label, monitor, { accessibility });
+
+  await keepButton.click();
+  await expect(
+    confirmation,
+    `${label}: keep memory cancels deletion`,
+  ).toBeHidden();
+  await expect(
+    deleteButton,
+    `${label}: cancel restores delete-trigger focus`,
+  ).toBeFocused();
+}
+
 test('authenticated routes and primary interactions pass the UI audit', async ({
   page,
 }, testInfo) => {
-  test.setTimeout(300_000);
+  test.setTimeout(480_000);
   await signIn(page);
   // This suite consumes login as test setup; the public UI audit owns the
   // login page itself. Start route diagnostics at the authenticated boundary
@@ -226,6 +315,51 @@ test('authenticated routes and primary interactions pass the UI audit', async ({
         expect(Math.max(...heights) - Math.min(...heights)).toBeLessThanOrEqual(
           1,
         );
+      }
+
+      if (route.name === 'places') {
+        const card = page
+          .locator('.collection-grid > article[data-has-actions="true"]')
+          .first();
+        const memoryLink = card.locator('a.keepsake-card-link').first();
+        await expect(card, 'places: actionable memory card').toBeVisible();
+        const memoryHref = await memoryLink.getAttribute('href');
+        expect(memoryHref, 'places: memory-card destination').toMatch(
+          /^\/dashboard\/card\/[0-9a-f-]+$/,
+        );
+        if (!memoryHref) {
+          throw new Error('The populated collection needs a memory-card link.');
+        }
+        const memoryId = memoryHref.slice('/dashboard/card/'.length);
+        const actionScope = card.locator('[data-memory-actions="card"]');
+        await auditMemoryActions(page, testInfo, monitor, {
+          accessibility: shouldRunAccessibilityAudit(testInfo, viewport),
+          deleteButton: actionScope.getByRole('button', {
+            name: /^Delete /,
+          }),
+          editLink: actionScope.getByRole('link', { name: /^Edit / }),
+          expectedEditHref: `/dashboard?memory=${encodeURIComponent(memoryId)}`,
+          label: `places-delete-confirmation-${viewport.name}-${testInfo.project.name}`,
+          scope: actionScope,
+        });
+      }
+
+      if (route.name === 'memory-card') {
+        const actionScope = page.locator('.keepsake-page-actions');
+        await auditMemoryActions(page, testInfo, monitor, {
+          accessibility: shouldRunAccessibilityAudit(testInfo, viewport),
+          deleteButton: actionScope.getByRole('button', {
+            name: 'Delete memory',
+            exact: true,
+          }),
+          editLink: actionScope.getByRole('link', {
+            name: 'Edit memory',
+            exact: true,
+          }),
+          expectedEditHref: `/dashboard?memory=${encodeURIComponent(e2eEntryId)}`,
+          label: `memory-card-delete-confirmation-${viewport.name}-${testInfo.project.name}`,
+          scope: actionScope,
+        });
       }
     }
   }

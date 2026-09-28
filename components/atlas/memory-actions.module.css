@@ -1,0 +1,264 @@
+.cardActions {
+  position: absolute;
+  z-index: 4;
+  right: 0.8rem;
+  bottom: 0.8rem;
+  display: flex;
+  align-items: center;
+  padding: 0.18rem;
+  border: 1px solid rgba(16, 35, 29, 0.13);
+  border-radius: 999px;
+  background: rgba(251, 250, 245, 0.92);
+  box-shadow: 0 0.55rem 1.4rem rgba(16, 35, 29, 0.12);
+  gap: 0.12rem;
+  backdrop-filter: blur(0.75rem);
+}
+
+.cardActions[data-confirming='true'] {
+  right: 0.8rem;
+  bottom: 0.8rem;
+  left: 0.8rem;
+  display: block;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
+  backdrop-filter: none;
+}
+
+.iconAction,
+.detailEdit,
+.detailDelete,
+.cancelButton,
+.confirmButton {
+  display: inline-flex;
+  min-width: 2.75rem;
+  min-height: 2.75rem;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid transparent;
+  border-radius: 999px;
+  color: var(--forest-700);
+  text-decoration: none;
+  transition:
+    border-color 160ms ease,
+    background 160ms ease,
+    box-shadow 160ms ease,
+    color 160ms ease,
+    transform 160ms ease;
+}
+
+.iconAction:hover,
+.iconAction:focus-visible {
+  border-color: rgba(76, 106, 91, 0.22);
+  background: var(--sage-100);
+  color: var(--forest-950);
+  transform: translateY(-1px);
+}
+
+.iconAction:focus-visible,
+.detailEdit:focus-visible,
+.detailDelete:focus-visible,
+.cancelButton:focus-visible,
+.confirmButton:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 0.18rem rgba(76, 106, 91, 0.3);
+}
+
+.iconDelete:hover,
+.iconDelete:focus-visible {
+  border-color: rgba(142, 67, 39, 0.25);
+  background: rgba(182, 109, 66, 0.12);
+  color: #853e27;
+}
+
+.iconAction svg,
+.detailEdit svg,
+.detailDelete svg,
+.cancelButton svg,
+.confirmButton svg {
+  width: 1rem;
+  height: 1rem;
+  flex: 0 0 auto;
+}
+
+.cardConfirmation,
+.detailConfirmation {
+  display: grid;
+  min-width: 0;
+  padding: 0.8rem;
+  border: 1px solid rgba(142, 67, 39, 0.2);
+  border-radius: 1rem;
+  background: rgba(251, 250, 245, 0.96);
+  box-shadow: 0 0.8rem 2rem rgba(16, 35, 29, 0.1);
+  gap: 0.7rem;
+}
+
+.detailConfirmation {
+  width: min(100%, 28rem);
+  flex: 1 0 100%;
+}
+
+.confirmationCopy {
+  display: grid;
+  min-width: 0;
+  gap: 0.2rem;
+}
+
+.confirmationCopy strong {
+  color: var(--forest-950);
+  font-family: Georgia, 'Times New Roman', serif;
+  font-size: 0.95rem;
+  font-weight: 400;
+}
+
+.confirmationCopy p,
+.error {
+  color: var(--forest-600);
+  font-size: 0.75rem;
+  line-height: 1.45;
+}
+
+.error {
+  color: #853e27;
+  font-weight: 750;
+}
+
+.confirmationActions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  flex-wrap: wrap;
+  gap: 0.45rem;
+}
+
+.cancelButton,
+.confirmButton {
+  min-width: 0;
+  padding-inline: 0.75rem;
+  border-color: rgba(16, 35, 29, 0.14);
+  background: rgba(251, 250, 245, 0.8);
+  font-size: 0.72rem;
+  font-weight: 800;
+  gap: 0.35rem;
+}
+
+.cancelButton:hover,
+.cancelButton:focus-visible {
+  border-color: rgba(76, 106, 91, 0.32);
+  background: var(--sage-100);
+  color: var(--forest-950);
+}
+
+.confirmButton {
+  border-color: #853e27;
+  background: #853e27;
+  color: var(--paper-light);
+}
+
+.confirmButton:hover,
+.confirmButton:focus-visible {
+  background: #71331f;
+  color: var(--paper-light);
+}
+
+.cancelButton:disabled,
+.confirmButton:disabled {
+  cursor: wait;
+  opacity: 0.62;
+}
+
+.detailEdit,
+.detailDelete {
+  min-height: 3rem;
+  padding-inline: 1.05rem;
+  border-color: rgba(16, 35, 29, 0.16);
+  background: rgba(251, 250, 245, 0.72);
+  font-size: 0.75rem;
+  font-weight: 800;
+  gap: 0.5rem;
+}
+
+.detailEdit {
+  border-color: var(--forest-950);
+  background: var(--forest-950);
+  color: var(--paper-light);
+}
+
+.detailEdit:hover,
+.detailEdit:focus-visible {
+  background: var(--forest-800);
+  color: var(--paper-light);
+  transform: translateY(-2px);
+}
+
+.detailDelete {
+  color: #853e27;
+}
+
+.detailDelete:hover,
+.detailDelete:focus-visible {
+  border-color: rgba(142, 67, 39, 0.3);
+  background: rgba(182, 109, 66, 0.1);
+  transform: translateY(-2px);
+}
+
+.deletedStatus {
+  position: relative;
+  z-index: 4;
+  margin: 0.75rem;
+  color: var(--forest-600);
+  font-size: 0.65rem;
+  font-weight: 800;
+}
+
+@media (max-width: 520px) {
+  .detailEdit,
+  .detailDelete {
+    flex: 1 1 7.5rem;
+    padding-inline: 0.7rem;
+  }
+
+  .detailConfirmation {
+    width: 100%;
+  }
+}
+
+@media (max-width: 360px) {
+  .cardActions {
+    right: 0.65rem;
+    bottom: 0.65rem;
+  }
+
+  .cardActions[data-confirming='true'] {
+    right: 0.65rem;
+    bottom: 0.65rem;
+    left: 0.65rem;
+  }
+
+  .cardConfirmation {
+    padding: 0.7rem;
+  }
+}
+
+@media print {
+  .cardActions,
+  .detailEdit,
+  .detailDelete,
+  .detailConfirmation,
+  .deletedStatus {
+    display: none !important;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .iconAction,
+  .detailEdit,
+  .detailDelete,
+  .cancelButton,
+  .confirmButton {
+    transition: none;
+  }
+}

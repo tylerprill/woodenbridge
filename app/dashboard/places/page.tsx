@@ -11,6 +11,10 @@ import {
   getAtlasCollectionData,
 } from '@/app/lib/atlas/data';
 import { KeepsakeCard } from '@/components/atlas/keepsake-card';
+import {
+  MemoryActionGroup,
+  MemoryActions,
+} from '@/components/atlas/memory-actions';
 
 function collectionHref(
   filter: AtlasCollectionFilter,
@@ -112,17 +116,31 @@ export default async function CollectionPage({
       </div>
 
       {memories.length ? (
-        <section className="collection-grid" aria-label="Memories">
-          {memories.map((entry, index) => (
-            <KeepsakeCard
-              key={entry.id}
-              entry={entry}
-              index={String(data.offset + index + 1).padStart(2, '0')}
-              variant="grid"
-              href={`/dashboard/card/${entry.id}`}
-            />
-          ))}
-        </section>
+        <MemoryActionGroup>
+          <section className="collection-grid" aria-label="Memories">
+            {memories.map((entry, index) => (
+              <KeepsakeCard
+                key={entry.id}
+                entry={entry}
+                index={String(data.offset + index + 1).padStart(2, '0')}
+                variant="grid"
+                href={`/dashboard/card/${entry.id}`}
+                actions={
+                  <MemoryActions
+                    entryId={entry.id}
+                    title={entry.title}
+                    variant="card"
+                    returnTo={
+                      memories.length === 1 && data.page > 1
+                        ? collectionHref(filter, sort, data.page - 1)
+                        : undefined
+                    }
+                  />
+                }
+              />
+            ))}
+          </section>
+        </MemoryActionGroup>
       ) : data.counts.total ? (
         <section
           className="collection-empty collection-filter-empty"
