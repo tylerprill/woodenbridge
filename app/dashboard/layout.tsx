@@ -5,7 +5,7 @@ import SideNav from '@/components/unclean/dashboard/sidenav';
 
 export const metadata: Metadata = {
   title: 'Your atlas — Field Atlas',
-  description: 'Your memories, field notes, journeys, and adventures.',
+  description: 'Your memories, field notes, and journeys.',
   robots: { index: false, follow: false },
 };
 

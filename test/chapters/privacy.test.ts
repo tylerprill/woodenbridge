@@ -17,6 +17,7 @@ const chapter: AtlasChapter = {
   shareLocationPrecision: 'exact',
   createdAt: '2026-08-17T12:00:00.000Z',
   updatedAt: '2026-08-17T12:00:00.000Z',
+  segments: [],
   entries: [
     {
       id: '5a4ea1bb-4a42-43c4-bca4-8278f4971486',
@@ -42,6 +43,7 @@ const chapter: AtlasChapter = {
       updatedAt: '2026-08-17T12:00:00.000Z',
       media: [],
       transitionNote: '',
+      segmentId: null,
     },
   ],
 };

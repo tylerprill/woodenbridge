@@ -51,14 +51,13 @@ describe('dashboard navigation', () => {
     mockLinkPrefetchProps.mockClear();
   });
 
-  it('disables prefetch for the heavier journey and adventure routes', () => {
-    renderNavigation('owner', '/dashboard/adventures');
+  it('disables prefetch for the heavier Journey route', () => {
+    renderNavigation('owner', '/dashboard/chapters');
 
     expect(mockLinkPrefetchProps.mock.calls.map(([props]) => props)).toEqual([
       { href: '/dashboard', prefetch: undefined },
       { href: '/dashboard/places', prefetch: undefined },
       { href: '/dashboard/chapters', prefetch: false },
-      { href: '/dashboard/adventures', prefetch: false },
       { href: '/dashboard/security', prefetch: undefined },
       { href: '/dashboard/owner/users', prefetch: undefined },
     ]);
@@ -79,8 +78,8 @@ describe('dashboard navigation', () => {
       within(atlas).getByRole('link', { name: 'Journeys' }),
     ).toHaveAttribute('href', '/dashboard/chapters');
     expect(
-      within(atlas).getByRole('link', { name: 'Adventures' }),
-    ).toHaveAttribute('href', '/dashboard/adventures');
+      within(atlas).queryByRole('link', { name: 'Adventures' }),
+    ).not.toBeInTheDocument();
     expect(
       within(atlas).queryByRole('link', { name: /chapters/i }),
     ).not.toBeInTheDocument();
@@ -124,10 +123,6 @@ describe('dashboard navigation', () => {
     {
       linkName: 'Journeys',
       pathname: '/dashboard/chapters/6a67afcf-768f-4fe4-8c62-41b58a19840d/edit',
-    },
-    {
-      linkName: 'Adventures',
-      pathname: '/dashboard/adventures/6a67afcf-768f-4fe4-8c62-41b58a19840d',
     },
     {
       linkName: 'Security',

@@ -19,6 +19,7 @@ import type {
   AtlasChapterEditorData,
   AtlasChapterSummary,
   AtlasJourneyContinuation,
+  AtlasJourneySegment,
 } from './definitions';
 import { toSharedAtlasChapter } from './shared';
 import { CHAPTER_MAX_MEMORIES, atlasChapterIdSchema } from './validation';
@@ -52,10 +53,26 @@ type ChapterEditorRow = {
   share_id: string;
   share_map: boolean;
   share_location_precision: AtlasChapterSummary['shareLocationPrecision'];
-  memories: Array<{ entryId: string; transitionNote: string }>;
+  memories: Array<{
+    entryId: string;
+    transitionNote: string;
+    segmentId: string | null;
+  }>;
 };
 
-type ChapterEntryRow = AtlasEntryRow & { transition_note: string };
+type ChapterEntryRow = AtlasEntryRow & {
+  transition_note: string;
+  segment_id: string | null;
+};
+
+type ChapterSegmentRow = {
+  id: string;
+  title: string;
+  position: number | string;
+  memory_count: number | string;
+  start_date: Date | string | null;
+  end_date: Date | string | null;
+};
 
 type ChapterMemoryOptionRow = {
   id: string;
@@ -83,6 +100,17 @@ function toDateString(value: Date | string | null) {
     : String(value).slice(0, 10);
 }
 
+function toJourneySegment(row: ChapterSegmentRow): AtlasJourneySegment {
+  return {
+    id: row.id,
+    title: row.title,
+    position: Number(row.position),
+    memoryCount: Number(row.memory_count),
+    startDate: toDateString(row.start_date),
+    endDate: toDateString(row.end_date),
+  };
+}
+
 function attachMedia(
   entries: ChapterEntryRow[],
   mediaRows: AtlasMediaRow[],
@@ -99,6 +127,7 @@ function attachMedia(
   return entries.map((row) => ({
     ...toAtlasEntry(row, mediaByEntry.get(row.id) ?? []),
     transitionNote: row.transition_note,
+    segmentId: row.segment_id,
   }));
 }
 
@@ -134,8 +163,9 @@ async function loadChapter({
   chapterId: string | null;
   shareId: string | null;
 }) {
-  const [chapterResult, entriesResult, mediaResult] = await Promise.all([
-    sql<ChapterRow>`
+  const [chapterResult, entriesResult, mediaResult, segmentsResult] =
+    await Promise.all([
+      sql<ChapterRow>`
       SELECT
         chapter.id,
         chapter.title,
@@ -166,7 +196,7 @@ async function loadChapter({
       GROUP BY chapter.id
       LIMIT 1
     `,
-    sql<ChapterEntryRow>`
+      sql<ChapterEntryRow>`
       SELECT
         entry.id,
         entry.title,
@@ -189,7 +219,8 @@ async function loadChapter({
         entry.version,
         entry.created_at,
         entry.updated_at,
-        chapter_entry.transition_note
+        chapter_entry.transition_note,
+        chapter_entry.segment_id
       FROM atlas_chapter_entries AS chapter_entry
       INNER JOIN atlas_chapters AS chapter
         ON chapter.id = chapter_entry.chapter_id
@@ -204,7 +235,7 @@ async function loadChapter({
         AND entry.deleted_at IS NULL
       ORDER BY chapter_entry.position
     `,
-    sql<AtlasMediaRow>`
+      sql<AtlasMediaRow>`
       SELECT
         media.id,
         media.entry_id,
@@ -234,7 +265,35 @@ async function loadChapter({
         AND entry.deleted_at IS NULL
       ORDER BY chapter_entry.position, media.sort_order, media.created_at
     `,
-  ]);
+      sql<ChapterSegmentRow>`
+      SELECT
+        segment.id,
+        segment.title,
+        segment.position,
+        COUNT(entry.id)::int AS memory_count,
+        MIN(entry.visited_on) AS start_date,
+        MAX(entry.visited_on) AS end_date
+      FROM atlas_chapter_segments AS segment
+      INNER JOIN atlas_chapters AS chapter
+        ON chapter.id = segment.chapter_id
+        AND chapter.user_id = segment.user_id
+      LEFT JOIN atlas_chapter_entries AS chapter_entry
+        ON chapter_entry.chapter_id = segment.chapter_id
+        AND chapter_entry.segment_id = segment.id
+        AND chapter_entry.user_id = segment.user_id
+      LEFT JOIN atlas_entries AS entry
+        ON entry.id = chapter_entry.entry_id
+        AND entry.user_id = segment.user_id
+        AND entry.record_state = 'saved'
+        AND entry.deleted_at IS NULL
+      WHERE (
+        (chapter.id = ${chapterId}::uuid AND chapter.user_id = ${userId}::uuid)
+        OR (chapter.share_id = ${shareId}::uuid AND chapter.visibility = 'shared')
+      )
+      GROUP BY segment.id
+      ORDER BY segment.position
+    `,
+    ]);
 
   const row = chapterResult.rows[0];
   if (!row) return null;
@@ -252,6 +311,7 @@ async function loadChapter({
   return {
     ...toChapterSummary(row, coverMedia),
     entries,
+    segments: segmentsResult.rows.map(toJourneySegment),
   } satisfies AtlasChapter;
 }
 
@@ -394,37 +454,87 @@ export async function getAtlasChapter(chapterId: string) {
 
 export async function getAtlasJourneyContinuation(
   chapterId: string,
+  options: {
+    requestedSegmentId?: string;
+    preferUnsegmented?: boolean;
+  } = {},
 ): Promise<AtlasJourneyContinuation | null> {
   const parsed = atlasChapterIdSchema.safeParse(chapterId);
   if (!parsed.success) return null;
 
   const session = await requireVerifiedSession();
-  const result = await sql<{
-    id: string;
-    title: string;
-    memory_count: number | string;
-  }>`
-    SELECT
-      chapter.id,
-      chapter.title,
-      COUNT(chapter_entry.entry_id)::int AS memory_count
-    FROM atlas_chapters AS chapter
-    LEFT JOIN atlas_chapter_entries AS chapter_entry
-      ON chapter_entry.chapter_id = chapter.id
-      AND chapter_entry.user_id = chapter.user_id
-    WHERE chapter.id = ${parsed.data}
-      AND chapter.user_id = ${session.user.id}
-    GROUP BY chapter.id
-    LIMIT 1
-  `;
-  const journey = result.rows[0];
-  return journey
-    ? {
-        id: journey.id,
-        title: journey.title,
-        memoryCount: Number(journey.memory_count),
-      }
+  const [journeyResult, segmentsResult] = await Promise.all([
+    sql<{
+      id: string;
+      title: string;
+      memory_count: number | string;
+      latest_memory_date: Date | string | null;
+    }>`
+      SELECT
+        chapter.id,
+        chapter.title,
+        COUNT(chapter_entry.entry_id)::int AS memory_count,
+        MAX(entry.visited_on) AS latest_memory_date
+      FROM atlas_chapters AS chapter
+      LEFT JOIN atlas_chapter_entries AS chapter_entry
+        ON chapter_entry.chapter_id = chapter.id
+        AND chapter_entry.user_id = chapter.user_id
+      LEFT JOIN atlas_entries AS entry
+        ON entry.id = chapter_entry.entry_id
+        AND entry.user_id = chapter.user_id
+        AND entry.record_state = 'saved'
+        AND entry.deleted_at IS NULL
+      WHERE chapter.id = ${parsed.data}
+        AND chapter.user_id = ${session.user.id}
+      GROUP BY chapter.id
+      LIMIT 1
+    `,
+    sql<ChapterSegmentRow>`
+      SELECT
+        segment.id,
+        segment.title,
+        segment.position,
+        COUNT(entry.id)::int AS memory_count,
+        MIN(entry.visited_on) AS start_date,
+        MAX(entry.visited_on) AS end_date
+      FROM atlas_chapter_segments AS segment
+      LEFT JOIN atlas_chapter_entries AS chapter_entry
+        ON chapter_entry.chapter_id = segment.chapter_id
+        AND chapter_entry.segment_id = segment.id
+        AND chapter_entry.user_id = segment.user_id
+      LEFT JOIN atlas_entries AS entry
+        ON entry.id = chapter_entry.entry_id
+        AND entry.user_id = segment.user_id
+        AND entry.record_state = 'saved'
+        AND entry.deleted_at IS NULL
+      WHERE segment.chapter_id = ${parsed.data}
+        AND segment.user_id = ${session.user.id}
+      GROUP BY segment.id
+      ORDER BY segment.position
+    `,
+  ]);
+  const journey = journeyResult.rows[0];
+  if (!journey) return null;
+
+  const segments = segmentsResult.rows.map(toJourneySegment);
+  const requestedSegment = options.requestedSegmentId
+    ? atlasChapterIdSchema.safeParse(options.requestedSegmentId)
     : null;
+  const selectedSegmentId = options.preferUnsegmented
+    ? null
+    : requestedSegment?.success &&
+        segments.some((segment) => segment.id === requestedSegment.data)
+      ? requestedSegment.data
+      : (segments.at(-1)?.id ?? null);
+
+  return {
+    id: journey.id,
+    title: journey.title,
+    memoryCount: Number(journey.memory_count),
+    segments,
+    selectedSegmentId,
+    latestMemoryDate: toDateString(journey.latest_memory_date),
+  };
 }
 
 export const getSharedAtlasChapter = cache(async (shareId: string) => {
@@ -463,7 +573,7 @@ export async function getAtlasChapterEditorData(
   }
   const editorChapterId = parsedId?.success ? parsedId.data : null;
 
-  const [chapter, entriesResult] = await Promise.all([
+  const [chapter, entriesResult, segmentsResult] = await Promise.all([
     editorChapterId
       ? sql<ChapterEditorRow>`
           SELECT
@@ -480,7 +590,8 @@ export async function getAtlasChapterEditorData(
               JSONB_AGG(
                 JSONB_BUILD_OBJECT(
                   'entryId', chapter_entry.entry_id,
-                  'transitionNote', chapter_entry.transition_note
+                  'transitionNote', chapter_entry.transition_note,
+                  'segmentId', chapter_entry.segment_id
                 )
                 ORDER BY chapter_entry.position
               )
@@ -572,10 +683,37 @@ export async function getAtlasChapterEditorData(
         )
       ORDER BY entry.visited_on DESC NULLS LAST, entry.updated_at DESC
     `,
+    editorChapterId
+      ? sql<ChapterSegmentRow>`
+          SELECT
+            segment.id,
+            segment.title,
+            segment.position,
+            COUNT(entry.id)::int AS memory_count,
+            MIN(entry.visited_on) AS start_date,
+            MAX(entry.visited_on) AS end_date
+          FROM atlas_chapter_segments AS segment
+          LEFT JOIN atlas_chapter_entries AS chapter_entry
+            ON chapter_entry.chapter_id = segment.chapter_id
+            AND chapter_entry.segment_id = segment.id
+            AND chapter_entry.user_id = segment.user_id
+          LEFT JOIN atlas_entries AS entry
+            ON entry.id = chapter_entry.entry_id
+            AND entry.user_id = segment.user_id
+            AND entry.record_state = 'saved'
+            AND entry.deleted_at IS NULL
+          WHERE segment.chapter_id = ${editorChapterId}
+            AND segment.user_id = ${userId}
+          GROUP BY segment.id
+          ORDER BY segment.position
+        `
+      : Promise.resolve({ rows: [] as ChapterSegmentRow[] }),
   ]);
 
   return {
-    chapter,
+    chapter: chapter
+      ? { ...chapter, segments: segmentsResult.rows.map(toJourneySegment) }
+      : null,
     availableEntries: entriesResult.rows.map((row) => {
       const mediaUrls =
         row.media_id && row.storage_path && row.mime_type

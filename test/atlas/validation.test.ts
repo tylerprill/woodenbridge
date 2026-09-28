@@ -136,4 +136,47 @@ describe('atlas validation', () => {
       }).success,
     ).toBe(false);
   });
+
+  it('validates existing and new Segment destinations inside a Journey', () => {
+    const memory = {
+      id: 'f7c0bf19-59fc-49df-9bd7-ae405a69e49c',
+      version: 1,
+      title: 'Lunch beside the lake',
+      description: '',
+      placeLabel: 'Lake Michigan',
+      visitedOn: '2026-09-28',
+      occurredTime: null,
+      occurredUtcOffsetMinutes: null,
+      journeyState: 'visited' as const,
+      appendToJourneyId: '78daf767-13e6-4f2f-a7bf-8a087824c005',
+    };
+    const segmentId = 'e8ef6529-4961-4847-8272-e0da4aebf38b';
+
+    expect(
+      atlasEntryUpdateSchema.safeParse({
+        ...memory,
+        appendToJourneySegmentId: segmentId,
+      }).success,
+    ).toBe(true);
+    expect(
+      atlasEntryUpdateSchema.parse({
+        ...memory,
+        appendToNewJourneySegmentTitle: '  Day 2 · The coast  ',
+      }).appendToNewJourneySegmentTitle,
+    ).toBe('Day 2 · The coast');
+    expect(
+      atlasEntryUpdateSchema.safeParse({
+        ...memory,
+        appendToJourneySegmentId: segmentId,
+        appendToNewJourneySegmentTitle: 'Day 3',
+      }).success,
+    ).toBe(false);
+    expect(
+      atlasEntryUpdateSchema.safeParse({
+        ...memory,
+        appendToJourneyId: undefined,
+        appendToJourneySegmentId: segmentId,
+      }).success,
+    ).toBe(false);
+  });
 });

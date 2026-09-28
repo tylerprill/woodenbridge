@@ -41,6 +41,8 @@ const batchId = '3fe3cf16-c676-42cf-b3e6-87158c836fd9';
 const entryId = 'f7c0bf19-59fc-49df-9bd7-ae405a69e49c';
 const journeyId = '78daf767-13e6-4f2f-a7bf-8a087824c005';
 const shareId = '742dbb48-7be8-4d8f-b8b4-1f8d82725025';
+const segmentId = 'e8ef6529-4961-4847-8272-e0da4aebf38b';
+const newSegmentId = 'c47412f0-b990-421d-9321-693f153bd2d1';
 
 function normalizeQuery(query: unknown) {
   return String(query).replace(/\s+/g, ' ').trim();
@@ -291,6 +293,212 @@ describe('Atlas entry active-import mutation guard', () => {
       `/dashboard/chapters/${journeyId}`,
     );
     expect(revalidatePath).toHaveBeenCalledWith(`/shared/chapters/${shareId}`);
+  });
+
+  it('creates a new Segment only inside the successful Memory transaction', async () => {
+    __testMocks.clientQuery.mockImplementation(
+      async (query: string, values?: unknown[]) => {
+        const text = normalizeQuery(query);
+        if (text.includes('FROM atlas_import_items')) {
+          return { rows: [], rowCount: 0 };
+        }
+        if (text.includes('SELECT version FROM atlas_entries')) {
+          return { rows: [{ version: 1 }], rowCount: 1 };
+        }
+        if (
+          text.includes('FROM atlas_chapters') &&
+          text.includes('FOR UPDATE')
+        ) {
+          return { rows: [{ id: journeyId, shareId }], rowCount: 1 };
+        }
+        if (text.includes('COUNT(*)::int AS "memoryCount"')) {
+          return {
+            rows: [
+              {
+                memoryCount: 3,
+                alreadyIncluded: false,
+                segmentCount: 2,
+              },
+            ],
+            rowCount: 1,
+          };
+        }
+        if (text.startsWith('UPDATE atlas_entries')) {
+          return {
+            rows: [
+              {
+                id: entryId,
+                title: String(values?.[0]),
+                description: '',
+                place_label: 'Lake Michigan',
+                place_name: null,
+                place_locality: null,
+                place_region: null,
+                place_country: null,
+                place_country_code: null,
+                place_geocoder: null,
+                place_geocoded_at: null,
+                visited_on: '2026-09-29',
+                occurred_time: null,
+                occurred_utc_offset_minutes: null,
+                record_state: 'saved',
+                journey_state: 'visited',
+                latitude: 44.9,
+                longitude: -86,
+                version: 2,
+                created_at: '2026-09-28T00:00:00.000Z',
+                updated_at: '2026-09-28T00:00:00.000Z',
+              },
+            ],
+            rowCount: 1,
+          };
+        }
+        if (text.startsWith('INSERT INTO atlas_chapter_segments')) {
+          expect(values).toEqual([journeyId, userId, 'Day 2 · The coast']);
+          return { rows: [{ id: newSegmentId }], rowCount: 1 };
+        }
+        if (text.includes('AS "insertAfter"')) {
+          return {
+            rows: [{ insertAfter: -1, maxPosition: 2 }],
+            rowCount: 1,
+          };
+        }
+        if (text.startsWith('INSERT INTO atlas_chapter_entries')) {
+          expect(values).toEqual([journeyId, entryId, userId, 3, newSegmentId]);
+          return { rows: [{ entryId }], rowCount: 1 };
+        }
+        return { rows: [], rowCount: 0 };
+      },
+    );
+
+    await expect(
+      updateAtlasEntryAction({
+        id: entryId,
+        version: 1,
+        title: 'Morning on the coast',
+        description: '',
+        placeLabel: 'Lake Michigan',
+        visitedOn: '2026-09-29',
+        occurredTime: null,
+        occurredUtcOffsetMinutes: null,
+        journeyState: 'visited',
+        appendToJourneyId: journeyId,
+        appendToNewJourneySegmentTitle: 'Day 2 · The coast',
+      }),
+    ).resolves.toMatchObject({ ok: true });
+
+    const queries = __testMocks.clientQuery.mock.calls.map(([query]) =>
+      normalizeQuery(query),
+    );
+    expect(
+      queries.findIndex((query) =>
+        query.startsWith('INSERT INTO atlas_chapter_segments'),
+      ),
+    ).toBeLessThan(
+      queries.findIndex((query) =>
+        query.startsWith('INSERT INTO atlas_chapter_entries'),
+      ),
+    );
+    expect(queries).toContain('COMMIT');
+  });
+
+  it('inserts into an older Segment without scrambling later stop positions', async () => {
+    __testMocks.clientQuery.mockImplementation(
+      async (query: string, values?: unknown[]) => {
+        const text = normalizeQuery(query);
+        if (text.includes('FROM atlas_import_items')) {
+          return { rows: [], rowCount: 0 };
+        }
+        if (text.includes('SELECT version FROM atlas_entries')) {
+          return { rows: [{ version: 1 }], rowCount: 1 };
+        }
+        if (
+          text.includes('FROM atlas_chapters') &&
+          text.includes('FOR UPDATE')
+        ) {
+          return { rows: [{ id: journeyId, shareId }], rowCount: 1 };
+        }
+        if (text.startsWith('SELECT id FROM atlas_chapter_segments')) {
+          return { rows: [{ id: segmentId }], rowCount: 1 };
+        }
+        if (text.includes('COUNT(*)::int AS "memoryCount"')) {
+          return {
+            rows: [
+              {
+                memoryCount: 5,
+                alreadyIncluded: false,
+                segmentCount: 3,
+              },
+            ],
+            rowCount: 1,
+          };
+        }
+        if (text.startsWith('UPDATE atlas_entries')) {
+          return {
+            rows: [
+              {
+                id: entryId,
+                title: String(values?.[0]),
+                description: '',
+                place_label: 'Lake Michigan',
+                place_name: null,
+                place_locality: null,
+                place_region: null,
+                place_country: null,
+                place_country_code: null,
+                place_geocoder: null,
+                place_geocoded_at: null,
+                visited_on: '2026-09-28',
+                occurred_time: null,
+                occurred_utc_offset_minutes: null,
+                record_state: 'saved',
+                journey_state: 'visited',
+                latitude: 44.9,
+                longitude: -86,
+                version: 2,
+                created_at: '2026-09-28T00:00:00.000Z',
+                updated_at: '2026-09-28T00:00:00.000Z',
+              },
+            ],
+            rowCount: 1,
+          };
+        }
+        if (text.includes('AS "insertAfter"')) {
+          return {
+            rows: [{ insertAfter: 1, maxPosition: 4 }],
+            rowCount: 1,
+          };
+        }
+        if (text.startsWith('INSERT INTO atlas_chapter_entries')) {
+          expect(values).toEqual([journeyId, entryId, userId, 2, segmentId]);
+          return { rows: [{ entryId }], rowCount: 1 };
+        }
+        return { rows: [], rowCount: 1 };
+      },
+    );
+
+    await expect(
+      updateAtlasEntryAction({
+        id: entryId,
+        version: 1,
+        title: 'Another stop on day one',
+        description: '',
+        placeLabel: 'Lake Michigan',
+        visitedOn: '2026-09-28',
+        occurredTime: null,
+        occurredUtcOffsetMinutes: null,
+        journeyState: 'visited',
+        appendToJourneyId: journeyId,
+        appendToJourneySegmentId: segmentId,
+      }),
+    ).resolves.toMatchObject({ ok: true });
+
+    const shiftCalls = __testMocks.clientQuery.mock.calls.filter(([query]) =>
+      normalizeQuery(query).startsWith('UPDATE atlas_chapter_entries'),
+    );
+    expect(shiftCalls).toHaveLength(2);
+    expect(shiftCalls[0]?.[1]).toEqual([journeyId, userId, 1, 51]);
+    expect(shiftCalls[1]?.[1]).toEqual([journeyId, userId, 1, 51]);
   });
 
   it.each([

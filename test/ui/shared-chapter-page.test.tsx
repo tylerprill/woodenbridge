@@ -35,6 +35,7 @@ const chapter: SharedAtlasChapter = {
   shareLocationPrecision: 'approximate',
   createdAt: '2025-09-20T00:00:00.000Z',
   updatedAt: '2025-09-20T00:00:00.000Z',
+  segments: [],
   entries: [],
 };
 

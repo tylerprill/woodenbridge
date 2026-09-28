@@ -9,6 +9,7 @@ import {
 } from '@heroicons/react/24/outline';
 import Image from 'next/image';
 import Link from 'next/link';
+import { Fragment } from 'react';
 
 import type {
   AtlasChapter,
@@ -27,6 +28,15 @@ import {
 } from './chapter-save-notice';
 import { ChapterShareControl } from './chapter-share-control';
 import styles from './chapters.module.css';
+
+function continueJourneyHref(chapterId: string, segmentId?: string | null) {
+  const query = new URLSearchParams({
+    new: 'memory',
+    continueJourney: chapterId,
+  });
+  if (segmentId) query.set('continueSegment', segmentId);
+  return `/dashboard?${query.toString()}`;
+}
 
 export function ChapterReader({
   chapter,
@@ -68,6 +78,10 @@ export function ChapterReader({
     : showMap
       ? '#chapter-route'
       : '#chapter-memories';
+  const segmentsById = new Map(
+    chapter.segments.map((segment) => [segment.id, segment]),
+  );
+  const defaultContinuationSegmentId = chapter.segments.at(-1)?.id ?? null;
 
   return (
     <article
@@ -99,7 +113,10 @@ export function ChapterReader({
               Edit journey
             </Link>
             <Link
-              href={`/dashboard?new=memory&continueJourney=${encodeURIComponent(chapter.id)}`}
+              href={continueJourneyHref(
+                chapter.id,
+                defaultContinuationSegmentId,
+              )}
             >
               <PlusIcon aria-hidden="true" />
               Continue journey
@@ -270,38 +287,111 @@ export function ChapterReader({
           </div>
           <p>{chapterMemoryLabel(chapter.memoryCount)}, held in sequence.</p>
         </div>
+        {chapter.segments.length ? (
+          <nav
+            className={styles.journeySegmentIndex}
+            aria-label="Journey segments"
+          >
+            <ol>
+              {chapter.segments.map((segment) => (
+                <li key={segment.id}>
+                  <a href={`#journey-segment-${segment.id}`}>
+                    <span>{String(segment.position + 1).padStart(2, '0')}</span>
+                    <strong>{segment.title}</strong>
+                    <small>{chapterMemoryLabel(segment.memoryCount)}</small>
+                  </a>
+                </li>
+              ))}
+            </ol>
+          </nav>
+        ) : null}
         <ol
           className={styles.chapterTimeline}
           aria-label="Journey memories in route order"
         >
-          {chapter.entries.map((entry, index) => (
-            <li className={styles.chapterStopGroup} key={entry.id}>
-              {index > 0 && entry.transitionNote ? (
-                <div className={styles.chapterTransition}>
-                  <span aria-hidden="true" />
-                  <div className={styles.chapterTransitionCopy}>
-                    <span>Between stops</span>
-                    <p>{entry.transitionNote}</p>
+          {chapter.entries.map((entry, index) => {
+            const segment = entry.segmentId
+              ? segmentsById.get(entry.segmentId)
+              : null;
+            const previousSegmentId =
+              index > 0 ? chapter.entries[index - 1].segmentId : null;
+            const beginsSegment =
+              chapter.segments.length > 0 &&
+              (index === 0 || entry.segmentId !== previousSegmentId);
+
+            return (
+              <Fragment key={entry.id}>
+                {beginsSegment ? (
+                  <li
+                    id={
+                      segment
+                        ? `journey-segment-${segment.id}`
+                        : 'journey-segment-unsegmented'
+                    }
+                    className={styles.journeySegmentHeading}
+                    role="presentation"
+                  >
+                    <div>
+                      <span>
+                        {segment
+                          ? `Segment ${String(segment.position + 1).padStart(2, '0')}`
+                          : 'Journey start'}
+                      </span>
+                      <h3>{segment?.title ?? 'Before the first segment'}</h3>
+                      <p>
+                        {segment
+                          ? `${formatChapterDateRange(segment.startDate, segment.endDate)} · ${chapterMemoryLabel(segment.memoryCount)}`
+                          : 'Memories kept outside a segment'}
+                      </p>
+                    </div>
+                    {mode === 'owner' ? (
+                      <Link
+                        href={
+                          segment
+                            ? continueJourneyHref(chapter.id, segment.id)
+                            : `${continueJourneyHref(chapter.id)}&continueWithoutSegment=1`
+                        }
+                      >
+                        <PlusIcon aria-hidden="true" />
+                        Add memory
+                      </Link>
+                    ) : null}
+                  </li>
+                ) : null}
+                <li className={styles.chapterStopGroup}>
+                  {index > 0 && !beginsSegment && entry.transitionNote ? (
+                    <div className={styles.chapterTransition}>
+                      <span aria-hidden="true" />
+                      <div className={styles.chapterTransitionCopy}>
+                        <span>Between stops</span>
+                        <p>{entry.transitionNote}</p>
+                      </div>
+                    </div>
+                  ) : null}
+                  <div className={styles.chapterStop}>
+                    <div
+                      className={styles.chapterStopMarker}
+                      aria-hidden="true"
+                    >
+                      <span>{String(index + 1).padStart(2, '0')}</span>
+                    </div>
+                    <KeepsakeCard
+                      entry={entry}
+                      index={String(index + 1).padStart(2, '0')}
+                      variant="row"
+                      href={
+                        mode === 'owner'
+                          ? `/dashboard/card/${entry.id}`
+                          : undefined
+                      }
+                      eager={false}
+                      showDescription
+                    />
                   </div>
-                </div>
-              ) : null}
-              <div className={styles.chapterStop}>
-                <div className={styles.chapterStopMarker} aria-hidden="true">
-                  <span>{String(index + 1).padStart(2, '0')}</span>
-                </div>
-                <KeepsakeCard
-                  entry={entry}
-                  index={String(index + 1).padStart(2, '0')}
-                  variant="row"
-                  href={
-                    mode === 'owner' ? `/dashboard/card/${entry.id}` : undefined
-                  }
-                  eager={false}
-                  showDescription
-                />
-              </div>
-            </li>
-          ))}
+                </li>
+              </Fragment>
+            );
+          })}
         </ol>
       </section>
 

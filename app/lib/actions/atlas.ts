@@ -15,7 +15,10 @@ import { reverseGeocodeAtlasPlace } from '@/app/lib/atlas/geocoding';
 import type { AtlasPlaceContext } from '@/app/lib/atlas/place';
 import { type AtlasEntryRow, toAtlasEntry } from '@/app/lib/atlas/rows';
 import { deleteAtlasMediaObjects } from '@/app/lib/atlas/media-storage';
-import { CHAPTER_MAX_MEMORIES } from '@/app/lib/chapters/validation';
+import {
+  CHAPTER_MAX_MEMORIES,
+  CHAPTER_MAX_SEGMENTS,
+} from '@/app/lib/chapters/validation';
 import {
   atlasDraftSchema,
   atlasEntryIdSchema,
@@ -205,6 +208,7 @@ export async function updateAtlasEntryAction(
     }
 
     let continuationJourney: { id: string; shareId: string } | null = null;
+    let continuationAlreadyIncluded = false;
     if (entry.appendToJourneyId) {
       const journey = await client.query<{ id: string; shareId: string }>(
         `
@@ -225,29 +229,72 @@ export async function updateAtlasEntryAction(
         };
       }
 
+      if (entry.appendToJourneySegmentId) {
+        const segment = await client.query<{ id: string }>(
+          `
+            SELECT id
+            FROM atlas_chapter_segments
+            WHERE id = $1 AND chapter_id = $2 AND user_id = $3
+            FOR UPDATE
+          `,
+          [
+            entry.appendToJourneySegmentId,
+            continuationJourney.id,
+            session.user.id,
+          ],
+        );
+        if (!segment.rows[0]) {
+          await client.query('ROLLBACK');
+          return {
+            ok: false,
+            error: 'not-found',
+            message: 'That journey segment no longer exists.',
+          };
+        }
+      }
+
       const membership = await client.query<{
         memoryCount: number | string;
         alreadyIncluded: boolean;
+        segmentCount: number | string;
       }>(
         `
           SELECT
             COUNT(*)::int AS "memoryCount",
-            COALESCE(BOOL_OR(entry_id = $3), FALSE) AS "alreadyIncluded"
+            COALESCE(BOOL_OR(entry_id = $3), FALSE) AS "alreadyIncluded",
+            (
+              SELECT COUNT(*)::int
+              FROM atlas_chapter_segments
+              WHERE chapter_id = $1 AND user_id = $2
+            ) AS "segmentCount"
           FROM atlas_chapter_entries
           WHERE chapter_id = $1 AND user_id = $2
         `,
         [continuationJourney.id, session.user.id, entry.id],
       );
       const memoryCount = Number(membership.rows[0]?.memoryCount ?? 0);
-      if (
-        !membership.rows[0]?.alreadyIncluded &&
-        memoryCount >= CHAPTER_MAX_MEMORIES
-      ) {
+      const segmentCount = Number(membership.rows[0]?.segmentCount ?? 0);
+      continuationAlreadyIncluded = Boolean(
+        membership.rows[0]?.alreadyIncluded,
+      );
+      if (!continuationAlreadyIncluded && memoryCount >= CHAPTER_MAX_MEMORIES) {
         await client.query('ROLLBACK');
         return {
           ok: false,
           error: 'invalid',
           message: `This journey already holds ${CHAPTER_MAX_MEMORIES} memories.`,
+        };
+      }
+      if (
+        !continuationAlreadyIncluded &&
+        entry.appendToNewJourneySegmentTitle &&
+        segmentCount >= CHAPTER_MAX_SEGMENTS
+      ) {
+        await client.query('ROLLBACK');
+        return {
+          ok: false,
+          error: 'invalid',
+          message: `This journey already has ${CHAPTER_MAX_SEGMENTS} segments.`,
         };
       }
     }
@@ -290,7 +337,85 @@ export async function updateAtlasEntryAction(
       throw new Error('Locked Atlas entry update returned no row.');
     }
 
-    if (continuationJourney) {
+    if (continuationJourney && !continuationAlreadyIncluded) {
+      let continuationSegmentId = entry.appendToJourneySegmentId ?? null;
+      const isNewSegment = Boolean(entry.appendToNewJourneySegmentTitle);
+      if (entry.appendToNewJourneySegmentTitle) {
+        const segment = await client.query<{ id: string }>(
+          `
+            INSERT INTO atlas_chapter_segments (
+              chapter_id,
+              user_id,
+              title,
+              position
+            )
+            SELECT
+              $1,
+              $2,
+              $3,
+              (COALESCE(MAX(position), -1) + 1)::smallint
+            FROM atlas_chapter_segments
+            WHERE chapter_id = $1 AND user_id = $2
+            RETURNING id
+          `,
+          [
+            continuationJourney.id,
+            session.user.id,
+            entry.appendToNewJourneySegmentTitle,
+          ],
+        );
+        continuationSegmentId = segment.rows[0]?.id ?? null;
+        if (!continuationSegmentId) {
+          throw new Error('Journey segment insert returned no row.');
+        }
+      }
+
+      const positions = await client.query<{
+        insertAfter: number | string;
+        maxPosition: number | string;
+      }>(
+        `
+          SELECT
+            COALESCE(
+              MAX(position) FILTER (
+                WHERE segment_id IS NOT DISTINCT FROM $3::uuid
+              ),
+              -1
+            )::int AS "insertAfter",
+            COALESCE(MAX(position), -1)::int AS "maxPosition"
+          FROM atlas_chapter_entries
+          WHERE chapter_id = $1 AND user_id = $2
+        `,
+        [continuationJourney.id, session.user.id, continuationSegmentId],
+      );
+      const maxPosition = Number(positions.rows[0]?.maxPosition ?? -1);
+      const insertAfter = isNewSegment
+        ? maxPosition
+        : Number(positions.rows[0]?.insertAfter ?? -1);
+      if (insertAfter < maxPosition) {
+        const offset = CHAPTER_MAX_MEMORIES + 1;
+        await client.query(
+          `
+            UPDATE atlas_chapter_entries
+            SET position = position + $4
+            WHERE chapter_id = $1
+              AND user_id = $2
+              AND position > $3
+          `,
+          [continuationJourney.id, session.user.id, insertAfter, offset],
+        );
+        await client.query(
+          `
+            UPDATE atlas_chapter_entries
+            SET position = position - $4 + 1
+            WHERE chapter_id = $1
+              AND user_id = $2
+              AND position > $3 + $4
+          `,
+          [continuationJourney.id, session.user.id, insertAfter, offset],
+        );
+      }
+
       const appended = await client.query<{ entryId: string }>(
         `
           INSERT INTO atlas_chapter_entries (
@@ -298,20 +423,20 @@ export async function updateAtlasEntryAction(
             entry_id,
             user_id,
             position,
-            transition_note
+            transition_note,
+            segment_id
           )
-          SELECT
-            $1,
-            $2,
-            $3,
-            (COALESCE(MAX(position), -1) + 1)::smallint,
-            ''
-          FROM atlas_chapter_entries
-          WHERE chapter_id = $1 AND user_id = $3
+          VALUES ($1, $2, $3, $4::smallint, '', $5::uuid)
           ON CONFLICT (chapter_id, entry_id) DO NOTHING
           RETURNING entry_id AS "entryId"
         `,
-        [continuationJourney.id, entry.id, session.user.id],
+        [
+          continuationJourney.id,
+          entry.id,
+          session.user.id,
+          insertAfter + 1,
+          continuationSegmentId,
+        ],
       );
       if (appended.rows[0]) {
         await client.query(

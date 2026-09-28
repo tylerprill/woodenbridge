@@ -250,6 +250,9 @@ describe('Atlas Journey Lens', () => {
           id: JOURNEY_ID,
           title: 'Leelanau weekend',
           memoryCount: 2,
+          segments: [],
+          selectedSegmentId: null,
+          latestMemoryDate: '2026-09-28',
         }}
       />,
     );

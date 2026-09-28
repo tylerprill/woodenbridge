@@ -151,6 +151,14 @@ export function ChapterEditor({
       initialMemories.map((memory) => [memory.entryId, memory.transitionNote]),
     ),
   );
+  const [segmentIds, setSegmentIds] = useState<Record<string, string | null>>(
+    Object.fromEntries(
+      initialMemories.map((memory) => [
+        memory.entryId,
+        memory.segmentId ?? null,
+      ]),
+    ),
+  );
   const [openTransitionIds, setOpenTransitionIds] = useState(
     new Set(
       initialMemories
@@ -182,11 +190,18 @@ export function ChapterEditor({
   const navigationGuardId = useId();
   const didLeaveRef = useRef(false);
   const [isPending, startTransition] = useTransition();
-  const initialMemoryState = JSON.stringify(initialMemories);
+  const initialMemoryState = JSON.stringify(
+    initialMemories.map((memory) => ({
+      entryId: memory.entryId,
+      transitionNote: memory.transitionNote,
+      segmentId: memory.segmentId ?? null,
+    })),
+  );
   const currentMemoryState = JSON.stringify(
     selectedIds.map((entryId) => ({
       entryId,
       transitionNote: transitionNotes[entryId] ?? '',
+      segmentId: segmentIds[entryId] ?? null,
     })),
   );
   const isDirty =
@@ -203,6 +218,10 @@ export function ChapterEditor({
     return new Map(availableEntries.map((entry) => [entry.id, entry]));
   }, [availableEntries]);
   const selectedIdSet = useMemo(() => new Set(selectedIds), [selectedIds]);
+  const segmentsById = useMemo(
+    () => new Map(chapter?.segments.map((segment) => [segment.id, segment])),
+    [chapter?.segments],
+  );
   const selectedEntries = useMemo(
     () =>
       selectedIds
@@ -387,6 +406,10 @@ export function ChapterEditor({
       return;
     }
     setSelectedIds([...selectedIds, entryId]);
+    setSegmentIds((current) => ({
+      ...current,
+      [entryId]: chapter?.segments.at(-1)?.id ?? null,
+    }));
   }
 
   function removeEntry(entryId: string) {
@@ -409,6 +432,12 @@ export function ChapterEditor({
   function moveEntry(index: number, direction: -1 | 1) {
     const target = index + direction;
     if (target < 0 || target >= selectedIds.length) return;
+    if (
+      (segmentIds[selectedIds[index]] ?? null) !==
+      (segmentIds[selectedIds[target]] ?? null)
+    ) {
+      return;
+    }
     const next = [...selectedIds];
     [next[index], next[target]] = [next[target], next[index]];
     setSelectedIds(next);
@@ -452,10 +481,14 @@ export function ChapterEditor({
       const input = {
         title,
         introduction,
-        memories: selectedIds.map((entryId) => ({
-          entryId,
-          transitionNote: transitionNotes[entryId] ?? '',
-        })),
+        memories: selectedIds.map((entryId) => {
+          const segmentId = segmentIds[entryId] ?? null;
+          return {
+            entryId,
+            transitionNote: transitionNotes[entryId] ?? '',
+            ...(segmentId ? { segmentId } : {}),
+          };
+        }),
         coverMediaId,
         visibility,
         shareMap,
@@ -1062,6 +1095,15 @@ export function ChapterEditor({
               {selectedEntries.map((entry, index) => {
                 const transitionNote = transitionNotes[entry.id] ?? '';
                 const transitionIsOpen = openTransitionIds.has(entry.id);
+                const segmentId = segmentIds[entry.id] ?? null;
+                const segment = segmentId ? segmentsById.get(segmentId) : null;
+                const previousSegmentId =
+                  index > 0
+                    ? (segmentIds[selectedEntries[index - 1].id] ?? null)
+                    : null;
+                const beginsSegment =
+                  Boolean(chapter?.segments.length) &&
+                  (index === 0 || segmentId !== previousSegmentId);
                 const isCover =
                   Boolean(entry.coverMediaId) &&
                   entry.coverMediaId === effectiveCoverMediaId;
@@ -1071,7 +1113,17 @@ export function ChapterEditor({
 
                 return (
                   <Fragment key={entry.id}>
-                    {index > 0 ? (
+                    {beginsSegment ? (
+                      <li className={styles.sequenceSegmentHeading}>
+                        <span>
+                          {segment
+                            ? `Segment ${String(segment.position + 1).padStart(2, '0')}`
+                            : 'Journey'}
+                        </span>
+                        <strong>{segment?.title ?? 'Without a segment'}</strong>
+                      </li>
+                    ) : null}
+                    {index > 0 && !beginsSegment ? (
                       <li className={styles.transitionEditor}>
                         {transitionIsOpen ? (
                           <label>
@@ -1172,7 +1224,11 @@ export function ChapterEditor({
                         <button
                           type="button"
                           onClick={() => moveEntry(index, -1)}
-                          disabled={index === 0}
+                          disabled={
+                            index === 0 ||
+                            (segmentIds[selectedEntries[index - 1].id] ??
+                              null) !== segmentId
+                          }
                           aria-label={`Move ${memoryName(entry)} earlier`}
                         >
                           <ArrowUpIcon aria-hidden="true" />
@@ -1180,7 +1236,11 @@ export function ChapterEditor({
                         <button
                           type="button"
                           onClick={() => moveEntry(index, 1)}
-                          disabled={index === selectedEntries.length - 1}
+                          disabled={
+                            index === selectedEntries.length - 1 ||
+                            (segmentIds[selectedEntries[index + 1].id] ??
+                              null) !== segmentId
+                          }
                           aria-label={`Move ${memoryName(entry)} later`}
                         >
                           <ArrowDownIcon aria-hidden="true" />

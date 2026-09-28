@@ -36,6 +36,7 @@ import {
   ATLAS_TITLE_MAX_LENGTH,
 } from '@/app/lib/atlas/validation';
 import type { AtlasJourneyContinuation } from '@/app/lib/chapters/definitions';
+import { CHAPTER_SEGMENT_TITLE_MAX_LENGTH } from '@/app/lib/chapters/validation';
 import {
   getAtlasPlaceContextLabel,
   getAtlasPlaceInputLabel,
@@ -66,6 +67,17 @@ type FormState = Pick<
   | 'occurredUtcOffsetMinutes'
   | 'journeyState'
 >;
+
+type ContinuationTarget = 'journey' | 'new' | string;
+
+const SEGMENT_DATE_FORMATTER = new Intl.DateTimeFormat('en-US', {
+  month: 'short',
+  day: 'numeric',
+});
+
+function segmentDateLabel(date: string) {
+  return SEGMENT_DATE_FORMATTER.format(new Date(`${date}T12:00:00`));
+}
 
 function formFromEntry(entry: AtlasEntry): FormState {
   return {
@@ -101,6 +113,11 @@ export function MemoryDrawer({
   const [discardArmed, setDiscardArmed] = useState(false);
   const [mediaBusy, setMediaBusy] = useState(false);
   const [placeTouched, setPlaceTouched] = useState(false);
+  const [continuationTarget, setContinuationTarget] =
+    useState<ContinuationTarget>(
+      () => continuationJourney?.selectedSegmentId ?? 'journey',
+    );
+  const [newSegmentTitle, setNewSegmentTitle] = useState('');
   const drawerRef = useRef<HTMLDivElement>(null);
   const titleRef = useRef<HTMLTextAreaElement>(null);
   const headingRef = useRef<HTMLHeadingElement>(null);
@@ -221,6 +238,41 @@ export function MemoryDrawer({
     (storedPlaceLabel &&
       placeValue.toLocaleLowerCase() !== detectedPlace.toLocaleLowerCase()),
   );
+  const selectedContinuationSegment = continuationJourney?.segments.find(
+    (segment) => segment.id === continuationTarget,
+  );
+  const continuationBaselineDate =
+    selectedContinuationSegment?.endDate ??
+    (continuationTarget === 'journey'
+      ? continuationJourney?.latestMemoryDate
+      : null);
+  const suggestNewSegment = Boolean(
+    continuationJourney &&
+    continuationTarget !== 'new' &&
+    form.journeyState === 'visited' &&
+    form.visitedOn &&
+    continuationBaselineDate &&
+    form.visitedOn !== continuationBaselineDate,
+  );
+
+  const chooseContinuationTarget = (target: ContinuationTarget) => {
+    editRevisionRef.current += 1;
+    setContinuationTarget(target);
+    setDirty(true);
+    setDiscardArmed(false);
+    setSaveState('idle');
+    setMessage('');
+  };
+
+  const beginSuggestedSegment = () => {
+    const date = form.visitedOn;
+    chooseContinuationTarget('new');
+    if (date && !newSegmentTitle.trim()) {
+      setNewSegmentTitle(
+        `Day ${(continuationJourney?.segments.length ?? 0) + 1} · ${segmentDateLabel(date)}`,
+      );
+    }
+  };
 
   const save = useCallback(async () => {
     if (savingRef.current) return;
@@ -231,6 +283,15 @@ export function MemoryDrawer({
     if (!form.title.trim()) {
       setSaveState('error');
       setMessage('Give this memory a title before saving it.');
+      return;
+    }
+    if (
+      continuationJourney &&
+      continuationTarget === 'new' &&
+      !newSegmentTitle.trim()
+    ) {
+      setSaveState('error');
+      setMessage('Give the new journey segment a title.');
       return;
     }
 
@@ -248,6 +309,16 @@ export function MemoryDrawer({
         ...form,
         placeLabel: placeValue,
         appendToJourneyId: continuationJourney?.id,
+        appendToJourneySegmentId:
+          continuationJourney &&
+          continuationTarget !== 'journey' &&
+          continuationTarget !== 'new'
+            ? continuationTarget
+            : undefined,
+        appendToNewJourneySegmentTitle:
+          continuationJourney && continuationTarget === 'new'
+            ? newSegmentTitle
+            : undefined,
       });
 
       if (result.ok) {
@@ -277,6 +348,7 @@ export function MemoryDrawer({
     }
   }, [
     continuationJourney,
+    continuationTarget,
     entry.id,
     form,
     markLeaving,
@@ -284,6 +356,7 @@ export function MemoryDrawer({
     onContinuationSaved,
     onUpdate,
     placeValue,
+    newSegmentTitle,
   ]);
 
   const cancelContinuation = async () => {
@@ -581,10 +654,61 @@ export function MemoryDrawer({
 
       <div className={styles.drawerBody}>
         {continuationJourney ? (
-          <div className={styles.journeyContinuation} role="status">
+          <div className={styles.journeyContinuation}>
             <span>Continuing journey</span>
             <strong>{continuationJourney.title}</strong>
-            <small>This memory will be added as the next stop.</small>
+            <label>
+              <span>Journey segment</span>
+              <select
+                value={continuationTarget}
+                onChange={(event) =>
+                  chooseContinuationTarget(event.target.value)
+                }
+              >
+                {continuationJourney.segments.map((segment, index) => (
+                  <option key={segment.id} value={segment.id}>
+                    {segment.title}
+                    {index === continuationJourney.segments.length - 1
+                      ? ' (latest)'
+                      : ''}
+                  </option>
+                ))}
+                <option value="journey">No segment</option>
+                <option value="new">+ Start a new segment…</option>
+              </select>
+            </label>
+            {continuationTarget === 'new' ? (
+              <label>
+                <span>New segment name</span>
+                <input
+                  type="text"
+                  value={newSegmentTitle}
+                  maxLength={CHAPTER_SEGMENT_TITLE_MAX_LENGTH}
+                  placeholder="Day 2 · The coast"
+                  autoComplete="off"
+                  autoCapitalize="words"
+                  onChange={(event) => {
+                    editRevisionRef.current += 1;
+                    setNewSegmentTitle(event.target.value);
+                    setDirty(true);
+                    setSaveState('idle');
+                    setMessage('');
+                  }}
+                />
+              </label>
+            ) : null}
+            <small aria-live="polite">
+              {continuationTarget === 'new'
+                ? 'The segment will be created only when this memory is saved.'
+                : selectedContinuationSegment
+                  ? `This memory will follow the last stop in ${selectedContinuationSegment.title}.`
+                  : 'This memory will be added to the journey without a segment.'}
+            </small>
+            {suggestNewSegment ? (
+              <button type="button" onClick={beginSuggestedSegment}>
+                Start a new segment for {segmentDateLabel(form.visitedOn!)}
+              </button>
+            ) : null}
           </div>
         ) : null}
 

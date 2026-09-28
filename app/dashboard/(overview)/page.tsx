@@ -16,6 +16,8 @@ export default async function DashboardPage({
     stop?: string;
     new?: string;
     continueJourney?: string;
+    continueSegment?: string;
+    continueWithoutSegment?: string;
   }>;
 }) {
   const query = await searchParams;
@@ -24,7 +26,10 @@ export default async function DashboardPage({
     requireVerifiedSession(),
     getAtlasData(),
     query.new === 'memory' && continuationId.success
-      ? getAtlasJourneyContinuation(continuationId.data)
+      ? getAtlasJourneyContinuation(continuationId.data, {
+          requestedSegmentId: query.continueSegment,
+          preferUnsegmented: query.continueWithoutSegment === '1',
+        })
       : Promise.resolve(null),
   ]);
   const displayName = getAccountDisplayName(session.user);
