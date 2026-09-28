@@ -253,6 +253,7 @@ describe('Atlas Journey Lens', () => {
           segments: [],
           selectedSegmentId: null,
           latestMemoryDate: '2026-09-28',
+          latestMemoryLocation: null,
         }}
       />,
     );

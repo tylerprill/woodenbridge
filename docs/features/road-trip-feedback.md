@@ -162,6 +162,10 @@ the common pattern of adding a lunch Memory and then another Memory later in
 the afternoon.
 
 - [x] Add **Continue journey** to the Journey detail experience.
+- [x] Route **Continue journey** into a dedicated **Add a memory** step in the
+      Journey workshop instead of returning to Atlas.
+- [x] Start the placement map near the Journey's latest stop and retain the
+      requested Segment as the default target.
 - [x] Open a new-Memory flow that accepts photographs, title, description,
       date, and location.
 - [x] Associate the saved Memory with the source Journey automatically.

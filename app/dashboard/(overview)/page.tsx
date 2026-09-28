@@ -2,9 +2,10 @@ import { getAccountDisplayName } from '@/app/lib/auth/account-display';
 import { requireVerifiedSession } from '@/app/lib/auth/session';
 import { getAtlasData } from '@/app/lib/atlas/data';
 import { atlasJourneyIdSchema } from '@/app/lib/atlas/journeys/validation';
-import { getAtlasJourneyContinuation } from '@/app/lib/chapters/data';
+import { continueJourneyEditorHref } from '@/app/lib/chapters/links';
 import { atlasChapterIdSchema } from '@/app/lib/chapters/validation';
 import { AtlasWorkspace } from '@/components/atlas/atlas-workspace';
+import { redirect } from 'next/navigation';
 
 export default async function DashboardPage({
   searchParams,
@@ -22,15 +23,18 @@ export default async function DashboardPage({
 }) {
   const query = await searchParams;
   const continuationId = atlasChapterIdSchema.safeParse(query.continueJourney);
-  const [session, initialData, continuationJourney] = await Promise.all([
+  if (query.new === 'memory' && continuationId.success) {
+    redirect(
+      continueJourneyEditorHref(continuationId.data, {
+        segmentId: query.continueSegment,
+        withoutSegment: query.continueWithoutSegment === '1',
+      }),
+    );
+  }
+
+  const [session, initialData] = await Promise.all([
     requireVerifiedSession(),
     getAtlasData(),
-    query.new === 'memory' && continuationId.success
-      ? getAtlasJourneyContinuation(continuationId.data, {
-          requestedSegmentId: query.continueSegment,
-          preferUnsegmented: query.continueWithoutSegment === '1',
-        })
-      : Promise.resolve(null),
   ]);
   const displayName = getAccountDisplayName(session.user);
   const initialMode = query.view === 'journeys' ? 'journeys' : 'places';
@@ -51,12 +55,8 @@ export default async function DashboardPage({
       initialJourneyId={journeyId.success ? journeyId.data : null}
       initialJourneyStopId={stopId.success ? stopId.data : null}
       initialPlacementMode={
-        initialMode === 'places' &&
-        !initialSelectedId &&
-        query.new === 'memory' &&
-        (!query.continueJourney || Boolean(continuationJourney))
+        initialMode === 'places' && !initialSelectedId && query.new === 'memory'
       }
-      continuationJourney={continuationJourney}
     />
   );
 }

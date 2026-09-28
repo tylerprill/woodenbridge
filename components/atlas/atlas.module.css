@@ -895,6 +895,11 @@
   width: min(25rem, calc(100% - 2.2rem));
 }
 
+.memoryDrawer[data-surface='journey-editor'] {
+  position: fixed;
+  z-index: 111;
+}
+
 .drawerHeader,
 .memoryTray > header {
   display: flex;
@@ -1096,7 +1101,7 @@
 .titleField textarea {
   width: 100%;
   min-height: 44px;
-  max-height: 5.75rem;
+  max-height: 9rem;
   resize: none;
   overflow-y: auto;
   border: 0;

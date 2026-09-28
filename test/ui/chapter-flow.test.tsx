@@ -51,6 +51,15 @@ jest.mock('@/app/lib/actions/chapters', () => ({
   updateAtlasChapterAction: jest.fn(),
 }));
 
+jest.mock('@/app/lib/actions/atlas', () => ({
+  createAtlasDraftAction: jest.fn(),
+  resolveAtlasPlaceAction: jest.fn(),
+}));
+
+jest.mock('@/components/atlas/memory-photos', () => ({
+  MemoryPhotos: () => <div data-testid="memory-photos">Photographs</div>,
+}));
+
 const memories: AtlasChapterMemoryOption[] = [
   {
     id: 'memory-1',

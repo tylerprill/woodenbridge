@@ -42,6 +42,7 @@ import {
 import type {
   AtlasChapterEditorChapter,
   AtlasChapterMemoryOption,
+  AtlasJourneyContinuation,
   ChapterActionError,
 } from '@/app/lib/chapters/definitions';
 import type {
@@ -56,9 +57,10 @@ import {
   CHAPTER_TRANSITION_MAX_LENGTH,
 } from '@/app/lib/chapters/validation';
 import styles from './chapters.module.css';
+import { JourneyMemoryComposer } from './journey-memory-composer';
 
 const MEMORY_PICKER_BATCH_SIZE = 24;
-type ChapterEditorStep = 'details' | 'arrange';
+type ChapterEditorStep = 'details' | 'arrange' | 'continue';
 const MEMORY_DATE_FORMATTER = new Intl.DateTimeFormat('en-US', {
   month: 'short',
   day: 'numeric',
@@ -121,6 +123,7 @@ export function ChapterEditor({
   initialMemoryIds = [],
   initialTitle = '',
   journeySuggestion = null,
+  continuationJourney = null,
   source = null,
 }: {
   chapter: AtlasChapterEditorChapter | null;
@@ -129,6 +132,7 @@ export function ChapterEditor({
   initialMemoryIds?: string[];
   initialTitle?: string;
   journeySuggestion?: ChapterSuggestionPrefill | null;
+  continuationJourney?: AtlasJourneyContinuation | null;
   source?: ChapterEditorSource | null;
 }) {
   const router = useRouter();
@@ -371,10 +375,12 @@ export function ChapterEditor({
 
   function goToEditorStep(nextStep: ChapterEditorStep) {
     if (nextStep === 'arrange' && !canArrange) return;
+    if (nextStep === 'continue' && (!continuationJourney || isDirty)) return;
     setEditorStep(nextStep);
     const nextUrl = new URL(window.location.href);
-    if (nextStep === 'arrange') nextUrl.searchParams.set('step', 'arrange');
-    else nextUrl.searchParams.delete('step');
+    if (nextStep === 'arrange' || nextStep === 'continue') {
+      nextUrl.searchParams.set('step', nextStep);
+    } else nextUrl.searchParams.delete('step');
     nextUrl.hash = '';
     window.history.replaceState(
       window.history.state,
@@ -385,7 +391,9 @@ export function ChapterEditor({
       const headingId =
         nextStep === 'details'
           ? 'chapter-story-heading'
-          : 'chapter-sequence-heading';
+          : nextStep === 'arrange'
+            ? 'chapter-sequence-heading'
+            : 'continue-journey-heading';
       document.getElementById(headingId)?.focus({ preventScroll: true });
       window.scrollTo({
         top: 0,
@@ -592,14 +600,24 @@ export function ChapterEditor({
                 : 'Journeys'}
           </Link>
           <p className="section-kicker">Journey workshop</p>
-          <h1>{chapter ? 'Shape your journey.' : 'Begin a new journey.'}</h1>
+          <h1>
+            {editorStep === 'continue'
+              ? 'Add the next memory.'
+              : chapter
+                ? 'Shape your journey.'
+                : 'Begin a new journey.'}
+          </h1>
           <p>
-            Choose the memories, set their order, and give the journey a voice.
+            {editorStep === 'continue'
+              ? 'Place it, add the details, and choose where it belongs in the journey.'
+              : 'Choose the memories, set their order, and give the journey a voice.'}
           </p>
         </div>
         <p className={styles.editorProgress}>
           <strong>{String(selectedIds.length).padStart(2, '0')}</strong>
-          memories selected
+          {editorStep === 'continue'
+            ? 'memories in journey'
+            : 'memories selected'}
         </p>
       </header>
 
@@ -639,6 +657,26 @@ export function ChapterEditor({
               </small>
             </span>
           </button>
+          {chapter && continuationJourney ? (
+            <button
+              type="button"
+              data-active={editorStep === 'continue' ? 'true' : undefined}
+              aria-current={editorStep === 'continue' ? 'step' : undefined}
+              onClick={() => goToEditorStep('continue')}
+              disabled={isDirty || isPending}
+            >
+              <span>03</span>
+              <span>
+                <strong>Add a memory</strong>
+                <small>
+                  {isDirty
+                    ? 'Save journey changes before adding a new memory.'
+                    : 'Upload the next stop and choose its segment.'}
+                </small>
+              </span>
+              <PlusIcon aria-hidden="true" />
+            </button>
+          ) : null}
         </nav>
 
         <div className={styles.editorMain}>
@@ -1074,6 +1112,10 @@ export function ChapterEditor({
             ) : null}
           </div>
         </div>
+
+        {editorStep === 'continue' && continuationJourney ? (
+          <JourneyMemoryComposer journey={continuationJourney} />
+        ) : null}
 
         <aside
           className={styles.chapterSequence}

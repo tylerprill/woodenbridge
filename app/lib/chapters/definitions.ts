@@ -56,6 +56,10 @@ export type AtlasJourneyContinuation = Pick<
   segments: AtlasJourneySegment[];
   selectedSegmentId: string | null;
   latestMemoryDate: string | null;
+  latestMemoryLocation: {
+    latitude: number;
+    longitude: number;
+  } | null;
 };
 
 type SharedAtlasChapterEntryWithoutCoordinates = Omit<

@@ -499,6 +499,7 @@ describe('memory capture UI', () => {
       segments: [],
       selectedSegmentId: null,
       latestMemoryDate: '2026-09-28',
+      latestMemoryLocation: null,
     };
     const saved = {
       ...entry,
@@ -564,6 +565,7 @@ describe('memory capture UI', () => {
       segments,
       selectedSegmentId: segments.at(-1)!.id,
       latestMemoryDate: '2026-09-12',
+      latestMemoryLocation: null,
     };
     const saved = {
       ...entry,
@@ -669,6 +671,7 @@ describe('memory capture UI', () => {
           segments: [firstSegment, latestSegment],
           selectedSegmentId: latestSegment.id,
           latestMemoryDate: latestSegment.endDate,
+          latestMemoryLocation: null,
         }}
         onContinuationSaved={jest.fn()}
       />,
@@ -719,6 +722,7 @@ describe('memory capture UI', () => {
           segments: [],
           selectedSegmentId: null,
           latestMemoryDate: '2026-09-28',
+          latestMemoryLocation: null,
         }}
       />,
     );

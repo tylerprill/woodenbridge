@@ -19,6 +19,7 @@ import {
   chapterMemoryLabel,
   formatChapterDateRange,
 } from '@/app/lib/chapters/format';
+import { continueJourneyEditorHref } from '@/app/lib/chapters/links';
 import { KeepsakeCard } from '@/components/atlas/keepsake-card';
 import { ChapterJumpLink } from './chapter-jump-link';
 import { ChapterMapLoader } from './chapter-map-loader';
@@ -28,15 +29,6 @@ import {
 } from './chapter-save-notice';
 import { ChapterShareControl } from './chapter-share-control';
 import styles from './chapters.module.css';
-
-function continueJourneyHref(chapterId: string, segmentId?: string | null) {
-  const query = new URLSearchParams({
-    new: 'memory',
-    continueJourney: chapterId,
-  });
-  if (segmentId) query.set('continueSegment', segmentId);
-  return `/dashboard?${query.toString()}`;
-}
 
 export function ChapterReader({
   chapter,
@@ -113,10 +105,9 @@ export function ChapterReader({
               Edit journey
             </Link>
             <Link
-              href={continueJourneyHref(
-                chapter.id,
-                defaultContinuationSegmentId,
-              )}
+              href={continueJourneyEditorHref(chapter.id, {
+                segmentId: defaultContinuationSegmentId,
+              })}
             >
               <PlusIcon aria-hidden="true" />
               Continue journey
@@ -348,8 +339,12 @@ export function ChapterReader({
                       <Link
                         href={
                           segment
-                            ? continueJourneyHref(chapter.id, segment.id)
-                            : `${continueJourneyHref(chapter.id)}&continueWithoutSegment=1`
+                            ? continueJourneyEditorHref(chapter.id, {
+                                segmentId: segment.id,
+                              })
+                            : continueJourneyEditorHref(chapter.id, {
+                                withoutSegment: true,
+                              })
                         }
                       >
                         <PlusIcon aria-hidden="true" />

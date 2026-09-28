@@ -469,12 +469,40 @@ export async function getAtlasJourneyContinuation(
       title: string;
       memory_count: number | string;
       latest_memory_date: Date | string | null;
+      latest_memory_latitude: number | string | null;
+      latest_memory_longitude: number | string | null;
     }>`
       SELECT
         chapter.id,
         chapter.title,
         COUNT(chapter_entry.entry_id)::int AS memory_count,
-        MAX(entry.visited_on) AS latest_memory_date
+        MAX(entry.visited_on) AS latest_memory_date,
+        (
+          SELECT ST_Y(latest_entry.location::geometry)::float8
+          FROM atlas_chapter_entries AS latest_chapter_entry
+          JOIN atlas_entries AS latest_entry
+            ON latest_entry.id = latest_chapter_entry.entry_id
+            AND latest_entry.user_id = chapter.user_id
+            AND latest_entry.record_state = 'saved'
+            AND latest_entry.deleted_at IS NULL
+          WHERE latest_chapter_entry.chapter_id = chapter.id
+            AND latest_chapter_entry.user_id = chapter.user_id
+          ORDER BY latest_chapter_entry.position DESC
+          LIMIT 1
+        ) AS latest_memory_latitude,
+        (
+          SELECT ST_X(latest_entry.location::geometry)::float8
+          FROM atlas_chapter_entries AS latest_chapter_entry
+          JOIN atlas_entries AS latest_entry
+            ON latest_entry.id = latest_chapter_entry.entry_id
+            AND latest_entry.user_id = chapter.user_id
+            AND latest_entry.record_state = 'saved'
+            AND latest_entry.deleted_at IS NULL
+          WHERE latest_chapter_entry.chapter_id = chapter.id
+            AND latest_chapter_entry.user_id = chapter.user_id
+          ORDER BY latest_chapter_entry.position DESC
+          LIMIT 1
+        ) AS latest_memory_longitude
       FROM atlas_chapters AS chapter
       LEFT JOIN atlas_chapter_entries AS chapter_entry
         ON chapter_entry.chapter_id = chapter.id
@@ -534,6 +562,14 @@ export async function getAtlasJourneyContinuation(
     segments,
     selectedSegmentId,
     latestMemoryDate: toDateString(journey.latest_memory_date),
+    latestMemoryLocation:
+      journey.latest_memory_latitude === null ||
+      journey.latest_memory_longitude === null
+        ? null
+        : {
+            latitude: Number(journey.latest_memory_latitude),
+            longitude: Number(journey.latest_memory_longitude),
+          },
   };
 }
 
