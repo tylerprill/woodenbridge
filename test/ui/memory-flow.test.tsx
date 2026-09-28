@@ -496,6 +496,9 @@ describe('memory capture UI', () => {
       id: '78daf767-13e6-4f2f-a7bf-8a087824c005',
       title: 'Leelanau weekend',
       memoryCount: 2,
+      segments: [],
+      selectedSegmentId: null,
+      latestMemoryDate: '2026-09-28',
     };
     const saved = {
       ...entry,
@@ -544,6 +547,153 @@ describe('memory capture UI', () => {
     expect(onContinuationSaved).toHaveBeenCalledWith(saved);
   });
 
+  it('keeps many Journey Segments compact and can start a suggested new day', async () => {
+    const user = userEvent.setup();
+    const segments = Array.from({ length: 12 }, (_, index) => ({
+      id: `00000000-0000-4000-8000-${String(index + 1).padStart(12, '0')}`,
+      title: `Day ${index + 1}`,
+      position: index,
+      memoryCount: 2,
+      startDate: `2026-09-${String(index + 1).padStart(2, '0')}`,
+      endDate: `2026-09-${String(index + 1).padStart(2, '0')}`,
+    }));
+    const journey = {
+      id: '78daf767-13e6-4f2f-a7bf-8a087824c005',
+      title: 'Twelve days on the road',
+      memoryCount: 24,
+      segments,
+      selectedSegmentId: segments.at(-1)!.id,
+      latestMemoryDate: '2026-09-12',
+    };
+    const saved = {
+      ...entry,
+      title: 'A new morning',
+      recordState: 'saved' as const,
+      version: 2,
+    };
+    jest.mocked(updateAtlasEntryAction).mockResolvedValue({
+      ok: true,
+      data: saved,
+    });
+
+    render(
+      <MemoryDrawer
+        entry={entry}
+        onClose={jest.fn()}
+        onDirtyChange={jest.fn()}
+        onUpdate={jest.fn()}
+        onMediaChange={jest.fn()}
+        onArchive={jest.fn()}
+        mediaLoading={false}
+        placeResolving={false}
+        continuationJourney={journey}
+        onContinuationSaved={jest.fn()}
+      />,
+    );
+
+    const segmentPicker = screen.getByRole('combobox', {
+      name: 'Journey segment',
+    });
+    expect(segmentPicker).toHaveValue(segments.at(-1)!.id);
+    expect(segmentPicker.querySelectorAll('option')).toHaveLength(14);
+
+    await user.type(
+      screen.getByRole('textbox', { name: 'Title' }),
+      saved.title,
+    );
+    await user.type(screen.getByLabelText('Date visited'), '2026-09-13');
+    await user.click(
+      screen.getByRole('button', {
+        name: 'Start a new segment for Sep 13',
+      }),
+    );
+    expect(screen.getByLabelText('New segment name')).toHaveValue(
+      'Day 13 · Sep 13',
+    );
+    await user.click(screen.getByRole('button', { name: 'Add to journey' }));
+
+    await waitFor(() =>
+      expect(updateAtlasEntryAction).toHaveBeenCalledWith(
+        expect.objectContaining({
+          appendToJourneyId: journey.id,
+          appendToJourneySegmentId: undefined,
+          appendToNewJourneySegmentTitle: 'Day 13 · Sep 13',
+        }),
+      ),
+    );
+  });
+
+  it('can continue an older Segment selected from the same compact control', async () => {
+    const user = userEvent.setup();
+    const firstSegment = {
+      id: 'e8ef6529-4961-4847-8272-e0da4aebf38b',
+      title: 'Day 1 · The dunes',
+      position: 0,
+      memoryCount: 2,
+      startDate: '2026-09-28',
+      endDate: '2026-09-28',
+    };
+    const latestSegment = {
+      id: 'c47412f0-b990-421d-9321-693f153bd2d1',
+      title: 'Day 2 · The coast',
+      position: 1,
+      memoryCount: 2,
+      startDate: '2026-09-29',
+      endDate: '2026-09-29',
+    };
+    const saved = {
+      ...entry,
+      title: 'One more dune stop',
+      recordState: 'saved' as const,
+      version: 2,
+    };
+    jest.mocked(updateAtlasEntryAction).mockResolvedValue({
+      ok: true,
+      data: saved,
+    });
+
+    render(
+      <MemoryDrawer
+        entry={entry}
+        onClose={jest.fn()}
+        onDirtyChange={jest.fn()}
+        onUpdate={jest.fn()}
+        onMediaChange={jest.fn()}
+        onArchive={jest.fn()}
+        mediaLoading={false}
+        placeResolving={false}
+        continuationJourney={{
+          id: '78daf767-13e6-4f2f-a7bf-8a087824c005',
+          title: 'Leelanau weekend',
+          memoryCount: 4,
+          segments: [firstSegment, latestSegment],
+          selectedSegmentId: latestSegment.id,
+          latestMemoryDate: latestSegment.endDate,
+        }}
+        onContinuationSaved={jest.fn()}
+      />,
+    );
+
+    await user.selectOptions(
+      screen.getByRole('combobox', { name: 'Journey segment' }),
+      firstSegment.id,
+    );
+    await user.type(
+      screen.getByRole('textbox', { name: 'Title' }),
+      saved.title,
+    );
+    await user.click(screen.getByRole('button', { name: 'Add to journey' }));
+
+    await waitFor(() =>
+      expect(updateAtlasEntryAction).toHaveBeenCalledWith(
+        expect.objectContaining({
+          appendToJourneySegmentId: firstSegment.id,
+          appendToNewJourneySegmentTitle: undefined,
+        }),
+      ),
+    );
+  });
+
   it('discards a cancelled Journey memory before returning', async () => {
     const user = userEvent.setup();
     const onArchive = jest.fn();
@@ -566,6 +716,9 @@ describe('memory capture UI', () => {
           id: '78daf767-13e6-4f2f-a7bf-8a087824c005',
           title: 'Leelanau weekend',
           memoryCount: 2,
+          segments: [],
+          selectedSegmentId: null,
+          latestMemoryDate: '2026-09-28',
         }}
       />,
     );

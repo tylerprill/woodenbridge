@@ -1,5 +1,6 @@
 import { z } from 'zod';
 
+import { CHAPTER_SEGMENT_TITLE_MAX_LENGTH } from '@/app/lib/chapters/validation';
 import { JOURNEY_STATES } from './definitions';
 
 export const ATLAS_TITLE_MAX_LENGTH = 80;
@@ -48,6 +49,16 @@ export const atlasEntryUpdateSchema = z
       .transform((value) => value ?? null),
     journeyState: z.enum(JOURNEY_STATES),
     appendToJourneyId: z.string().uuid().optional(),
+    appendToJourneySegmentId: z.string().uuid().optional(),
+    appendToNewJourneySegmentTitle: z
+      .string()
+      .trim()
+      .min(1, 'Give the new segment a title.')
+      .max(
+        CHAPTER_SEGMENT_TITLE_MAX_LENGTH,
+        `Keep the segment title under ${CHAPTER_SEGMENT_TITLE_MAX_LENGTH} characters.`,
+      )
+      .optional(),
   })
   .superRefine((memory, context) => {
     if (memory.occurredTime && !memory.visitedOn) {
@@ -62,6 +73,27 @@ export const atlasEntryUpdateSchema = z
         code: z.ZodIssueCode.custom,
         path: ['occurredUtcOffsetMinutes'],
         message: 'A photo timezone requires an occurrence time.',
+      });
+    }
+    if (
+      (memory.appendToJourneySegmentId ||
+        memory.appendToNewJourneySegmentTitle) &&
+      !memory.appendToJourneyId
+    ) {
+      context.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ['appendToJourneyId'],
+        message: 'Choose a journey before choosing one of its segments.',
+      });
+    }
+    if (
+      memory.appendToJourneySegmentId &&
+      memory.appendToNewJourneySegmentTitle
+    ) {
+      context.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ['appendToJourneySegmentId'],
+        message: 'Choose an existing segment or create a new one, not both.',
       });
     }
   });

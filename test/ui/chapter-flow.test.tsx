@@ -84,6 +84,7 @@ const existingJourney: AtlasChapterEditorChapter = {
   shareId: '95e54d0c-d3f6-4f5c-aa65-92e006469efd',
   shareMap: true,
   shareLocationPrecision: 'approximate',
+  segments: [],
   memories: memories.map((memory) => ({
     entryId: memory.id,
     transitionNote: '',
@@ -209,6 +210,86 @@ describe('chapter creation and sharing UI', () => {
     );
     expect(mockPush).toHaveBeenCalledWith(
       '/dashboard/chapters/chapter-1?saved=created',
+    );
+  });
+
+  it('preserves Segment membership and keeps reordering inside each Segment', async () => {
+    const user = userEvent.setup();
+    const firstSegment = {
+      id: 'e8ef6529-4961-4847-8272-e0da4aebf38b',
+      title: 'Day 1 · Petra',
+      position: 0,
+      memoryCount: 1,
+      startDate: '2026-01-03',
+      endDate: '2026-01-03',
+    };
+    const secondSegment = {
+      id: 'c47412f0-b990-421d-9321-693f153bd2d1',
+      title: 'Day 2 · Kyoto',
+      position: 1,
+      memoryCount: 1,
+      startDate: '2026-02-12',
+      endDate: '2026-02-12',
+    };
+    const segmentedJourney: AtlasChapterEditorChapter = {
+      ...existingJourney,
+      segments: [firstSegment, secondSegment],
+      memories: [
+        {
+          entryId: memories[0].id,
+          transitionNote: '',
+          segmentId: firstSegment.id,
+        },
+        {
+          entryId: memories[1].id,
+          transitionNote: '',
+          segmentId: secondSegment.id,
+        },
+      ],
+    };
+    jest.mocked(updateAtlasChapterAction).mockResolvedValue({
+      ok: true,
+      data: {
+        id: segmentedJourney.id,
+        version: segmentedJourney.version + 1,
+        shareId: segmentedJourney.shareId,
+      },
+    });
+
+    render(
+      <ChapterEditor chapter={segmentedJourney} availableEntries={memories} />,
+    );
+
+    const title = screen.getByLabelText('Journey title');
+    await user.clear(title);
+    await user.type(title, 'Wonders in two days');
+    await user.click(screen.getByRole('button', { name: /Arrange & share/i }));
+
+    expect(screen.getByText(firstSegment.title)).toBeVisible();
+    expect(screen.getByText(secondSegment.title)).toBeVisible();
+    expect(
+      screen.getByRole('button', { name: 'Move Kyoto lanterns earlier' }),
+    ).toBeDisabled();
+
+    await user.click(screen.getByRole('button', { name: 'Save changes' }));
+
+    await waitFor(() =>
+      expect(updateAtlasChapterAction).toHaveBeenCalledWith(
+        expect.objectContaining({
+          memories: [
+            {
+              entryId: memories[0].id,
+              transitionNote: '',
+              segmentId: firstSegment.id,
+            },
+            {
+              entryId: memories[1].id,
+              transitionNote: '',
+              segmentId: secondSegment.id,
+            },
+          ],
+        }),
+      ),
     );
   });
 

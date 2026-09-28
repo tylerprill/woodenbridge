@@ -45,6 +45,7 @@ const chapter: SharedAtlasChapter = {
   shareLocationPrecision: 'approximate',
   createdAt: '2026-01-04T00:00:00.000Z',
   updatedAt: '2026-01-04T00:00:00.000Z',
+  segments: [],
   entries: [
     {
       id: 'memory-1',
@@ -70,6 +71,7 @@ const chapter: SharedAtlasChapter = {
       updatedAt: '2026-01-03T00:00:00.000Z',
       media: [],
       transitionNote: '',
+      segmentId: null,
     },
     {
       id: 'memory-2',
@@ -95,6 +97,7 @@ const chapter: SharedAtlasChapter = {
       updatedAt: '2026-02-12T00:00:00.000Z',
       media: [],
       transitionNote: 'Eastward, desert stone gave way to lantern light.',
+      segmentId: null,
     },
   ],
 };
@@ -224,6 +227,61 @@ describe('shared Chapter reader', () => {
     expect(
       screen.getByRole('link', { name: /Open Petra at dawn keepsake/i }),
     ).toHaveAttribute('href', '/dashboard/card/memory-1');
+  });
+
+  it('groups a multi-day Journey into scalable Segments and continues the latest one', () => {
+    const firstSegment = {
+      id: 'e8ef6529-4961-4847-8272-e0da4aebf38b',
+      title: 'Day 1 · Petra',
+      position: 0,
+      memoryCount: 1,
+      startDate: '2026-01-03',
+      endDate: '2026-01-03',
+    };
+    const secondSegment = {
+      id: 'c47412f0-b990-421d-9321-693f153bd2d1',
+      title: 'Day 2 · Kyoto',
+      position: 1,
+      memoryCount: 1,
+      startDate: '2026-02-12',
+      endDate: '2026-02-12',
+    };
+
+    render(
+      <ChapterReader
+        chapter={{
+          ...chapter,
+          segments: [firstSegment, secondSegment],
+          entries: [
+            { ...chapter.entries[0], segmentId: firstSegment.id },
+            { ...chapter.entries[1], segmentId: secondSegment.id },
+          ],
+        }}
+        mode="owner"
+      />,
+    );
+
+    const segmentIndex = screen.getByRole('navigation', {
+      name: 'Journey segments',
+    });
+    expect(segmentIndex).toHaveTextContent(firstSegment.title);
+    expect(segmentIndex).toHaveTextContent(secondSegment.title);
+    expect(
+      screen.getByRole('link', { name: 'Continue journey' }),
+    ).toHaveAttribute(
+      'href',
+      `/dashboard?new=memory&continueJourney=chapter-1&continueSegment=${secondSegment.id}`,
+    );
+    expect(
+      screen.getByRole('heading', { name: firstSegment.title }),
+    ).toBeVisible();
+    expect(
+      screen.getByRole('heading', { name: secondSegment.title }),
+    ).toBeVisible();
+    expect(screen.getAllByRole('link', { name: 'Add memory' })).toHaveLength(2);
+    expect(
+      screen.queryByText('Eastward, desert stone gave way to lantern light.'),
+    ).not.toBeInTheDocument();
   });
 
   it('sends the opening action to the route when there is no field note', () => {

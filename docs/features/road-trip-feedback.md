@@ -14,23 +14,24 @@ Atlas action.
 
 - **Memory** — one moment, place, or experience. A Memory can contain multiple
   photographs.
-- **Journey** — an ordered collection of Memories representing a day or stage
-  of a trip. A Journey is not required to fit within one calendar day.
-- **Adventure** — an ordered collection of Journeys representing the complete
-  multi-day or multi-stage trip.
+- **Journey** — the complete trip: an ordered collection of Memories that can
+  span one day or many days.
+- **Segment** — an optional named section inside a Journey, such as **Day 2**,
+  **Morning**, or **Pacific Coast**. Short Journeys do not need a Segment.
+- **Adventure** — a possible future collection for truly separate Journeys.
+  It is deferred until real usage shows that Journey Segments are not enough.
 - **Atlas** — the authenticated map and home experience for exploring Memories
   and Journeys and quickly creating a Memory.
 
 Keep the name **Journey**. Do not rename it to **Day Trip**, which would imply
-that the traveler returns home on the same day and would not describe a stage
-within a longer Adventure.
+that the traveler returns home on the same day. Use Segments when a Journey
+needs distinct days or stages.
 
 The primary product navigation should contain only:
 
 1. Atlas
 2. Memories
 3. Journeys
-4. Adventures
 
 Account and administrative actions can remain in a separate account menu; they
 are not part of this product-navigation constraint.
@@ -123,30 +124,35 @@ multi-photo Memory flow even if the old Atlas importer is retired.
 deployed application without a client-ID/token error, and a failed upload can
 be retried without creating duplicate Memories or photographs.
 
-### 3. Add Adventures above Journeys
+### 3. Add optional Segments inside Journeys
 
-**Status:** Not started; larger product and data-model change.
+**Status:** Implemented and browser-verified; deployment remains.
 
-Add an Adventure as the top-level trip object so a traveler can preserve each
-day or stage as a Journey while still presenting a week-long trip as one
-coherent experience.
+Treat a Journey as the complete trip and let travelers divide a longer Journey
+into optional named Segments. A one-day trip should remain simple and never
+require Segment setup.
 
-- [ ] Define Adventure ownership, privacy, title, description, cover, dates,
-      and ordering.
-- [ ] Define whether a Journey can belong to zero or one Adventure, or to more
-      than one.
-- [ ] Add storage and ownership rules for Adventure-to-Journey membership and
-      ordering.
-- [ ] Add an Adventures list page with a **New adventure** CTA.
-- [ ] Let a user add, remove, and reorder Journeys in an Adventure without
-      changing the underlying Memories.
-- [ ] Add an Adventure detail/reading view that rolls up its Journeys.
-- [ ] Decide how existing Journey privacy and sharing settings compose with an
-      Adventure before Adventure sharing is introduced.
+- [x] Add owner-scoped Segment storage, ordering, and Memory membership.
+- [x] Keep all existing Journeys valid without requiring a Segment migration.
+- [x] Show Segment boundaries and a compact, horizontally scrollable Segment
+      index in the Journey reader.
+- [x] Make **Continue journey** default to the latest Segment while allowing
+      the traveler to choose any existing Segment from a native, scalable
+      selector.
+- [x] Let the traveler create a new Segment as part of saving the next Memory,
+      so cancelling does not leave an empty Segment behind.
+- [x] Suggest a new day Segment when the Memory date differs from the selected
+      Segment's latest date, while keeping the choice editable.
+- [x] Let each Segment's heading continue directly into that Segment.
+- [x] Preserve Segment membership when a Journey is edited and limit Memory
+      reordering to within a Segment.
+- [x] Remove Adventures from primary navigation while keeping it documented as
+      a future option if separate Journey grouping becomes necessary.
 
-**Acceptance criteria:** A user can create an Adventure, combine multiple
-Journeys in a chosen order, reopen the Adventure as one trip, and continue to
-open or edit each Journey independently.
+**Acceptance criteria:** A short Journey still works with no Segment. A
+multi-day Journey can add and revisit many named Segments, continue the latest
+one in one action, target an older Segment without scrolling through buttons,
+and start a new Segment without leaving empty records after cancellation.
 
 ### 4. Continue an existing Journey
 
@@ -179,18 +185,17 @@ manually selecting the Journey.
 
 ### 5. Simplify navigation and align the language
 
-**Status:** Implemented except for Adventure creation, which remains disabled
-until the item 3 data model exists.
+**Status:** Implemented for the three agreed destinations.
 
-Use the agreed four-part product navigation: **Atlas**, **Memories**,
-**Journeys**, and **Adventures**.
+Use the agreed product navigation: **Atlas**, **Memories**, and **Journeys**.
 
 - [x] Make Atlas the authenticated home page.
 - [x] Make Memories a list page with a **New memory** CTA.
 - [x] Replace user-facing **My places**, **collection**, **saved places**, and
       similar object names with **Memories** where they refer to Memories.
 - [x] Make Journeys a list page with a **New journey** CTA.
-- [ ] Make Adventures a list page with a **New adventure** CTA.
+- [x] Keep Segments inside Journeys instead of adding another primary
+      destination.
 - [x] Remove **Upload photos** and **On this day** as primary navigation items.
 - [x] Preserve useful rediscovery behavior such as On this day within Atlas or
       Memories rather than treating it as another top-level destination.
@@ -199,7 +204,7 @@ Use the agreed four-part product navigation: **Atlas**, **Memories**,
 - [x] Keep internal `chapter` naming private to compatibility code; all
       user-facing language should say **Journey**.
 
-**Acceptance criteria:** The primary navigation contains only the four agreed
+**Acceptance criteria:** The primary navigation contains only the three agreed
 destinations, each term has one consistent meaning, and each list page exposes
 the expected creation CTA on desktop and mobile.
 
@@ -295,7 +300,8 @@ happened. Memories with no known time remain visible in a consistent position.
 
 - Retire the existing Atlas bulk importer completely, or reuse parts of it
   behind the Memories **New memory** flow?
-- Can one Journey belong to multiple Adventures?
+- Do real trips eventually require Adventures to group separate Journeys, or
+  are Journey Segments sufficient?
 - Should On this day live within Memories or on Atlas?
 - Should Atlas request location on first load, or wait for an explicit
   location action before triggering the browser permission prompt?
@@ -309,7 +315,7 @@ model changes:
 
 1. **P0 — Deploy and verify item 2.** Confirm the repaired upload path on
    desktop and mobile before building more capture flows on top of it.
-2. **P1 — Items 5 and 6: simplify navigation and Atlas.** Establish the four
+2. **P1 — Items 5 and 6: simplify navigation and Atlas.** Establish the three
    agreed destinations, align the language, and remove Journey creation and the
    separate bulk-import action from Atlas.
 3. **P1 — Items 1 and 8: complete the Memories experience.** Add the Memories
@@ -319,8 +325,8 @@ model changes:
    to append a Memory directly to an existing Journey.
 5. **P2 — Item 7: location-aware Atlas start.** Add approximate one-shot
    geolocation with a safe fallback after the core Atlas controls are settled.
-6. **P3 — Item 3: Adventures.** Design and implement the larger multi-Journey
-   model after the Memory and Journey workflows are stable.
+6. **P2 — Item 3: Journey Segments.** Add optional, scalable days or stages to
+   the shipped continuation flow without adding another primary object.
 
 ## Verification required for each UI change
 

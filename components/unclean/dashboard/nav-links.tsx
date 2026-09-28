@@ -4,7 +4,6 @@ import {
   BookOpenIcon,
   BookmarkIcon,
   GlobeAltIcon,
-  MapIcon,
   ShieldCheckIcon,
   UsersIcon,
 } from '@heroicons/react/24/outline';
@@ -19,7 +18,6 @@ const atlasLinks = [
   { name: 'Atlas', href: '/dashboard', icon: GlobeAltIcon },
   { name: 'Memories', href: '/dashboard/places', icon: BookmarkIcon },
   { name: 'Journeys', href: '/dashboard/chapters', icon: BookOpenIcon },
-  { name: 'Adventures', href: '/dashboard/adventures', icon: MapIcon },
 ];
 
 type NavigationLink = (typeof atlasLinks)[number];
@@ -64,12 +62,7 @@ function NavigationSection({
             <Link
               key={link.name}
               href={link.href}
-              prefetch={
-                link.href === '/dashboard/chapters' ||
-                link.href === '/dashboard/adventures'
-                  ? false
-                  : undefined
-              }
+              prefetch={link.href === '/dashboard/chapters' ? false : undefined}
               aria-label={link.name}
               aria-current={isActive ? 'page' : undefined}
               title={link.name}

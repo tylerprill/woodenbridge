@@ -88,6 +88,8 @@ export type AtlasEntryUpdateInput = {
   occurredUtcOffsetMinutes: number | null;
   journeyState: JourneyState;
   appendToJourneyId?: string;
+  appendToJourneySegmentId?: string;
+  appendToNewJourneySegmentTitle?: string;
 };
 
 export type AtlasViewInput = AtlasView;

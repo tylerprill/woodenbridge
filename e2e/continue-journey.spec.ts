@@ -87,8 +87,15 @@ async function openContinuation(page: Page) {
 
 async function removeTestMemory(page: Page, journeyId: string, title: string) {
   await page.goto(`/dashboard/chapters/${journeyId}/edit`);
-  await page.getByRole('button', { name: /Arrange & share/i }).click();
-  const remove = page.getByRole('button', { name: `Remove ${title}` });
+  const arrange = page.getByRole('button', { name: /Arrange & share/i });
+  await expect(async () => {
+    await arrange.click();
+    await expect(page).toHaveURL(
+      new RegExp(`/dashboard/chapters/${journeyId}/edit\\?step=arrange$`),
+    );
+  }).toPass({ timeout: 20_000 });
+  const route = page.locator('aside').filter({ hasText: 'The route.' });
+  const remove = route.getByRole('button', { name: `Remove ${title}` });
   await expect(remove).toBeVisible();
   await remove.click();
   await expect(remove).toBeHidden();
@@ -122,6 +129,7 @@ test('a Journey can be continued with a new Memory', async ({
   );
   test.setTimeout(240_000);
   const title = `Continued road-trip memory ${Date.now()}`;
+  const segmentTitle = `Road-trip day ${Date.now()}`;
   let journeyId = '';
   let saved = false;
   let draftOpen = false;
@@ -177,6 +185,8 @@ test('a Journey can be continued with a new Memory', async ({
     const editor = await openContinuation(page);
     draftOpen = true;
     monitor = monitorBrowserIssues(page);
+    await editor.getByLabel('Journey segment').selectOption('new');
+    await editor.getByLabel('New segment name').fill(segmentTitle);
     await editor.getByRole('textbox', { name: 'Title' }).fill(title);
     await editor.getByLabel('Place').fill('Road-trip lunch stop');
     await editor.getByLabel('Date visited').fill('2026-09-28');
@@ -215,6 +225,9 @@ test('a Journey can be continued with a new Memory', async ({
     saved = true;
     draftOpen = false;
     await expect(page.getByText('Memory added.')).toBeVisible();
+    await expect(
+      page.getByRole('heading', { name: segmentTitle }),
+    ).toBeVisible();
     const timeline = page.getByRole('list', {
       name: 'Journey memories in route order',
     });
@@ -246,6 +259,12 @@ test('a Journey can be continued with a new Memory', async ({
         width: viewport.width,
         height: viewport.height,
       });
+      await page
+        .getByRole('heading', { name: segmentTitle })
+        .scrollIntoViewIfNeeded();
+      await expect(
+        page.getByRole('heading', { name: segmentTitle }),
+      ).toBeVisible();
       await timeline.locator('h3').last().scrollIntoViewIfNeeded();
       await expect(timeline.locator('h3').last()).toBeVisible();
       await expectViewportFits(page, `continued Journey ${viewport.label}`);

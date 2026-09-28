@@ -16,6 +16,7 @@ import {
   atlasChapterDeleteSchema,
   atlasChapterInputSchema,
   atlasChapterUpdateSchema,
+  CHAPTER_MAX_MEMORIES,
 } from '@/app/lib/chapters/validation';
 import { loadAtlasJourneySuggestions } from '@/app/lib/atlas/journeys/data';
 import type { AtlasJourneySuggestion } from '@/app/lib/atlas/journeys/definitions';
@@ -72,24 +73,95 @@ async function replaceChapterEntries(
         entry_id,
         user_id,
         position,
-        transition_note
+        transition_note,
+        segment_id
       )
       SELECT
         $1,
         selected.entry_id,
         $2,
         (selected.ordinality - 1)::smallint,
-        selected.transition_note
-      FROM unnest($3::uuid[], $4::text[])
-        WITH ORDINALITY AS selected(entry_id, transition_note, ordinality)
+        selected.transition_note,
+        selected.segment_id
+      FROM unnest($3::uuid[], $4::text[], $5::uuid[])
+        WITH ORDINALITY AS selected(
+          entry_id,
+          transition_note,
+          segment_id,
+          ordinality
+        )
     `,
     [
       chapterId,
       userId,
       memories.map((memory) => memory.entryId),
       memories.map((memory) => memory.transitionNote),
+      memories.map((memory) => memory.segmentId ?? null),
     ],
   );
+
+  await client.query(
+    `
+      DELETE FROM atlas_chapter_segments AS segment
+      WHERE segment.chapter_id = $1
+        AND segment.user_id = $2
+        AND NOT EXISTS (
+          SELECT 1
+          FROM atlas_chapter_entries AS chapter_entry
+          WHERE chapter_entry.chapter_id = segment.chapter_id
+            AND chapter_entry.segment_id = segment.id
+            AND chapter_entry.user_id = segment.user_id
+        )
+    `,
+    [chapterId, userId],
+  );
+  await client.query(
+    `
+      UPDATE atlas_chapter_segments
+      SET position = position + $3
+      WHERE chapter_id = $1 AND user_id = $2
+    `,
+    [chapterId, userId, CHAPTER_MAX_MEMORIES + 1],
+  );
+  await client.query(
+    `
+      WITH ordered_segments AS (
+        SELECT
+          id,
+          (ROW_NUMBER() OVER (ORDER BY position) - 1)::smallint AS position
+        FROM atlas_chapter_segments
+        WHERE chapter_id = $1 AND user_id = $2
+      )
+      UPDATE atlas_chapter_segments AS segment
+      SET position = ordered.position
+      FROM ordered_segments AS ordered
+      WHERE segment.id = ordered.id
+        AND segment.chapter_id = $1
+        AND segment.user_id = $2
+    `,
+    [chapterId, userId],
+  );
+}
+
+async function ownsEverySegment(
+  client: VercelPoolClient,
+  chapterId: string,
+  userId: string,
+  segmentIds: string[],
+) {
+  if (!segmentIds.length) return true;
+  const result = await client.query<{ id: string }>(
+    `
+      SELECT id
+      FROM atlas_chapter_segments
+      WHERE chapter_id = $1
+        AND user_id = $2
+        AND id = ANY($3::uuid[])
+      FOR SHARE
+    `,
+    [chapterId, userId, segmentIds],
+  );
+  return result.rows.length === segmentIds.length;
 }
 
 async function ownsCoverMedia(
@@ -256,6 +328,14 @@ export async function createAtlasChapterAction(
       error: 'invalid',
       message:
         parsed.error.issues[0]?.message ?? 'Check the journey and try again.',
+    };
+  }
+
+  if (parsed.data.memories.some((memory) => memory.segmentId)) {
+    return {
+      ok: false,
+      error: 'invalid',
+      message: 'Create the journey before adding segments.',
     };
   }
 
@@ -473,6 +553,28 @@ export async function updateAtlasChapterAction(
         ok: false,
         error: 'invalid',
         message: 'One of those memories is no longer available.',
+      };
+    }
+    const segmentIds = Array.from(
+      new Set(
+        parsed.data.memories.flatMap((memory) =>
+          memory.segmentId ? [memory.segmentId] : [],
+        ),
+      ),
+    );
+    if (
+      !(await ownsEverySegment(
+        client,
+        parsed.data.id,
+        session.user.id,
+        segmentIds,
+      ))
+    ) {
+      await client.query('ROLLBACK');
+      return {
+        ok: false,
+        error: 'invalid',
+        message: 'One of those journey segments is no longer available.',
       };
     }
     if (

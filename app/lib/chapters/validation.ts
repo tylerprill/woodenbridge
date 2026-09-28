@@ -9,8 +9,10 @@ import { ATLAS_JOURNEY_SUGGESTION_SOURCES } from '@/app/lib/atlas/journeys/defin
 export const CHAPTER_TITLE_MAX_LENGTH = 100;
 export const CHAPTER_INTRODUCTION_MAX_LENGTH = 1200;
 export const CHAPTER_TRANSITION_MAX_LENGTH = 500;
+export const CHAPTER_SEGMENT_TITLE_MAX_LENGTH = 100;
 export const CHAPTER_MIN_MEMORIES = 2;
 export const CHAPTER_MAX_MEMORIES = 50;
+export const CHAPTER_MAX_SEGMENTS = CHAPTER_MAX_MEMORIES;
 
 export const atlasChapterIdSchema = z.string().uuid();
 
@@ -25,6 +27,7 @@ const chapterMemoriesSchema = z
           CHAPTER_TRANSITION_MAX_LENGTH,
           `Keep each transition under ${CHAPTER_TRANSITION_MAX_LENGTH} characters.`,
         ),
+      segmentId: z.string().uuid().nullable().optional(),
     }),
   )
   .min(

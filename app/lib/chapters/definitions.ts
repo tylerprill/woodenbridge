@@ -32,16 +32,31 @@ export type AtlasChapterSummary = {
 
 export type AtlasChapterEntry = AtlasEntry & {
   transitionNote: string;
+  segmentId: string | null;
+};
+
+export type AtlasJourneySegment = {
+  id: string;
+  title: string;
+  position: number;
+  memoryCount: number;
+  startDate: string | null;
+  endDate: string | null;
 };
 
 export type AtlasChapter = AtlasChapterSummary & {
   entries: AtlasChapterEntry[];
+  segments: AtlasJourneySegment[];
 };
 
 export type AtlasJourneyContinuation = Pick<
   AtlasChapterSummary,
   'id' | 'title' | 'memoryCount'
->;
+> & {
+  segments: AtlasJourneySegment[];
+  selectedSegmentId: string | null;
+  latestMemoryDate: string | null;
+};
 
 type SharedAtlasChapterEntryWithoutCoordinates = Omit<
   AtlasChapterEntry,
@@ -75,6 +90,7 @@ export type AtlasChapterEditorChapter = Pick<
   | 'shareLocationPrecision'
 > & {
   memories: AtlasChapterMemoryInput[];
+  segments: AtlasJourneySegment[];
 };
 
 export type AtlasChapterMemoryOption = {
@@ -96,6 +112,7 @@ export type AtlasChapterEditorData = {
 export type AtlasChapterMemoryInput = {
   entryId: string;
   transitionNote: string;
+  segmentId?: string | null;
 };
 
 export type AtlasChapterInput = {
