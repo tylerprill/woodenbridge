@@ -1449,7 +1449,7 @@
 }
 
 .segmentGuide button {
-  min-height: 2.25rem;
+  min-height: 2.5rem;
   border: 1px solid rgba(182, 109, 66, 0.34);
   border-radius: 999px;
   padding: 0.5rem 0.8rem;

@@ -92,10 +92,30 @@ test('an existing Journey can be divided into editable Segments', async ({
   const monitor = monitorBrowserIssues(page);
 
   try {
-    await expect(
-      page.getByRole('button', { name: 'Divide into segments' }),
-    ).toBeVisible();
-    await page.getByRole('button', { name: 'Divide into segments' }).click();
+    const divideButton = page.getByRole('button', {
+      name: 'Divide into segments',
+    });
+    for (const viewport of viewports) {
+      await page.setViewportSize({
+        width: viewport.width,
+        height: viewport.height,
+      });
+      await divideButton.scrollIntoViewIfNeeded();
+      await expect(divideButton).toBeVisible();
+      const divideButtonBounds = await divideButton.boundingBox();
+      expect(
+        divideButtonBounds,
+        `${viewport.label}: divide button bounds`,
+      ).not.toBeNull();
+      expect(
+        divideButtonBounds?.height,
+        `${viewport.label}: divide button height`,
+      ).toBeGreaterThanOrEqual(40);
+      await capture(page, testInfo, `journey-segment-guide-${viewport.label}`);
+    }
+
+    await page.setViewportSize({ width: 1440, height: 900 });
+    await divideButton.click();
     await expect(page.getByLabel('Name for segment 1')).toHaveValue(
       'Segment 1',
     );
