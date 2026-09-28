@@ -18,8 +18,6 @@ Atlas action.
   span one day or many days.
 - **Segment** — an optional named section inside a Journey, such as **Day 2**,
   **Morning**, or **Pacific Coast**. Short Journeys do not need a Segment.
-- **Adventure** — a possible future collection for truly separate Journeys.
-  It is deferred until real usage shows that Journey Segments are not enough.
 - **Atlas** — the authenticated map and home experience for exploring Memories
   and Journeys and quickly creating a Memory.
 
@@ -146,8 +144,8 @@ require Segment setup.
 - [x] Let each Segment's heading continue directly into that Segment.
 - [x] Preserve Segment membership when a Journey is edited and limit Memory
       reordering to within a Segment.
-- [x] Remove Adventures from primary navigation while keeping it documented as
-      a future option if separate Journey grouping becomes necessary.
+- [x] Remove the Adventures page and primary-navigation destination now that
+      Journey Segments cover multi-day and multi-stage trips.
 
 **Acceptance criteria:** A short Journey still works with no Segment. A
 multi-day Journey can add and revisit many named Segments, continue the latest
@@ -300,8 +298,6 @@ happened. Memories with no known time remain visible in a consistent position.
 
 - Retire the existing Atlas bulk importer completely, or reuse parts of it
   behind the Memories **New memory** flow?
-- Do real trips eventually require Adventures to group separate Journeys, or
-  are Journey Segments sufficient?
 - Should On this day live within Memories or on Atlas?
 - Should Atlas request location on first load, or wait for an explicit
   location action before triggering the browser permission prompt?

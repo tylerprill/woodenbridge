@@ -149,11 +149,6 @@ test('authenticated routes and primary interactions pass the UI audit', async ({
       expectedHeading: 'Journeys.',
     },
     {
-      name: 'adventures',
-      path: '/dashboard/adventures',
-      expectedHeading: 'Adventures.',
-    },
-    {
       name: 'chapter',
       path: `/dashboard/chapters/${encodeURIComponent(e2eChapterId)}`,
       expectedSelector: '[aria-label="Journey actions"]',
@@ -371,6 +366,44 @@ test('authenticated routes and primary interactions pass the UI audit', async ({
       {
         accessibility: testInfo.project.name === 'chromium',
         readySelector: '[data-map-state="ready"]',
+      },
+    );
+  }
+
+  monitor.stop();
+});
+
+test('the removed Adventures route returns the authenticated 404', async ({
+  page,
+}, testInfo) => {
+  test.skip(
+    testInfo.project.name !== 'chromium',
+    'The required removed-route viewport matrix runs once in Chromium.',
+  );
+  test.setTimeout(120_000);
+  await signIn(page);
+  const monitor = monitorBrowserIssues(page);
+  const viewports = [
+    { name: 'desktop-1440x900', width: 1440, height: 900 },
+    { name: 'mobile-portrait-412x915', width: 412, height: 915 },
+    { name: 'smallest-portrait-320x568', width: 320, height: 568 },
+    { name: 'mobile-landscape-915x412', width: 915, height: 412 },
+  ];
+
+  for (const viewport of viewports) {
+    await applyViewport(page, viewport);
+    await openAndAudit(
+      page,
+      testInfo,
+      '/dashboard/adventures',
+      `removed-adventures-${viewport.name}`,
+      monitor,
+      {
+        accessibility:
+          viewport.name === 'desktop-1440x900' ||
+          viewport.name === 'smallest-portrait-320x568',
+        expectedHeading: 'This path is not in the atlas.',
+        expectedStatus: 404,
       },
     );
   }
