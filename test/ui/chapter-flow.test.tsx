@@ -109,7 +109,7 @@ describe('chapter creation and sharing UI', () => {
     expect(screen.getByText('Journey workshop')).toBeInTheDocument();
     expect(screen.getByLabelText('Journey title')).toBeInTheDocument();
     expect(screen.getByLabelText('Journey introduction')).toBeInTheDocument();
-    expect(screen.getByRole('link', { name: 'My Journeys' })).toHaveAttribute(
+    expect(screen.getByRole('link', { name: 'Journeys' })).toHaveAttribute(
       'href',
       '/dashboard/chapters',
     );
@@ -260,7 +260,7 @@ describe('chapter creation and sharing UI', () => {
     render(<ChapterEditor chapter={null} availableEntries={memories} />);
 
     await user.type(screen.getByLabelText('Journey title'), 'A new route');
-    const backLink = screen.getByRole('link', { name: 'My Journeys' });
+    const backLink = screen.getByRole('link', { name: 'Journeys' });
     backLink.addEventListener('click', (event) => event.preventDefault());
 
     fireEvent.click(backLink, { button: 0, metaKey: true });

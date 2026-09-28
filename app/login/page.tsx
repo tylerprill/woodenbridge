@@ -32,9 +32,9 @@ export default async function LoginPage({
     <AuthShell
       headingId="login-title"
       panelDescription="Enter the email and password connected to your account."
-      panelEyebrow="Your collection"
+      panelEyebrow="Your memories"
       panelTitle="Sign in to continue"
-      storyDescription="Return to the places you have saved and the journeys still on your horizon."
+      storyDescription="Return to the memories you have saved and the journeys still on your horizon."
       storyEyebrow="Welcome back"
       storyNote="The best stories rarely begin with a straight line."
       storyTitle="Your next memory is waiting."

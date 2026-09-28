@@ -20,7 +20,7 @@ export async function generateMetadata({
 
   return {
     title: entry
-      ? `${entry.title || 'Untitled place'} keepsake — Field Atlas`
+      ? `${entry.title || 'Untitled memory'} keepsake — Field Atlas`
       : 'Keepsake — Field Atlas',
     description: entry
       ? `A private Field Atlas keepsake from ${entry.placeLabel || entry.placeName || 'a remembered place'}.`
@@ -51,7 +51,7 @@ export default async function KeepsakePage({
         <div className="keepsake-page-actions">
           <Link className="dashboard-header-action" href="/dashboard/places">
             <ArrowLeftIcon aria-hidden="true" />
-            Back to collection
+            Back to memories
           </Link>
           <PrintCardButton />
         </div>

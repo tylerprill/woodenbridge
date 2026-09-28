@@ -25,22 +25,16 @@ export default async function ChaptersPage({
     redirect(chaptersHref(data.totalPages));
   }
   const canCreateJourney = data.availableMemoryCount >= CHAPTER_MIN_MEMORIES;
-  const journeyActionHref = canCreateJourney
-    ? '/dashboard/chapters/new'
-    : '/dashboard/import';
-  const journeyActionLabel = canCreateJourney
-    ? 'New journey'
-    : data.availableMemoryCount === 1
-      ? 'Add one more memory'
-      : 'Add memories';
+  const journeyActionHref = '/dashboard/chapters/new';
+  const journeyActionLabel = 'New journey';
 
   return (
     <div className={`dashboard-page ${styles.chaptersPage}`}>
       <header className={styles.chaptersHeader}>
         <div>
           <p className="section-kicker">Stories from your atlas</p>
-          <h1>My Journeys.</h1>
-          <p>Connect the places that belong to the same story.</p>
+          <h1>Journeys.</h1>
+          <p>Connect the memories that belong to the same story.</p>
         </div>
         <div className={styles.chaptersHeaderActions}>
           <p className={styles.chapterCount}>

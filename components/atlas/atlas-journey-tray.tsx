@@ -4,22 +4,16 @@ import {
   ArrowLeftIcon,
   ArrowRightIcon,
   BookOpenIcon,
-  LightBulbIcon,
   MapPinIcon,
   PencilIcon,
   PlayIcon,
-  PlusIcon,
   XMarkIcon,
 } from '@heroicons/react/24/outline';
 import Link from 'next/link';
 import { useEffect, useRef } from 'react';
 
-import type {
-  AtlasJourneySuggestion,
-  AtlasJourneySummary,
-} from '@/app/lib/atlas/journeys/definitions';
+import type { AtlasJourneySummary } from '@/app/lib/atlas/journeys/definitions';
 import { formatChapterDateRange } from '@/app/lib/chapters/format';
-import { CHAPTER_MIN_MEMORIES } from '@/app/lib/chapters/validation';
 import styles from './atlas.module.css';
 
 type JourneyLoadState = 'idle' | 'loading' | 'ready' | 'error';
@@ -54,8 +48,6 @@ function JourneySummaryCopy({ journey }: { journey: AtlasJourneySummary }) {
 
 export function AtlasJourneyTray({
   journeys,
-  suggestions,
-  availableMemoryCount,
   selectedJourney,
   selectedStopId,
   loadState,
@@ -65,14 +57,9 @@ export function AtlasJourneyTray({
   onSelectJourney,
   onSelectStop,
   onShowOverview,
-  onStartBuilder,
   onStartPlayback,
-  onReviewSuggestion,
-  onDismissSuggestion,
 }: {
   journeys: AtlasJourneySummary[];
-  suggestions: AtlasJourneySuggestion[];
-  availableMemoryCount: number;
   selectedJourney: AtlasJourneySummary | null;
   selectedStopId: string | null;
   loadState: JourneyLoadState;
@@ -82,10 +69,7 @@ export function AtlasJourneyTray({
   onSelectJourney: (id: string) => void;
   onSelectStop: (id: string) => void;
   onShowOverview: () => void;
-  onStartBuilder: (entryIds?: string[]) => void;
   onStartPlayback: (id: string) => void;
-  onReviewSuggestion: (suggestion: AtlasJourneySuggestion) => void;
-  onDismissSuggestion: (suggestion: AtlasJourneySuggestion) => void;
 }) {
   const headingRef = useRef<HTMLHeadingElement>(null);
 
@@ -194,53 +178,13 @@ export function AtlasJourneyTray({
             </div>
           ) : (
             <>
-              {suggestions.length ? (
-                <section
-                  className={styles.journeySuggestions}
-                  aria-labelledby="journey-suggestions-title"
-                >
-                  <div className={styles.journeySectionHeading}>
-                    <LightBulbIcon aria-hidden="true" />
-                    <h3 id="journey-suggestions-title">Possibly connected</h3>
-                  </div>
-                  {suggestions.map((suggestion) => (
-                    <article key={suggestion.key}>
-                      <strong>{suggestion.suggestedTitle}</strong>
-                      <p>{suggestion.explanation}</p>
-                      <div>
-                        <button
-                          type="button"
-                          onClick={() => onReviewSuggestion(suggestion)}
-                        >
-                          Review
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => onDismissSuggestion(suggestion)}
-                        >
-                          Dismiss
-                        </button>
-                      </div>
-                    </article>
-                  ))}
-                </section>
-              ) : null}
-
               <div className={styles.journeyListActions}>
                 <p>
                   {journeys.length
                     ? `${journeys.length} ${journeys.length === 1 ? 'journey' : 'journeys'}`
                     : 'No journeys yet'}
                 </p>
-                {availableMemoryCount >= CHAPTER_MIN_MEMORIES ? (
-                  <button type="button" onClick={() => onStartBuilder()}>
-                    <PlusIcon aria-hidden="true" /> Create journey
-                  </button>
-                ) : (
-                  <Link href="/dashboard/import">
-                    <PlusIcon aria-hidden="true" /> Add memories
-                  </Link>
-                )}
+                <Link href="/dashboard/chapters">All journeys</Link>
               </div>
               {journeys.length ? (
                 <div className={styles.journeyList}>
@@ -261,27 +205,14 @@ export function AtlasJourneyTray({
               ) : (
                 <div className={styles.emptyTray}>
                   <span aria-hidden="true" />
-                  <strong>
-                    {availableMemoryCount >= CHAPTER_MIN_MEMORIES
-                      ? 'Turn memories into a journey.'
-                      : availableMemoryCount === 1
-                        ? 'One more memory will make a journey.'
-                        : 'Your first journey starts with memories.'}
-                  </strong>
+                  <strong>Your first journey starts with memories.</strong>
                   <p>
-                    {availableMemoryCount >= CHAPTER_MIN_MEMORIES
-                      ? 'Choose at least two saved memories and shape their story.'
-                      : 'Upload photographs or place memories on the map, then return here to connect at least two.'}
+                    Create and arrange journeys from the Journeys page, then
+                    return here to explore their paths.
                   </p>
                   <div className={styles.journeyEmptyActions}>
-                    {availableMemoryCount >= CHAPTER_MIN_MEMORIES ? (
-                      <button type="button" onClick={() => onStartBuilder()}>
-                        Create a journey
-                      </button>
-                    ) : (
-                      <Link href="/dashboard/import">Upload photos</Link>
-                    )}
-                    <Link href="/dashboard">Place a memory</Link>
+                    <Link href="/dashboard/chapters">Open Journeys</Link>
+                    <Link href="/dashboard?new=memory">Add memory</Link>
                   </div>
                 </div>
               )}

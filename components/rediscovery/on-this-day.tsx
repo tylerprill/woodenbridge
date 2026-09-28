@@ -233,18 +233,18 @@ export function OnThisDay({
           <span className={styles.emptyIcon} aria-hidden="true">
             <PhotoIcon />
           </span>
-          <p className="section-kicker">A collection waiting to grow</p>
+          <p className="section-kicker">Memories waiting to grow</p>
           <h2 id="rediscovery-empty-title">
             Your memories will meet you here.
           </h2>
           <p>
-            Upload photographs from a past visit and add its date. As your atlas
+            Add a memory from a past visit and include its date. As your atlas
             grows, this page brings those days back into view.
           </p>
           <div className={styles.emptyActions}>
-            <Link href="/dashboard/import" className={styles.primaryAction}>
+            <Link href="/dashboard?new=memory" className={styles.primaryAction}>
               <PhotoIcon aria-hidden="true" />
-              Upload photos
+              New memory
             </Link>
             <Link href="/dashboard" prefetch={false}>
               Open Atlas

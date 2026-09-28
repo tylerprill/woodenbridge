@@ -323,7 +323,7 @@ async function beginManualMemory(page: Page, index: number) {
   if (await firstMemory.isVisible()) {
     await firstMemory.click();
   } else {
-    await page.getByRole('button', { name: 'Add memory', exact: true }).click();
+    await page.getByLabel('Add memory', { exact: true }).click();
   }
 
   const prompt = page.getByRole('region', { name: 'Place a memory' });
@@ -558,7 +558,7 @@ test('an empty account can preserve memories, shape a journey, and cleanly remov
   await page.goto('/dashboard/places');
   await expect(
     page.getByRole('heading', {
-      name: 'Your collection is ready for its first place.',
+      name: 'Your first memory is waiting.',
     }),
   ).toBeVisible();
   await auditState(page, testInfo, 'empty-places', monitor, {
@@ -572,7 +572,7 @@ test('an empty account can preserve memories, shape a journey, and cleanly remov
     }),
   ).toBeVisible();
   await expect(
-    page.getByRole('link', { name: /Add memories/i }).first(),
+    page.getByRole('link', { name: 'New journey' }).first(),
   ).toBeVisible();
   await auditState(page, testInfo, 'empty-journeys', monitor);
 

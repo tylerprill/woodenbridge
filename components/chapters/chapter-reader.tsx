@@ -77,7 +77,7 @@ export function ChapterReader({
       <nav className={styles.chapterDetailNav} aria-label="Journey actions">
         <Link href={mode === 'owner' ? '/dashboard/chapters' : '/'}>
           <ArrowLeftIcon aria-hidden="true" />
-          {mode === 'owner' ? 'My Journeys' : 'Field Atlas'}
+          {mode === 'owner' ? 'Journeys' : 'Field Atlas'}
         </Link>
         {mode === 'owner' ? (
           <div className={styles.chapterDetailActions}>

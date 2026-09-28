@@ -39,8 +39,10 @@ are not part of this product-navigation constraint.
 
 ### 1. Create a multi-photo Memory from Memories
 
-**Status:** Not started; the underlying multi-photo control already exists,
-but the requested Memories-page entry point does not.
+**Status:** In progress. The Memories-page entry point now opens Atlas directly
+in new-Memory placement mode, and the existing Memory drawer accepts multiple
+photographs. End-to-end browser verification and the six-photo product decision
+remain.
 
 The current code supports adding multiple photographs to one Memory. The
 Memory drawer accepts multiple files in one selection, supports repeated
@@ -53,16 +55,15 @@ flow is only exposed through Atlas:
 4. Select multiple photographs together, or add them in later selections,
    before reaching the six-photo limit.
 
-The current Memories-equivalent page is still presented as **My places** and
-does not offer a new-Memory CTA. The desired flow is:
+The flow is now exposed from **Memories**:
 
-- [ ] Present the collection page as **Memories** everywhere in the UI.
-- [ ] Add a clear **New memory** CTA to the Memories list page, including its
+- [x] Present the collection page as **Memories** everywhere in the UI.
+- [x] Add a clear **New memory** CTA to the Memories list page, including its
       empty state.
-- [ ] Let that flow select or capture multiple photographs for one new Memory.
-- [ ] Let the user enter the title, description, date, and location once for
+- [x] Let that flow select or capture multiple photographs for one new Memory.
+- [x] Let the user enter the title, description, date, and location once for
       the entire Memory.
-- [ ] Preserve clear per-photo progress, failure, retry, and removal behavior.
+- [x] Preserve clear per-photo progress, failure, retry, and removal behavior.
 - [ ] Decide whether the existing six-photo limit remains appropriate.
 
 **Acceptance criteria:** A user can begin on Memories, create one Memory, add
@@ -71,8 +72,8 @@ one new Memory in the list containing every successful photograph.
 
 ### 2. Resolve the deployed multi-image upload failure
 
-**Status:** Fixed in code and verified against the configured Blob store;
-deployment and post-deployment browser verification remain.
+**Status:** Fixed, merged, and deployed. Post-deployment authenticated browser
+verification remains.
 
 On the deployed Atlas, the multi-image upload currently fails with a Vercel
 client-ID or token error. The original failing network response was not
@@ -107,7 +108,7 @@ contract and verifies valid, missing, and tampered completion signatures.
       verification, credential selection, and the shared browser upload client.
 - [x] Run a disposable OIDC + presigned-upload canary against the configured
       private Blob store and delete the exact test object.
-- [ ] Deploy the repaired upload path.
+- [x] Deploy the repaired upload path.
 - [ ] Confirm whether the deployed error affected both the Atlas importer and
       the existing Memory drawer's multi-photo control.
 - [ ] Verify successful upload and recovery on desktop and mobile browsers.
@@ -149,7 +150,9 @@ open or edit each Journey independently.
 
 ### 4. Continue an existing Journey
 
-**Status:** Not started.
+**Status:** In progress. The four-destination navigation, Memories/Journeys
+language, list-page CTAs, and Adventure route shell are implemented. Adventure
+creation remains disabled until the data model in item 3 exists.
 
 Add a **Continue journey** action to a Journey. It should open the Memory
 creation experience with the Journey association already selected, supporting
@@ -177,18 +180,18 @@ manually selecting the Journey.
 Use the agreed four-part product navigation: **Atlas**, **Memories**,
 **Journeys**, and **Adventures**.
 
-- [ ] Make Atlas the authenticated home page.
-- [ ] Make Memories a list page with a **New memory** CTA.
-- [ ] Replace user-facing **My places**, **collection**, **saved places**, and
+- [x] Make Atlas the authenticated home page.
+- [x] Make Memories a list page with a **New memory** CTA.
+- [x] Replace user-facing **My places**, **collection**, **saved places**, and
       similar object names with **Memories** where they refer to Memories.
-- [ ] Make Journeys a list page with a **New journey** CTA.
+- [x] Make Journeys a list page with a **New journey** CTA.
 - [ ] Make Adventures a list page with a **New adventure** CTA.
-- [ ] Remove **Upload photos** and **On this day** as primary navigation items.
-- [ ] Preserve useful rediscovery behavior such as On this day within Atlas or
+- [x] Remove **Upload photos** and **On this day** as primary navigation items.
+- [x] Preserve useful rediscovery behavior such as On this day within Atlas or
       Memories rather than treating it as another top-level destination.
-- [ ] Preserve compatible redirects or internal route names where changing
+- [x] Preserve compatible redirects or internal route names where changing
       them would add risk without improving the user experience.
-- [ ] Keep internal `chapter` naming private to compatibility code; all
+- [x] Keep internal `chapter` naming private to compatibility code; all
       user-facing language should say **Journey**.
 
 **Acceptance criteria:** The primary navigation contains only the four agreed
@@ -197,21 +200,21 @@ the expected creation CTA on desktop and mobile.
 
 ### 6. Reduce Atlas to Memory capture and exploration
 
-**Status:** Not started.
+**Status:** Implemented in code; browser verification remains.
 
 Remove every way to create a Journey from the Atlas map. Atlas should expose
 one primary creation action, **Add memory**, plus a **Memories / Journeys**
 view filter.
 
-- [ ] Remove the Atlas Journey builder and every Atlas **Create journey** entry
+- [x] Remove the Atlas Journey builder and every Atlas **Create journey** entry
       point.
-- [ ] Remove Journey suggestions that start a Journey-creation flow on Atlas.
-- [ ] Remove the separate Atlas **Upload photos** action; multi-photo capture
+- [x] Remove Journey suggestions that start a Journey-creation flow on Atlas.
+- [x] Remove the separate Atlas **Upload photos** action; multi-photo capture
       should be part of **Add memory**.
-- [ ] Keep Journey viewing and playback available through the Journeys side of
+- [x] Keep Journey viewing and playback available through the Journeys side of
       the **Memories / Journeys** filter.
-- [ ] Keep Journey creation exclusively on the Journeys list page.
-- [ ] Keep ordinary map necessities, such as navigation and accessibility
+- [x] Keep Journey creation exclusively on the Journeys list page.
+- [x] Keep ordinary map necessities, such as navigation and accessibility
       controls, unless a separate decision removes them.
 
 **Acceptance criteria:** Atlas has no path that creates a Journey. A user can

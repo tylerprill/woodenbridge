@@ -889,7 +889,7 @@ test('imports a private photo chapter, recovers a lost response, and cancels a s
   );
 
   await page.goto('/dashboard/places');
-  const savedPlaces = page.getByRole('region', { name: 'Saved places' });
+  const savedPlaces = page.getByRole('region', { name: 'Memories' });
   await expect(
     savedPlaces.getByRole('link', {
       name: `Open ${riverwalkMemory.title} keepsake — ${riverwalkMemory.place}`,

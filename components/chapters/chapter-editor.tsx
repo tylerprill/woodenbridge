@@ -556,7 +556,7 @@ export function ChapterEditor({
               ? 'Back to Atlas'
               : chapter
                 ? 'Back to journey'
-                : 'My Journeys'}
+                : 'Journeys'}
           </Link>
           <p className="section-kicker">Journey workshop</p>
           <h1>{chapter ? 'Shape your journey.' : 'Begin a new journey.'}</h1>
@@ -939,7 +939,7 @@ export function ChapterEditor({
                     >
                       {returnsToAtlas
                         ? 'Return to Atlas'
-                        : 'Return to My Journeys'}
+                        : 'Return to Journeys'}
                     </Link>
                   ) : null}
                 </div>

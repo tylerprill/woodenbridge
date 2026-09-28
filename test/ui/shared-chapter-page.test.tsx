@@ -94,7 +94,7 @@ describe('Journey route naming', () => {
 
   it('uses Journey naming in both loading states', () => {
     const { container, unmount } = render(<ChaptersLoading />);
-    expect(screen.getByText('My Journeys')).toBeInTheDocument();
+    expect(screen.getByText('Journeys')).toBeInTheDocument();
     expect(container.textContent).not.toMatch(/\bchapters?\b/i);
     unmount();
 

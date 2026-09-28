@@ -3,7 +3,7 @@ import { DashboardRouteLoading } from '@/components/clean/dashboard-route-loadin
 export default function ChaptersLoading() {
   return (
     <DashboardRouteLoading
-      eyebrow="My Journeys"
+      eyebrow="Journeys"
       title="Opening your stories…"
       cards={4}
     />
