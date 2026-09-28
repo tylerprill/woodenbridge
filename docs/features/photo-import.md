@@ -20,9 +20,11 @@ flow; placing a memory manually remains a secondary option.
    reverse-geocoded places are visible. Low-confidence file dates can be
    confirmed together, and unreadable or duplicate files can be removed
    together. Missing locations must still be corrected explicitly.
-3. **Optional details** — Field Atlas suggests a title from the detected place,
-   date, or filename. Travelers can edit the title, place label, date, and field
-   note, or skip the remaining optional details.
+3. **Optional details** — Field Atlas suggests the detected place as the title,
+   while keeping the date as separate memory metadata. When no place name is
+   available yet, it falls back to a meaningful filename. Travelers can edit
+   the title, place label, date, and field note, or skip the remaining optional
+   details.
 4. **Shape the journey** — choose private Journey copy and a cover, or create
    memories without a Journey.
 

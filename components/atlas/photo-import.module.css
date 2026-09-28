@@ -1305,7 +1305,7 @@
 }
 
 .fieldConfidence button {
-  min-height: 2rem;
+  min-height: 2.5rem;
   margin-left: auto;
   color: var(--timber);
   font-size: 0.66rem;

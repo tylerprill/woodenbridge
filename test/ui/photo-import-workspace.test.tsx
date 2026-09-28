@@ -636,7 +636,7 @@ describe('bulk photo import workspace', () => {
     ).not.toBeInTheDocument();
   });
 
-  it('suggests titles and skips the remaining optional details', async () => {
+  it('suggests place-only titles and skips the remaining optional details', async () => {
     const user = userEvent.setup();
     render(<PhotoImportWorkspace />);
 
@@ -645,7 +645,10 @@ describe('bulk photo import workspace', () => {
       new File(['second'], 'second.jpg', { type: 'image/jpeg' }),
     ]);
     await reachStories(user);
-    expect(screen.getByRole('textbox', { name: /^Title/ })).not.toHaveValue('');
+    expect(screen.getByRole('textbox', { name: /^Title/ })).toHaveValue(
+      'Black Cloud Trail, Colorado',
+    );
+    expect(screen.getByLabelText('Date visited')).toHaveValue('2023-06-18');
     await user.click(
       screen.getByRole('button', { name: 'Skip optional details' }),
     );

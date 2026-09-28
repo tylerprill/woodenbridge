@@ -47,7 +47,6 @@ import {
 import {
   applyImportAnalysis,
   createAnalyzingImportItem,
-  formatImportDate,
   formatImportSize,
   getImportFileProblem,
   getImportPlaceLabel,
@@ -168,21 +167,12 @@ function recoveryMapping(batch: AtlasImportBatch): ActiveBatch {
 
 function suggestedMemoryTitle(item: ImportItem) {
   const place = item.placeLabel.trim();
-  const date = item.visitedOn ? formatImportDate(item.visitedOn) : '';
   const filename = item.fileName
     .replace(/\.[^.]+$/, '')
     .replace(/[_-]+/g, ' ')
     .trim();
   const cameraFilename = /^(?:img|dsc|pxl|image|photo)\s*\d+$/i.test(filename);
-  const suggestion =
-    place && date
-      ? `${place} · ${date}`
-      : place ||
-        (date
-          ? `Memory from ${date}`
-          : cameraFilename
-            ? 'Untitled memory'
-            : filename);
+  const suggestion = place || (cameraFilename ? 'Untitled memory' : filename);
   return (suggestion || 'Untitled memory').slice(0, 80);
 }
 
