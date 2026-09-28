@@ -323,7 +323,7 @@ async function beginManualMemory(page: Page, index: number) {
   if (await firstMemory.isVisible()) {
     await firstMemory.click();
   } else {
-    await page.getByRole('button', { name: 'Add memory', exact: true }).click();
+    await page.getByLabel('Add memory', { exact: true }).click();
   }
 
   const prompt = page.getByRole('region', { name: 'Place a memory' });
