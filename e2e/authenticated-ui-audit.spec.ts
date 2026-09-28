@@ -121,7 +121,7 @@ test('authenticated routes and primary interactions pass the UI audit', async ({
     {
       name: 'places',
       path: '/dashboard/places',
-      expectedHeading: 'Your collection.',
+      expectedHeading: 'Memories.',
     },
     {
       name: 'on-this-day',
@@ -146,7 +146,12 @@ test('authenticated routes and primary interactions pass the UI audit', async ({
     {
       name: 'chapters',
       path: '/dashboard/chapters',
-      expectedHeading: 'My Journeys.',
+      expectedHeading: 'Journeys.',
+    },
+    {
+      name: 'adventures',
+      path: '/dashboard/adventures',
+      expectedHeading: 'Adventures.',
     },
     {
       name: 'chapter',
@@ -184,13 +189,13 @@ test('authenticated routes and primary interactions pass the UI audit', async ({
     {
       name: 'legacy-users',
       path: '/dashboard/users',
-      expectedHeading: 'Your collection.',
+      expectedHeading: 'Memories.',
       expectedPath: '/dashboard/places',
     },
     {
       name: 'legacy-journal',
       path: '/dashboard/journal',
-      expectedHeading: 'Your collection.',
+      expectedHeading: 'Memories.',
       expectedPath: '/dashboard/places',
     },
   ];

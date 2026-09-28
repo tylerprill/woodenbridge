@@ -200,9 +200,9 @@ describe('On this day', () => {
     expect(
       screen.getByText('No memories from September 15 in earlier years.'),
     ).toBeInTheDocument();
-    expect(screen.getByRole('link', { name: 'Upload photos' })).toHaveAttribute(
+    expect(screen.getByRole('link', { name: 'New memory' })).toHaveAttribute(
       'href',
-      '/dashboard/import',
+      '/dashboard?new=memory',
     );
     expect(screen.getByRole('link', { name: 'Open Atlas' })).toHaveAttribute(
       'href',

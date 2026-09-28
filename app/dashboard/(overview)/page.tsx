@@ -12,6 +12,7 @@ export default async function DashboardPage({
     view?: string;
     journey?: string;
     stop?: string;
+    new?: string;
   }>;
 }) {
   const [session, initialData, query] = await Promise.all([
@@ -37,6 +38,9 @@ export default async function DashboardPage({
       initialMode={initialMode}
       initialJourneyId={journeyId.success ? journeyId.data : null}
       initialJourneyStopId={stopId.success ? stopId.data : null}
+      initialPlacementMode={
+        initialMode === 'places' && !initialSelectedId && query.new === 'memory'
+      }
     />
   );
 }

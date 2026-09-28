@@ -51,15 +51,14 @@ describe('dashboard navigation', () => {
     mockLinkPrefetchProps.mockClear();
   });
 
-  it('disables prefetch only for private rediscovery and journey routes', () => {
-    renderNavigation('owner', '/dashboard/on-this-day');
+  it('disables prefetch for the heavier journey and adventure routes', () => {
+    renderNavigation('owner', '/dashboard/adventures');
 
     expect(mockLinkPrefetchProps.mock.calls.map(([props]) => props)).toEqual([
       { href: '/dashboard', prefetch: undefined },
-      { href: '/dashboard/import', prefetch: undefined },
       { href: '/dashboard/places', prefetch: undefined },
       { href: '/dashboard/chapters', prefetch: false },
-      { href: '/dashboard/on-this-day', prefetch: false },
+      { href: '/dashboard/adventures', prefetch: false },
       { href: '/dashboard/security', prefetch: undefined },
       { href: '/dashboard/owner/users', prefetch: undefined },
     ]);
@@ -74,20 +73,23 @@ describe('dashboard navigation', () => {
       '/dashboard',
     );
     expect(
-      within(atlas).getByRole('link', { name: 'Upload photos' }),
-    ).toHaveAttribute('href', '/dashboard/import');
-    expect(
-      within(atlas).getByRole('link', { name: 'My places' }),
+      within(atlas).getByRole('link', { name: 'Memories' }),
     ).toHaveAttribute('href', '/dashboard/places');
     expect(
-      within(atlas).getByRole('link', { name: 'My Journeys' }),
+      within(atlas).getByRole('link', { name: 'Journeys' }),
     ).toHaveAttribute('href', '/dashboard/chapters');
+    expect(
+      within(atlas).getByRole('link', { name: 'Adventures' }),
+    ).toHaveAttribute('href', '/dashboard/adventures');
     expect(
       within(atlas).queryByRole('link', { name: /chapters/i }),
     ).not.toBeInTheDocument();
     expect(
-      within(atlas).getByRole('link', { name: 'On this day' }),
-    ).toHaveAttribute('href', '/dashboard/on-this-day');
+      within(atlas).queryByRole('link', { name: 'Upload photos' }),
+    ).not.toBeInTheDocument();
+    expect(
+      within(atlas).queryByRole('link', { name: 'On this day' }),
+    ).not.toBeInTheDocument();
     expect(
       screen.queryByRole('group', { name: 'Account' }),
     ).not.toBeInTheDocument();
@@ -116,12 +118,16 @@ describe('dashboard navigation', () => {
 
   it.each([
     {
-      linkName: 'On this day',
-      pathname: '/dashboard/on-this-day',
+      linkName: 'Memories',
+      pathname: '/dashboard/places',
     },
     {
-      linkName: 'My Journeys',
+      linkName: 'Journeys',
       pathname: '/dashboard/chapters/6a67afcf-768f-4fe4-8c62-41b58a19840d/edit',
+    },
+    {
+      linkName: 'Adventures',
+      pathname: '/dashboard/adventures/6a67afcf-768f-4fe4-8c62-41b58a19840d',
     },
     {
       linkName: 'Security',

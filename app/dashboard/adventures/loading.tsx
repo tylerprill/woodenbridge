@@ -1,10 +1,11 @@
 import { DashboardRouteLoading } from '@/components/clean/dashboard-route-loading';
 
-export default function PlacesLoading() {
+export default function AdventuresLoading() {
   return (
     <DashboardRouteLoading
-      eyebrow="Personal atlas"
-      title="Gathering your memories…"
+      eyebrow="Adventures"
+      title="Opening your trips…"
+      cards={3}
     />
   );
 }

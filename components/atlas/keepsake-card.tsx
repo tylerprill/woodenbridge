@@ -57,7 +57,7 @@ function CardContents({
 }) {
   const place = getAtlasPlaceContextLabel(entry);
   const date = formatAtlasDate(entry);
-  const title = entry.title || 'Untitled place';
+  const title = entry.title || 'Untitled memory';
   const description =
     entry.description || 'A place held quietly in your atlas.';
   const status = entry.journeyState === 'visited' ? 'Remembered' : 'Ahead';

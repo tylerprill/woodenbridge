@@ -2,13 +2,8 @@ import { expect, test, type Page, type TestInfo } from '@playwright/test';
 
 import { E2E_FIXTURE } from '../scripts/seed-e2e.js';
 import {
-  expectBuilderMapTargetsClear,
-  toggleVisibleBuilderPin,
-} from './support/builder-map-input';
-import {
   expectActiveJourneyDotClearOfOverlays,
   expectJourneyPlaybackPreviewHasRoom,
-  expectMapFirstJourneyBuilder,
   expectVisibleJourneyDotsClearOfOverlays,
 } from './support/journey-audit';
 import { auditCurrentPage, monitorBrowserIssues } from './support/ui-audit';
@@ -97,12 +92,6 @@ async function auditJourneyState(
         : '[data-map-state="ready"]',
     },
   );
-  if (await page.locator('[data-atlas-surface="builder"]').isVisible()) {
-    await expectBuilderMapTargetsClear(
-      page,
-      testInfo.outputPath(`${evidenceLabel(testInfo, state)}.png`),
-    );
-  }
 }
 
 async function expectJourneyDotContentCenteredInMarkers(page: Page) {
@@ -154,7 +143,7 @@ test('Journey Lens connects the Atlas, playback, and Journey workshop', async ({
 
   const atlasView = page.getByRole('group', { name: 'Atlas view' });
   await expect(
-    atlasView.getByRole('button', { name: 'Places' }),
+    atlasView.getByRole('button', { name: 'Memories' }),
   ).toHaveAttribute('aria-pressed', 'true');
   await atlasView.getByRole('button', { name: 'Journeys' }).click();
   await expect(page).toHaveURL((url) => {
@@ -278,78 +267,45 @@ test('Journey Lens connects the Atlas, playback, and Journey workshop', async ({
   const journeyTray = page.locator(
     'section[aria-labelledby="journey-tray-title"]',
   );
-  await journeyTray
-    .getByRole('button', { name: 'Create journey', exact: true })
-    .click();
   await expect(
-    page.getByRole('button', { name: 'Show memories' }),
-  ).toHaveAttribute('aria-expanded', 'false');
-  await expectMapFirstJourneyBuilder(page);
-  await page.waitForTimeout(1100);
-  await auditJourneyState(page, testInfo, 'builder-map-first', monitor);
-  await toggleVisibleBuilderPin(
-    page,
-    testInfo.outputPath(`${evidenceLabel(testInfo, 'builder-map-first')}.png`),
+    journeyTray.getByRole('button', { name: /Create journey/i }),
+  ).toHaveCount(0);
+  await expect(journeyTray.getByRole('button', { name: 'Review' })).toHaveCount(
+    0,
   );
-  await page.getByRole('button', { name: 'Show memories' }).click();
+  const allJourneys = journeyTray.getByRole('link', { name: 'All journeys' });
+  await expect(allJourneys).toHaveAttribute('href', '/dashboard/chapters');
+  await auditJourneyState(page, testInfo, 'creation-removed', monitor);
+
+  await allJourneys.click();
+  await expect(page).toHaveURL('/dashboard/chapters');
   await expect(
-    page.getByRole('heading', { level: 2, name: 'Choose the memories' }),
+    page.getByRole('heading', { level: 1, name: 'Journeys.' }),
   ).toBeVisible();
-
-  const availableMemories = page.locator('button[data-selected]');
-  await availableMemories.filter({ hasText: memories[0].title }).click();
-  await availableMemories.filter({ hasText: memories[1].title }).click();
-  await expect(page.getByText('2 selected', { exact: true })).toBeVisible();
-
-  const shapeChapter = page.getByRole('link', { name: 'Continue' });
-  const shapeChapterHref = await shapeChapter.getAttribute('href');
-  expect(shapeChapterHref).not.toBeNull();
-  const shapeChapterUrl = new URL(
-    shapeChapterHref ?? '',
-    'http://field-atlas.test',
+  const newJourney = page.getByRole('link', { name: 'New journey' });
+  await expect(newJourney).toHaveAttribute('href', '/dashboard/chapters/new');
+  await auditCurrentPage(
+    page,
+    testInfo,
+    evidenceLabel(testInfo, 'journey-list-creation'),
+    monitor,
+    {
+      accessibility: shouldAuditAccessibility(testInfo),
+      expectedHeading: 'Journeys.',
+      expectedPath: '/dashboard/chapters',
+    },
   );
-  expect(shapeChapterUrl.pathname).toBe('/dashboard/chapters/new');
-  expect(shapeChapterUrl.searchParams.get('source')).toBe('atlas');
-  expect(shapeChapterUrl.searchParams.getAll('memory')).toEqual([
-    memories[0].id,
-    memories[1].id,
-  ]);
-  await expectMapFirstJourneyBuilder(page);
-  await auditJourneyState(page, testInfo, 'builder', monitor);
-  await page.getByRole('button', { name: 'Hide memories' }).click();
-  await expect(page.getByText('2 selected', { exact: true })).toBeVisible();
-  await expectMapFirstJourneyBuilder(page);
-  await auditJourneyState(page, testInfo, 'builder-selected-map', monitor);
 
-  // Finish the existing debounced view save before leaving the Atlas so its
-  // navigation-canceled background POST is not mistaken for a UI failure.
-  await page.waitForTimeout(1700);
-  await page.waitForLoadState('networkidle');
-  await auditJourneyState(page, testInfo, 'builder-handoff-ready', monitor);
-  await shapeChapter.click();
-  await expect(page).toHaveURL((url) => {
-    return (
-      url.pathname === '/dashboard/chapters/new' &&
-      url.searchParams.get('source') === 'atlas'
-    );
-  });
+  await newJourney.click();
+  await expect(page).toHaveURL('/dashboard/chapters/new');
   await expect(
     page.getByRole('heading', { level: 1, name: 'Begin a new journey.' }),
   ).toBeVisible();
-  await expect(
-    page.getByRole('button', {
-      name: `Remove ${memories[0].title}`,
-    }),
-  ).toBeVisible();
-  await expect(
-    page.getByRole('button', {
-      name: `Remove ${memories[1].title}`,
-    }),
-  ).toBeVisible();
-  await expect(
-    page.getByRole('link', { name: 'Back to Atlas' }),
-  ).toHaveAttribute('href', '/dashboard?view=journeys');
-  await auditJourneyState(page, testInfo, 'prefilled-chapter', monitor);
+  await expect(page.getByRole('link', { name: 'Journeys' })).toHaveAttribute(
+    'href',
+    '/dashboard/chapters',
+  );
+  await auditJourneyState(page, testInfo, 'journey-workshop', monitor);
 
   if (testInfo.project.name === 'chromium') {
     await page.setViewportSize({ width: 320, height: 568 });

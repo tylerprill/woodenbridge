@@ -558,7 +558,7 @@ test('an empty account can preserve memories, shape a journey, and cleanly remov
   await page.goto('/dashboard/places');
   await expect(
     page.getByRole('heading', {
-      name: 'Your collection is ready for its first place.',
+      name: 'Your first memory is waiting.',
     }),
   ).toBeVisible();
   await auditState(page, testInfo, 'empty-places', monitor, {

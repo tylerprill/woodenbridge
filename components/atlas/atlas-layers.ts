@@ -36,7 +36,7 @@ export function entriesToGeoJson(
       },
       properties: {
         id: entry.id,
-        title: entry.title || 'Untitled place',
+        title: entry.title || 'Untitled memory',
         recordState: entry.recordState,
         journeyState: entry.journeyState,
       },

@@ -6,7 +6,6 @@ import {
   BookOpenIcon,
   MagnifyingGlassIcon,
   MapPinIcon,
-  PhotoIcon,
   PlusIcon,
   SparklesIcon,
   XMarkIcon,
@@ -20,7 +19,6 @@ import {
   useState,
 } from 'react';
 import { useRouter } from 'next/navigation';
-import Link from 'next/link';
 
 import {
   createAtlasDraftAction,
@@ -38,20 +36,17 @@ import type {
 import type {
   AtlasJourneyDetail,
   AtlasJourneyIndex,
-  AtlasJourneySuggestion,
 } from '@/app/lib/atlas/journeys/definitions';
 import {
   getAtlasPlaceContextLabel,
   withAtlasPlaceContext,
 } from '@/app/lib/atlas/place';
-import { CHAPTER_MIN_MEMORIES } from '@/app/lib/chapters/validation';
 import AtlasMap from './atlas-map-loader';
 import {
   atlasExperienceReducer,
   type AtlasExperience,
   type AtlasMode,
 } from './atlas-experience-state';
-import { AtlasJourneyBuilder } from './atlas-journey-builder';
 import { AtlasJourneyPlayback } from './atlas-journey-playback';
 import { AtlasJourneyTray } from './atlas-journey-tray';
 import { MemoryDrawer } from './memory-drawer';
@@ -67,6 +62,7 @@ type AtlasWorkspaceProps = {
   initialMode?: AtlasMode;
   initialJourneyId?: string | null;
   initialJourneyStopId?: string | null;
+  initialPlacementMode?: boolean;
 };
 
 type JourneyLoadState = 'idle' | 'loading' | 'ready' | 'error';
@@ -76,11 +72,13 @@ function initialAtlasExperience({
   memoryId,
   journeyId,
   journeyStopId,
+  placementMode,
 }: {
   mode: AtlasMode;
   memoryId: string | null;
   journeyId: string | null;
   journeyStopId: string | null;
+  placementMode: boolean;
 }): AtlasExperience {
   if (mode === 'journeys') {
     return journeyId
@@ -94,7 +92,9 @@ function initialAtlasExperience({
   }
   return memoryId
     ? { mode: 'places', surface: 'memory', entryId: memoryId }
-    : { mode: 'places', surface: 'overview' };
+    : placementMode
+      ? { mode: 'places', surface: 'placing' }
+      : { mode: 'places', surface: 'overview' };
 }
 
 function journeyDashboardHref(journeyId?: string, stopId?: string | null) {
@@ -132,6 +132,7 @@ export function AtlasWorkspace({
   initialMode = 'places',
   initialJourneyId = null,
   initialJourneyStopId = null,
+  initialPlacementMode = false,
 }: AtlasWorkspaceProps) {
   const router = useRouter();
   const [experience, dispatchExperience] = useReducer(
@@ -141,6 +142,7 @@ export function AtlasWorkspace({
       memoryId: initialSelectedId,
       journeyId: initialJourneyId,
       journeyStopId: initialJourneyStopId,
+      placementMode: initialPlacementMode,
     },
     initialAtlasExperience,
   );
@@ -148,7 +150,9 @@ export function AtlasWorkspace({
   const [selectedId, setSelectedId] = useState<string | null>(
     initialSelectedId,
   );
-  const [placementMode, setPlacementMode] = useState(false);
+  const [placementMode, setPlacementMode] = useState(
+    initialMode === 'places' && !initialSelectedId && initialPlacementMode,
+  );
   const [placementBusy, setPlacementBusy] = useState(false);
   const [filter, setFilter] = useState<AtlasFilter>('all');
   const [query, setQuery] = useState('');
@@ -171,9 +175,6 @@ export function AtlasWorkspace({
     string | null
   >(null);
   const [journeyDetailError, setJourneyDetailError] = useState('');
-  const [builderSuggestion, setBuilderSuggestion] =
-    useState<AtlasJourneySuggestion | null>(null);
-  const [builderListOpen, setBuilderListOpen] = useState(false);
   const [journeyFitRequest, setJourneyFitRequest] = useState(0);
   const [overlapJourneyIds, setOverlapJourneyIds] = useState<string[]>([]);
   const [fitRequest, setFitRequest] = useState(0);
@@ -205,6 +206,7 @@ export function AtlasWorkspace({
     initialSelectedId,
     initialJourneyId,
     initialJourneyStopId,
+    initialPlacementMode,
   ]);
   const lastLocationStateKeyRef = useRef(locationStateKey);
 
@@ -223,14 +225,21 @@ export function AtlasWorkspace({
         ? (journeyDetails[experience.journeyId].stops[experience.stopIndex]
             ?.entryId ?? null)
         : null;
-  const builderSelectedEntryIds =
-    experience.mode === 'journeys' && experience.surface === 'builder'
-      ? experience.selectedEntryIds
-      : [];
-  const buildingJourney =
-    experience.mode === 'journeys' && experience.surface === 'builder';
   const playingJourney =
     experience.mode === 'journeys' && experience.surface === 'playback';
+
+  useEffect(() => {
+    if (!initialPlacementMode || initialMode !== 'places') return;
+    const url = new URL(window.location.href);
+    if (url.searchParams.get('new') !== 'memory') return;
+    url.searchParams.delete('new');
+    const queryString = url.searchParams.toString();
+    window.history.replaceState(
+      window.history.state,
+      '',
+      `${url.pathname}${queryString ? `?${queryString}` : ''}${url.hash}`,
+    );
+  }, [initialMode, initialPlacementMode]);
 
   useEffect(() => {
     if (lastLocationStateKeyRef.current === locationStateKey) return;
@@ -241,8 +250,6 @@ export function AtlasWorkspace({
       setQuery('');
       setActiveSearchIndex(-1);
       setOverlapJourneyIds([]);
-      setBuilderSuggestion(null);
-      setBuilderListOpen(false);
       if (initialMode === 'journeys') {
         setSelectedId(null);
         setPlacementMode(false);
@@ -262,13 +269,15 @@ export function AtlasWorkspace({
       }
 
       setJourneyPanelOpen(false);
-      setPlacementMode(false);
+      setPlacementMode(initialPlacementMode && !initialSelectedId);
       setTrayOpen(false);
       setSelectedId(initialSelectedId);
       dispatchExperience(
         initialSelectedId
           ? { type: 'open-memory', entryId: initialSelectedId }
-          : { type: 'switch-mode', mode: 'places' },
+          : initialPlacementMode
+            ? { type: 'start-placement' }
+            : { type: 'switch-mode', mode: 'places' },
       );
     });
     return () => {
@@ -277,6 +286,7 @@ export function AtlasWorkspace({
   }, [
     initialJourneyId,
     initialJourneyStopId,
+    initialPlacementMode,
     initialMode,
     initialSelectedId,
     locationStateKey,
@@ -347,21 +357,6 @@ export function AtlasWorkspace({
       ),
     [entries],
   );
-  const eligibleJourneyEntries = useMemo(
-    () =>
-      entries
-        .filter(
-          (entry) =>
-            entry.recordState === 'saved' && entry.journeyState === 'visited',
-        )
-        .sort(
-          (first, second) =>
-            (first.visitedOn ?? '').localeCompare(second.visitedOn ?? '') ||
-            first.createdAt.localeCompare(second.createdAt) ||
-            first.id.localeCompare(second.id),
-        ),
-    [entries],
-  );
   const visibleJourneys = useMemo(() => {
     const search = query.trim().toLowerCase();
     if (!search) return journeyIndex.journeys;
@@ -390,7 +385,7 @@ export function AtlasWorkspace({
     setJourneyError('');
 
     try {
-      const params = new URLSearchParams({ suggestions: '1', limit: '100' });
+      const params = new URLSearchParams({ limit: '100' });
       if (initialJourneyId) params.set('selected', initialJourneyId);
       const response = await fetch(`/api/atlas/journeys?${params.toString()}`, {
         cache: 'no-store',
@@ -600,8 +595,6 @@ export function AtlasWorkspace({
       setTrayOpen(false);
       setJourneyPanelOpen(nextMode === 'journeys');
       setOverlapJourneyIds([]);
-      setBuilderSuggestion(null);
-      setBuilderListOpen(false);
       setQuery('');
       setActiveSearchIndex(-1);
       searchInputRef.current?.blur();
@@ -615,8 +608,7 @@ export function AtlasWorkspace({
   );
 
   const showJourneyOverview = useCallback(() => {
-    // The overview is applied locally now; its delayed route payload must not
-    // overwrite a newer interaction such as starting the journey builder.
+    // Apply the overview locally before the delayed route payload arrives.
     lastLocationStateKeyRef.current = JSON.stringify([
       'journeys',
       null,
@@ -626,8 +618,6 @@ export function AtlasWorkspace({
     dispatchExperience({ type: 'show-overview' });
     setJourneyPanelOpen(true);
     setOverlapJourneyIds([]);
-    setBuilderSuggestion(null);
-    setBuilderListOpen(false);
     router.push(journeyDashboardHref(), { scroll: false });
   }, [router]);
 
@@ -675,37 +665,6 @@ export function AtlasWorkspace({
       replaceJourneyDashboardLocation(journeyId, stopId);
     },
     [experience, journeyDetails, journeyId],
-  );
-
-  const startJourneyBuilder = useCallback(
-    (
-      requestedIds: string[] = [],
-      suggestion: AtlasJourneySuggestion | null = null,
-    ) => {
-      if (eligibleJourneyEntries.length < CHAPTER_MIN_MEMORIES) {
-        setNotice(
-          eligibleJourneyEntries.length
-            ? 'Add one more saved memory before creating a journey.'
-            : 'Add two saved memories before creating a journey.',
-        );
-        return;
-      }
-      const eligibleIds = new Set(
-        eligibleJourneyEntries.map((entry) => entry.id),
-      );
-      const selectedEntryIds = Array.from(new Set(requestedIds))
-        .filter((id) => eligibleIds.has(id))
-        .slice(0, 50);
-      dispatchExperience({ type: 'start-builder', selectedEntryIds });
-      setBuilderSuggestion(suggestion);
-      setBuilderListOpen(false);
-      setJourneyPanelOpen(true);
-      setOverlapJourneyIds([]);
-      setQuery('');
-      setActiveSearchIndex(-1);
-      searchInputRef.current?.blur();
-    },
-    [eligibleJourneyEntries],
   );
 
   const startJourneyPlayback = useCallback(
@@ -781,37 +740,6 @@ export function AtlasWorkspace({
       playing: !experience.playing,
     });
   }, [experience, journeyDetails]);
-
-  const dismissJourneySuggestion = useCallback(
-    async (suggestion: AtlasJourneySuggestion) => {
-      setJourneyIndex((current) => ({
-        ...current,
-        suggestions: current.suggestions.filter(
-          (candidate) => candidate.key !== suggestion.key,
-        ),
-      }));
-      try {
-        const response = await fetch(
-          `/api/atlas/journeys/suggestions/${encodeURIComponent(suggestion.key)}/dismiss`,
-          {
-            method: 'POST',
-            credentials: 'same-origin',
-            headers: { Accept: 'application/json' },
-          },
-        );
-        if (!response.ok) throw new Error('Suggestion dismissal failed.');
-        setNotice('Journey suggestion dismissed.');
-      } catch (error) {
-        console.error(
-          'Atlas journey suggestion could not be dismissed:',
-          error,
-        );
-        setNotice('That suggestion could not be dismissed. Please try again.');
-        setJourneyLoadState('idle');
-      }
-    },
-    [],
-  );
 
   const loadEntryMedia = useCallback(async (id: string) => {
     if (
@@ -1066,15 +994,6 @@ export function AtlasWorkspace({
     const handleKeyDown = (event: KeyboardEvent) => {
       if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === 'k') {
         event.preventDefault();
-        if (buildingJourney) {
-          setBuilderListOpen(true);
-          requestAnimationFrame(() =>
-            document
-              .getElementById('atlas-builder-memories')
-              ?.focus({ preventScroll: true }),
-          );
-          return;
-        }
         if (selectedId) {
           setNotice('Close the memory editor before searching your atlas.');
           return;
@@ -1085,15 +1004,6 @@ export function AtlasWorkspace({
       }
 
       if (event.key === 'Escape' && !event.defaultPrevented) {
-        if (buildingJourney && builderListOpen) {
-          setBuilderListOpen(false);
-          requestAnimationFrame(() =>
-            document
-              .getElementById('atlas-builder-toggle')
-              ?.focus({ preventScroll: true }),
-          );
-          return;
-        }
         if (document.activeElement === searchInputRef.current) {
           searchInputRef.current?.blur();
           setQuery('');
@@ -1124,8 +1034,6 @@ export function AtlasWorkspace({
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [
-    builderListOpen,
-    buildingJourney,
     closeJourneyPanel,
     closeOverlapChooser,
     experience,
@@ -1151,8 +1059,6 @@ export function AtlasWorkspace({
     return () => cancelAnimationFrame(frame);
   }, [overlapJourneyIds.length]);
 
-  const mapEntries = buildingJourney ? eligibleJourneyEntries : visibleEntries;
-  const mapMode = buildingJourney ? 'places' : mode;
   const playbackStopIndex = playingJourney ? experience.stopIndex : null;
 
   return (
@@ -1163,43 +1069,27 @@ export function AtlasWorkspace({
       data-atlas-mode={mode}
       data-atlas-empty={mode === 'places' && !entries.length ? 'true' : 'false'}
       data-atlas-surface={experience.surface}
-      data-builder-list-open={builderListOpen ? 'true' : 'false'}
       data-journey-panel-open={
         mode === 'journeys' && journeyPanelOpen ? 'true' : 'false'
       }
     >
       <AtlasMap
-        entries={mapEntries}
+        entries={visibleEntries}
         initialView={initialData.view}
         interactionLocked={Boolean(selectedEntry)}
         selectedId={mode === 'places' ? selectedId : null}
         placementMode={mode === 'places' && placementMode}
         focusRequest={focusRequest}
         fitRequest={fitRequest}
-        onSelect={(id) => {
-          if (!buildingJourney) {
-            selectEntry(id);
-            return;
-          }
-          if (
-            !builderSelectedEntryIds.includes(id) &&
-            builderSelectedEntryIds.length >= 50
-          ) {
-            setNotice('A journey can include up to 50 memories.');
-            return;
-          }
-          dispatchExperience({ type: 'toggle-builder-entry', entryId: id });
-        }}
+        onSelect={selectEntry}
         onPlace={(coordinates) => void placeEntry(coordinates)}
         onViewChange={rememberView}
-        mode={mapMode}
-        builderActive={buildingJourney}
+        mode={mode}
         journeys={visibleJourneys}
         selectedJourneyId={journeyId}
         selectedJourneyStopId={selectedJourneyStopId}
         journeyFitRequest={journeyFitRequest}
         journeyPlaybackIndex={playbackStopIndex}
-        builderSelectedEntryIds={builderSelectedEntryIds}
         onJourneySelect={selectJourney}
         onJourneyOverlapSelect={setOverlapJourneyIds}
         onJourneyStopSelect={selectJourneyStop}
@@ -1207,8 +1097,7 @@ export function AtlasWorkspace({
 
       <header
         className={styles.atlasHeader}
-        hidden={buildingJourney}
-        inert={selectedEntry || buildingJourney ? true : undefined}
+        inert={selectedEntry ? true : undefined}
       >
         <div className={styles.atlasIdentity}>
           <p className={styles.eyebrow}>
@@ -1260,7 +1149,7 @@ export function AtlasWorkspace({
               aria-pressed={mode === 'places'}
               onClick={() => switchMode('places')}
             >
-              <MapPinIcon aria-hidden="true" /> Places
+              <MapPinIcon aria-hidden="true" /> Memories
             </button>
             <button
               type="button"
@@ -1374,8 +1263,8 @@ export function AtlasWorkspace({
                     ? `${visibleJourneys.length} ${visibleJourneys.length === 1 ? 'journey' : 'journeys'} found`
                     : 'No matching journeys'
                   : visibleEntries.length
-                    ? `${visibleEntries.length} ${visibleEntries.length === 1 ? 'place' : 'places'} found`
-                    : 'No matching places'}
+                    ? `${visibleEntries.length} ${visibleEntries.length === 1 ? 'memory' : 'memories'} found`
+                    : 'No matching memories'}
               </p>
               <div
                 id="atlas-search-results"
@@ -1384,7 +1273,7 @@ export function AtlasWorkspace({
                 aria-label={
                   mode === 'journeys'
                     ? 'Matching Atlas journeys'
-                    : 'Matching Atlas places'
+                    : 'Matching Atlas memories'
                 }
               >
                 {mode === 'journeys'
@@ -1434,7 +1323,7 @@ export function AtlasWorkspace({
                       >
                         <MapPinIcon aria-hidden="true" />
                         <span>
-                          <strong>{entry.title || 'Untitled place'}</strong>
+                          <strong>{entry.title || 'Untitled memory'}</strong>
                           <small>
                             {entry.recordState === 'draft' ? 'Draft · ' : null}
                             {getAtlasPlaceContextLabel(entry)}
@@ -1450,54 +1339,12 @@ export function AtlasWorkspace({
 
       <div
         className={styles.toolDock}
-        hidden={buildingJourney}
         role="toolbar"
         aria-label={mode === 'journeys' ? 'Journey tools' : 'Atlas tools'}
-        inert={selectedEntry || buildingJourney ? true : undefined}
+        inert={selectedEntry ? true : undefined}
       >
         {mode === 'journeys' ? (
           <>
-            {eligibleJourneyEntries.length >= CHAPTER_MIN_MEMORIES ? (
-              <button
-                type="button"
-                className={styles.addButton}
-                data-active={buildingJourney ? 'true' : 'false'}
-                aria-pressed={buildingJourney}
-                onClick={() =>
-                  buildingJourney
-                    ? showJourneyOverview()
-                    : startJourneyBuilder()
-                }
-              >
-                {buildingJourney ? (
-                  <XMarkIcon aria-hidden="true" />
-                ) : (
-                  <PlusIcon aria-hidden="true" />
-                )}
-                <span>{buildingJourney ? 'Cancel' : 'Create journey'}</span>
-              </button>
-            ) : (
-              <Link
-                href="/dashboard/import"
-                className={styles.addButton}
-                aria-label="Add memories before creating a journey"
-              >
-                <PhotoIcon aria-hidden="true" />
-                <span>Add memories</span>
-              </Link>
-            )}
-            <span className={styles.toolDivider} aria-hidden="true" />
-            {eligibleJourneyEntries.length >= CHAPTER_MIN_MEMORIES ? (
-              <Link href="/dashboard/import" aria-label="Upload photos">
-                <PhotoIcon aria-hidden="true" />
-                <span>Upload</span>
-              </Link>
-            ) : (
-              <Link href="/dashboard" aria-label="Place a memory on the map">
-                <PlusIcon aria-hidden="true" />
-                <span>Place</span>
-              </Link>
-            )}
             <button
               ref={journeyListButtonRef}
               type="button"
@@ -1557,11 +1404,6 @@ export function AtlasWorkspace({
               )}
               <span>{placementMode ? 'Cancel pin' : 'Add memory'}</span>
             </button>
-            <span className={styles.toolDivider} aria-hidden="true" />
-            <Link href="/dashboard/import" aria-label="Upload photos">
-              <PhotoIcon aria-hidden="true" />
-              <span>Upload</span>
-            </Link>
             <button
               ref={memoryListButtonRef}
               type="button"
@@ -1605,7 +1447,7 @@ export function AtlasWorkspace({
         >
           {(
             [
-              ['all', 'All places'],
+              ['all', 'All memories'],
               ['visited', 'Remembered'],
               ['want_to_visit', 'Ahead'],
               ['draft', 'Drafts'],
@@ -1664,13 +1506,10 @@ export function AtlasWorkspace({
           <p className={styles.eyebrow}>The first page</p>
           <h2 id="empty-atlas-title">Your world is waiting.</h2>
           <p>
-            Begin with the photographs already in your camera roll, or place a
-            memory manually on the map.
+            Choose a place on the map, then add the details and photographs you
+            want to keep together.
           </p>
           <div className={styles.emptyStateActions}>
-            <Link href="/dashboard/import">
-              <PhotoIcon aria-hidden="true" /> Upload photos
-            </Link>
             <button
               type="button"
               onClick={() => {
@@ -1678,7 +1517,7 @@ export function AtlasWorkspace({
                 dispatchExperience({ type: 'start-placement' });
               }}
             >
-              <PlusIcon aria-hidden="true" /> Place manually
+              <PlusIcon aria-hidden="true" /> Add memory
             </button>
           </div>
         </section>
@@ -1693,50 +1532,6 @@ export function AtlasWorkspace({
             dispatchExperience({ type: 'show-overview' });
           }}
           onSelect={selectEntry}
-        />
-      ) : null}
-
-      {buildingJourney ? (
-        <>
-          <h1 className="sr-only">Build a journey in your Atlas</h1>
-          <div className={styles.journeyBuilderMapTools}>
-            <button
-              type="button"
-              onClick={() => setFitRequest((current) => current + 1)}
-              aria-label="Fit memories on map"
-            >
-              <ArrowsPointingOutIcon aria-hidden="true" />
-            </button>
-            <p>Select map pins to add memories.</p>
-          </div>
-        </>
-      ) : null}
-
-      {mode === 'journeys' && journeyPanelOpen && buildingJourney ? (
-        <AtlasJourneyBuilder
-          entries={eligibleJourneyEntries}
-          selectedEntryIds={builderSelectedEntryIds}
-          suggestion={builderSuggestion}
-          listOpen={builderListOpen}
-          onListOpenChange={setBuilderListOpen}
-          onToggle={(id) => {
-            if (
-              !builderSelectedEntryIds.includes(id) &&
-              builderSelectedEntryIds.length >= 50
-            ) {
-              setNotice('A journey can include up to 50 memories.');
-              return;
-            }
-            dispatchExperience({ type: 'toggle-builder-entry', entryId: id });
-          }}
-          onMove={(entryId, direction) =>
-            dispatchExperience({
-              type: 'move-builder-entry',
-              entryId,
-              direction,
-            })
-          }
-          onCancel={showJourneyOverview}
         />
       ) : null}
 
@@ -1762,14 +1557,9 @@ export function AtlasWorkspace({
         />
       ) : null}
 
-      {mode === 'journeys' &&
-      journeyPanelOpen &&
-      !buildingJourney &&
-      !playingJourney ? (
+      {mode === 'journeys' && journeyPanelOpen && !playingJourney ? (
         <AtlasJourneyTray
           journeys={visibleJourneys}
-          suggestions={journeyIndex.suggestions}
-          availableMemoryCount={eligibleJourneyEntries.length}
           selectedJourney={selectedJourney}
           selectedStopId={selectedJourneyStopId}
           loadState={journeyLoadState}
@@ -1781,14 +1571,7 @@ export function AtlasWorkspace({
           onSelectJourney={selectJourney}
           onSelectStop={selectJourneyStop}
           onShowOverview={showJourneyOverview}
-          onStartBuilder={startJourneyBuilder}
           onStartPlayback={startJourneyPlayback}
-          onReviewSuggestion={(suggestion) =>
-            startJourneyBuilder(suggestion.entryIds, suggestion)
-          }
-          onDismissSuggestion={(suggestion) =>
-            void dismissJourneySuggestion(suggestion)
-          }
         />
       ) : null}
 

@@ -3371,7 +3371,8 @@ body {
   gap: 0.75rem;
 }
 
-.collection-heading-actions > a {
+.collection-heading-actions > a,
+.collection-heading-actions > button {
   display: inline-flex;
   min-height: 3rem;
   align-items: center;
@@ -3391,15 +3392,23 @@ body {
     transform 160ms ease;
 }
 
-.collection-heading-actions > a svg {
+.collection-heading-actions > a svg,
+.collection-heading-actions > button svg {
   width: 1rem;
 }
 
 .collection-heading-actions > a:hover,
-.collection-heading-actions > a:focus-visible {
+.collection-heading-actions > a:focus-visible,
+.collection-heading-actions > button:not(:disabled):hover,
+.collection-heading-actions > button:not(:disabled):focus-visible {
   border-color: var(--forest-600);
   background: var(--sage-100);
   transform: translateY(-1px);
+}
+
+.collection-heading-actions > button:disabled {
+  cursor: not-allowed;
+  opacity: 0.55;
 }
 
 .collection-empty-actions {

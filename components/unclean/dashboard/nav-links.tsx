@@ -3,9 +3,8 @@
 import {
   BookOpenIcon,
   BookmarkIcon,
-  CalendarDaysIcon,
   GlobeAltIcon,
-  PhotoIcon,
+  MapIcon,
   ShieldCheckIcon,
   UsersIcon,
 } from '@heroicons/react/24/outline';
@@ -18,14 +17,9 @@ import { hasRequiredRole, type AppRole } from '@/app/lib/auth/roles';
 
 const atlasLinks = [
   { name: 'Atlas', href: '/dashboard', icon: GlobeAltIcon },
-  { name: 'Upload photos', href: '/dashboard/import', icon: PhotoIcon },
-  { name: 'My places', href: '/dashboard/places', icon: BookmarkIcon },
-  { name: 'My Journeys', href: '/dashboard/chapters', icon: BookOpenIcon },
-  {
-    name: 'On this day',
-    href: '/dashboard/on-this-day',
-    icon: CalendarDaysIcon,
-  },
+  { name: 'Memories', href: '/dashboard/places', icon: BookmarkIcon },
+  { name: 'Journeys', href: '/dashboard/chapters', icon: BookOpenIcon },
+  { name: 'Adventures', href: '/dashboard/adventures', icon: MapIcon },
 ];
 
 type NavigationLink = (typeof atlasLinks)[number];
@@ -71,8 +65,8 @@ function NavigationSection({
               key={link.name}
               href={link.href}
               prefetch={
-                link.href === '/dashboard/on-this-day' ||
-                link.href === '/dashboard/chapters'
+                link.href === '/dashboard/chapters' ||
+                link.href === '/dashboard/adventures'
                   ? false
                   : undefined
               }

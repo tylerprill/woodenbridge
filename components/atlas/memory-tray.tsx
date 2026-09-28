@@ -55,7 +55,7 @@ export function MemoryTray({
                 {String(index + 1).padStart(2, '0')}
               </span>
               <span className={styles.memoryRowCopy}>
-                <strong>{entry.title || 'Untitled place'}</strong>
+                <strong>{entry.title || 'Untitled memory'}</strong>
                 <small>
                   <MapPinIcon aria-hidden="true" />
                   {getAtlasPlaceContextLabel(entry)}
@@ -74,7 +74,7 @@ export function MemoryTray({
             <span aria-hidden="true" />
             <strong>
               {hasAnyEntries
-                ? 'No places match this view.'
+                ? 'No memories match this view.'
                 : 'No memories yet.'}
             </strong>
             <p>

@@ -1819,7 +1819,7 @@ export default function AtlasMap({
                       ? 'Remembered place'
                       : 'Journey ahead'}
               </span>
-              <strong>{tooltipEntry.title || 'Untitled place'}</strong>
+              <strong>{tooltipEntry.title || 'Untitled memory'}</strong>
               <p>{getAtlasPlaceContextLabel(tooltipEntry)}</p>
               <small>
                 {builderActive

@@ -178,7 +178,7 @@ describe('shared Chapter reader', () => {
   it('keeps the owner opening concise and hands focus to its field note', async () => {
     render(<ChapterReader chapter={chapter} mode="owner" />);
 
-    expect(screen.getByRole('link', { name: 'My Journeys' })).toHaveAttribute(
+    expect(screen.getByRole('link', { name: 'Journeys' })).toHaveAttribute(
       'href',
       '/dashboard/chapters',
     );

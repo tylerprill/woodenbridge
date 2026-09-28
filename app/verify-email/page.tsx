@@ -41,7 +41,7 @@ export default async function VerifyEmailPage({
       }
       panelEyebrow="One last step"
       panelTitle={hasChallenge ? 'Check your email' : 'Verify your email'}
-      storyDescription="A quick confirmation keeps every field note, saved place, and future journey connected to its rightful explorer."
+      storyDescription="A quick confirmation keeps every memory, field note, and future journey connected to its rightful explorer."
       storyEyebrow="Confirm your route"
       storyNote="A six-digit marker, valid for ten minutes, opens the way forward."
       storyTitle="Make sure this atlas finds its owner."

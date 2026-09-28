@@ -1,4 +1,8 @@
-import { BookmarkIcon, PhotoIcon } from '@heroicons/react/24/outline';
+import {
+  BookmarkIcon,
+  CalendarDaysIcon,
+  PlusIcon,
+} from '@heroicons/react/24/outline';
 import Link from 'next/link';
 
 import {
@@ -28,37 +32,40 @@ export default async function CollectionPage({
     filter,
     page: Number.isFinite(requestedPage) ? requestedPage : 1,
   });
-  const places = data.entries;
+  const memories = data.entries;
 
   return (
     <div className="dashboard-page collection-page">
       <header className="dashboard-page-heading">
         <div>
           <p className="section-kicker">Personal atlas</p>
-          <h1>Your collection.</h1>
-          <p>Places you have explored and those still calling you onward.</p>
+          <h1>Memories.</h1>
+          <p>The moments you have saved and those still taking shape.</p>
         </div>
         <div className="collection-heading-actions">
-          <Link href="/dashboard/import">
-            <PhotoIcon aria-hidden="true" /> Upload photos
+          <Link href="/dashboard/on-this-day">
+            <CalendarDaysIcon aria-hidden="true" /> On this day
+          </Link>
+          <Link href="/dashboard?new=memory">
+            <PlusIcon aria-hidden="true" /> New memory
           </Link>
           <div className="collection-count">
             <BookmarkIcon aria-hidden="true" />
             <span>
               <strong>{data.counts.total}</strong>
-              saved places
+              {data.counts.total === 1 ? 'memory' : 'memories'}
             </span>
           </div>
         </div>
       </header>
 
-      <nav className="collection-filter" aria-label="Filter saved places">
+      <nav className="collection-filter" aria-label="Filter memories">
         <Link
           href={collectionHref('all')}
           data-active={filter === 'all' ? 'true' : 'false'}
           aria-current={filter === 'all' ? 'page' : undefined}
         >
-          All places
+          All memories
         </Link>
         <Link
           href={collectionHref('visited')}
@@ -76,9 +83,9 @@ export default async function CollectionPage({
         </Link>
       </nav>
 
-      {places.length ? (
-        <section className="collection-grid" aria-label="Saved places">
-          {places.map((entry, index) => (
+      {memories.length ? (
+        <section className="collection-grid" aria-label="Memories">
+          {memories.map((entry, index) => (
             <KeepsakeCard
               key={entry.id}
               entry={entry}
@@ -94,14 +101,14 @@ export default async function CollectionPage({
           aria-labelledby="empty-filter-title"
         >
           <span aria-hidden="true" />
-          <p className="section-kicker">No places in this view</p>
+          <p className="section-kicker">No memories in this view</p>
           <h2 id="empty-filter-title">
             {filter === 'ahead'
-              ? 'No journeys are waiting in the wings.'
-              : 'No remembered places match this view.'}
+              ? 'No future memories are waiting in the wings.'
+              : 'No memories match this view.'}
           </h2>
-          <p>Your other keepsakes are still right where you left them.</p>
-          <Link href="/dashboard/places">View all places</Link>
+          <p>Your other memories are still right where you left them.</p>
+          <Link href="/dashboard/places">View all memories</Link>
         </section>
       ) : (
         <section
@@ -110,19 +117,19 @@ export default async function CollectionPage({
         >
           <span aria-hidden="true" />
           <p className="section-kicker">An open page</p>
-          <h2 id="empty-collection-title">
-            Your collection is ready for its first place.
-          </h2>
-          <p>Upload photographs or place a memory directly on your atlas.</p>
+          <h2 id="empty-collection-title">Your first memory is waiting.</h2>
+          <p>
+            Choose its place, then add the details and photographs together.
+          </p>
           <div className="collection-empty-actions">
-            <Link href="/dashboard/import">Upload photos</Link>
+            <Link href="/dashboard?new=memory">New memory</Link>
             <Link href="/dashboard">Open your atlas</Link>
           </div>
         </section>
       )}
 
-      {places.length && data.totalPages > 1 ? (
-        <nav className="collection-pagination" aria-label="Collection pages">
+      {memories.length && data.totalPages > 1 ? (
+        <nav className="collection-pagination" aria-label="Memory pages">
           {data.page > 1 ? (
             <Link href={collectionHref(filter, data.page - 1)}>Previous</Link>
           ) : (
