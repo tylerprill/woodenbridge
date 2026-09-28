@@ -44,6 +44,11 @@ export type AtlasJourneySegment = {
   endDate: string | null;
 };
 
+export type AtlasJourneySegmentInput = Pick<
+  AtlasJourneySegment,
+  'id' | 'title'
+>;
+
 export type AtlasChapter = AtlasChapterSummary & {
   entries: AtlasChapterEntry[];
   segments: AtlasJourneySegment[];
@@ -140,6 +145,7 @@ export type AtlasChapterUpdateInput = Omit<
 > & {
   id: string;
   version: number;
+  segments?: AtlasJourneySegmentInput[];
 };
 
 export type AtlasChapterDeleteInput = Pick<

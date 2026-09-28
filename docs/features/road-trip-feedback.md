@@ -144,13 +144,24 @@ require Segment setup.
 - [x] Let each Segment's heading continue directly into that Segment.
 - [x] Preserve Segment membership when a Journey is edited and limit Memory
       reordering to within a Segment.
+- [x] Let an existing unsegmented Journey be divided retroactively from
+      **Arrange & share**, without recreating the Journey or its Memories.
+- [x] Let the traveler start a Segment at any Memory boundary, rename each
+      Segment inline, and move individual Memories through a native Segment
+      selector that continues to scale as more Segments are added.
+- [x] Let the traveler remove a Segment without removing its Memories by
+      folding those Memories into the adjacent Segment, or back into the
+      unsegmented Journey when the final Segment is removed.
+- [x] Save Segment definitions, order, and Memory membership atomically with
+      the Journey's optimistic version check.
 - [x] Remove the Adventures page and primary-navigation destination now that
       Journey Segments cover multi-day and multi-stage trips.
 
 **Acceptance criteria:** A short Journey still works with no Segment. A
 multi-day Journey can add and revisit many named Segments, continue the latest
 one in one action, target an older Segment without scrolling through buttons,
-and start a new Segment without leaving empty records after cancellation.
+start a new Segment without leaving empty records after cancellation, and
+retroactively divide an existing route without losing a Memory.
 
 ### 4. Continue an existing Journey
 

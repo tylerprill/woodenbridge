@@ -42,6 +42,7 @@ import {
 import type {
   AtlasChapterEditorChapter,
   AtlasChapterMemoryOption,
+  AtlasJourneySegmentInput,
   AtlasJourneyContinuation,
   ChapterActionError,
 } from '@/app/lib/chapters/definitions';
@@ -52,7 +53,9 @@ import type {
 import {
   CHAPTER_INTRODUCTION_MAX_LENGTH,
   CHAPTER_MAX_MEMORIES,
+  CHAPTER_MAX_SEGMENTS,
   CHAPTER_MIN_MEMORIES,
+  CHAPTER_SEGMENT_TITLE_MAX_LENGTH,
   CHAPTER_TITLE_MAX_LENGTH,
   CHAPTER_TRANSITION_MAX_LENGTH,
 } from '@/app/lib/chapters/validation';
@@ -163,6 +166,9 @@ export function ChapterEditor({
       ]),
     ),
   );
+  const [segments, setSegments] = useState<AtlasJourneySegmentInput[]>(() =>
+    (chapter?.segments ?? []).map(({ id, title }) => ({ id, title })),
+  );
   const [openTransitionIds, setOpenTransitionIds] = useState(
     new Set(
       initialMemories
@@ -208,10 +214,15 @@ export function ChapterEditor({
       segmentId: segmentIds[entryId] ?? null,
     })),
   );
+  const initialSegmentState = JSON.stringify(
+    (chapter?.segments ?? []).map(({ id, title }) => ({ id, title })),
+  );
+  const currentSegmentState = JSON.stringify(segments);
   const isDirty =
     title !== (chapter?.title ?? '') ||
     introduction !== (chapter?.introduction ?? '') ||
     currentMemoryState !== initialMemoryState ||
+    currentSegmentState !== initialSegmentState ||
     coverMediaId !== (chapter?.coverMediaId ?? null) ||
     visibility !== (chapter?.visibility ?? 'private') ||
     shareMap !== (chapter?.shareMap ?? true) ||
@@ -223,8 +234,8 @@ export function ChapterEditor({
   }, [availableEntries]);
   const selectedIdSet = useMemo(() => new Set(selectedIds), [selectedIds]);
   const segmentsById = useMemo(
-    () => new Map(chapter?.segments.map((segment) => [segment.id, segment])),
-    [chapter?.segments],
+    () => new Map(segments.map((segment) => [segment.id, segment])),
+    [segments],
   );
   const selectedEntries = useMemo(
     () =>
@@ -416,7 +427,7 @@ export function ChapterEditor({
     setSelectedIds([...selectedIds, entryId]);
     setSegmentIds((current) => ({
       ...current,
-      [entryId]: chapter?.segments.at(-1)?.id ?? null,
+      [entryId]: segments.at(-1)?.id ?? null,
     }));
   }
 
@@ -450,6 +461,162 @@ export function ChapterEditor({
     [next[index], next[target]] = [next[target], next[index]];
     setSelectedIds(next);
     announcePosition(next[target], next);
+  }
+
+  function divideIntoSegments() {
+    if (!chapter || segments.length || !selectedIds.length) return;
+    const segment = { id: crypto.randomUUID(), title: 'Segment 1' };
+    setSegments([segment]);
+    setSegmentIds((current) => ({
+      ...current,
+      ...Object.fromEntries(
+        selectedIds.map((entryId) => [entryId, segment.id]),
+      ),
+    }));
+  }
+
+  function createSegmentAt(index: number) {
+    if (
+      !chapter ||
+      index <= 0 ||
+      index >= selectedIds.length ||
+      segments.length >= CHAPTER_MAX_SEGMENTS
+    ) {
+      return;
+    }
+    const currentSegmentId = segmentIds[selectedIds[index]] ?? null;
+    const previousSegmentId = segmentIds[selectedIds[index - 1]] ?? null;
+    if (currentSegmentId !== previousSegmentId) return;
+
+    const segment = {
+      id: crypto.randomUUID(),
+      title: `Segment ${segments.length + 1}`,
+    };
+    const currentPosition = currentSegmentId
+      ? segments.findIndex((candidate) => candidate.id === currentSegmentId)
+      : -1;
+    const nextAssignedSegmentId = selectedIds
+      .slice(index)
+      .map((entryId) => segmentIds[entryId] ?? null)
+      .find((assignedSegmentId) => assignedSegmentId !== null);
+    const nextAssignedPosition = nextAssignedSegmentId
+      ? segments.findIndex(
+          (candidate) => candidate.id === nextAssignedSegmentId,
+        )
+      : -1;
+    const insertAt =
+      currentPosition >= 0
+        ? currentPosition + 1
+        : nextAssignedPosition >= 0
+          ? nextAssignedPosition
+          : segments.length;
+    setSegments((current) => [
+      ...current.slice(0, insertAt),
+      segment,
+      ...current.slice(insertAt),
+    ]);
+    setSegmentIds((current) => {
+      const next = { ...current };
+      for (
+        let memoryIndex = index;
+        memoryIndex < selectedIds.length;
+        memoryIndex += 1
+      ) {
+        const entryId = selectedIds[memoryIndex];
+        if ((current[entryId] ?? null) !== currentSegmentId) break;
+        next[entryId] = segment.id;
+      }
+      return next;
+    });
+  }
+
+  function renameSegment(segmentId: string, title: string) {
+    setSegments((current) =>
+      current.map((segment) =>
+        segment.id === segmentId ? { ...segment, title } : segment,
+      ),
+    );
+  }
+
+  function removeSegment(segmentId: string) {
+    const segmentIndex = segments.findIndex(
+      (segment) => segment.id === segmentId,
+    );
+    if (segmentIndex < 0) return;
+    const fallbackSegmentId =
+      segments[segmentIndex - 1]?.id ?? segments[segmentIndex + 1]?.id ?? null;
+    setSegmentIds((current) =>
+      Object.fromEntries(
+        Object.entries(current).map(([entryId, assignedSegmentId]) => [
+          entryId,
+          assignedSegmentId === segmentId
+            ? fallbackSegmentId
+            : assignedSegmentId,
+        ]),
+      ),
+    );
+    setSegments((current) =>
+      current.filter((segment) => segment.id !== segmentId),
+    );
+  }
+
+  function assignMemoryToSegment(entryId: string, segmentId: string) {
+    const nextSegmentId = segmentId || null;
+    const previousSegmentId = segmentIds[entryId] ?? null;
+    if (nextSegmentId === previousSegmentId) return;
+
+    const withoutEntry = selectedIds.filter((id) => id !== entryId);
+    let insertAt = 0;
+    if (nextSegmentId) {
+      const lastTargetIndex = withoutEntry.reduce(
+        (lastIndex, id, index) =>
+          (segmentIds[id] ?? null) === nextSegmentId ? index : lastIndex,
+        -1,
+      );
+      if (lastTargetIndex >= 0) {
+        insertAt = lastTargetIndex + 1;
+      } else {
+        const targetPosition = segments.findIndex(
+          (segment) => segment.id === nextSegmentId,
+        );
+        const nextSegmentIndex = withoutEntry.findIndex((id) => {
+          const assignedSegmentId = segmentIds[id] ?? null;
+          if (!assignedSegmentId) return false;
+          return (
+            segments.findIndex((segment) => segment.id === assignedSegmentId) >
+            targetPosition
+          );
+        });
+        insertAt =
+          nextSegmentIndex >= 0 ? nextSegmentIndex : withoutEntry.length;
+      }
+    } else {
+      const lastUnsegmentedIndex = withoutEntry.reduce(
+        (lastIndex, id, index) =>
+          (segmentIds[id] ?? null) === null ? index : lastIndex,
+        -1,
+      );
+      insertAt = lastUnsegmentedIndex + 1;
+    }
+    const next = [
+      ...withoutEntry.slice(0, insertAt),
+      entryId,
+      ...withoutEntry.slice(insertAt),
+    ];
+    setSelectedIds(next);
+    const entry = entriesById.get(entryId);
+    const destination = nextSegmentId
+      ? segmentsById.get(nextSegmentId)?.title || 'another segment'
+      : 'the unsegmented route';
+    if (entry) {
+      setReorderAnnouncement(
+        `${memoryName(entry)} moved to ${destination}, position ${insertAt + 1} of ${next.length}.`,
+      );
+    }
+    setSegmentIds((current) => ({
+      ...current,
+      [entryId]: nextSegmentId,
+    }));
   }
 
   function updateTransitionNote(entryId: string, value: string) {
@@ -508,6 +675,7 @@ export function ChapterEditor({
               ...input,
               id: chapter.id,
               version: chapter.version,
+              segments,
             })
           : await createAtlasChapterAction({
               ...input,
@@ -1132,6 +1300,28 @@ export function ChapterEditor({
             <span>{selectedIds.length}</span>
           </div>
 
+          {chapter && selectedEntries.length ? (
+            <div className={styles.segmentGuide}>
+              <div>
+                <strong>
+                  {segments.length
+                    ? `${segments.length} ${segments.length === 1 ? 'segment' : 'segments'}`
+                    : 'One continuous journey'}
+                </strong>
+                <span>
+                  {segments.length
+                    ? 'Start a new segment at any break, or move a Memory with its Segment menu.'
+                    : 'Divide this Journey into days, regions, or any stages that fit the route.'}
+                </span>
+              </div>
+              {!segments.length ? (
+                <button type="button" onClick={divideIntoSegments}>
+                  Divide into segments
+                </button>
+              ) : null}
+            </div>
+          ) : null}
+
           {selectedEntries.length ? (
             <ol className={styles.sequenceList}>
               {selectedEntries.map((entry, index) => {
@@ -1144,8 +1334,13 @@ export function ChapterEditor({
                     ? (segmentIds[selectedEntries[index - 1].id] ?? null)
                     : null;
                 const beginsSegment =
-                  Boolean(chapter?.segments.length) &&
+                  Boolean(segments.length) &&
                   (index === 0 || segmentId !== previousSegmentId);
+                const segmentPosition = segment
+                  ? segments.findIndex(
+                      (candidate) => candidate.id === segment.id,
+                    )
+                  : -1;
                 const isCover =
                   Boolean(entry.coverMediaId) &&
                   entry.coverMediaId === effectiveCoverMediaId;
@@ -1157,12 +1352,38 @@ export function ChapterEditor({
                   <Fragment key={entry.id}>
                     {beginsSegment ? (
                       <li className={styles.sequenceSegmentHeading}>
-                        <span>
-                          {segment
-                            ? `Segment ${String(segment.position + 1).padStart(2, '0')}`
-                            : 'Journey'}
-                        </span>
-                        <strong>{segment?.title ?? 'Without a segment'}</strong>
+                        {segment ? (
+                          <label>
+                            <span>
+                              Segment{' '}
+                              {String(segmentPosition + 1).padStart(2, '0')}
+                            </span>
+                            <input
+                              value={segment.title}
+                              onChange={(event) =>
+                                renameSegment(segment.id, event.target.value)
+                              }
+                              aria-label={`Name for segment ${segmentPosition + 1}`}
+                              maxLength={CHAPTER_SEGMENT_TITLE_MAX_LENGTH}
+                              required
+                            />
+                          </label>
+                        ) : (
+                          <div>
+                            <span>Unassigned</span>
+                            <strong>Without a segment</strong>
+                          </div>
+                        )}
+                        {segment ? (
+                          <button
+                            type="button"
+                            onClick={() => removeSegment(segment.id)}
+                            aria-label={`Remove ${segment.title || `segment ${segmentPosition + 1}`} segment`}
+                          >
+                            <TrashIcon aria-hidden="true" />
+                            <span>Remove</span>
+                          </button>
+                        ) : null}
                       </li>
                     ) : null}
                     {index > 0 && !beginsSegment ? (
@@ -1198,14 +1419,35 @@ export function ChapterEditor({
                             </button>
                           </label>
                         ) : (
+                          <div className={styles.transitionActions}>
+                            <button
+                              type="button"
+                              onClick={() => toggleTransition(entry.id)}
+                            >
+                              <PlusIcon aria-hidden="true" />
+                              Add words between these stops
+                            </button>
+                            {chapter && segments.length ? (
+                              <button
+                                type="button"
+                                onClick={() => createSegmentAt(index)}
+                                aria-label={`Start a segment here before ${memoryName(entry)}`}
+                              >
+                                Start a segment here
+                              </button>
+                            ) : null}
+                          </div>
+                        )}
+                        {transitionIsOpen && chapter && segments.length ? (
                           <button
                             type="button"
-                            onClick={() => toggleTransition(entry.id)}
+                            className={styles.startSegmentButton}
+                            onClick={() => createSegmentAt(index)}
+                            aria-label={`Start a segment here before ${memoryName(entry)}`}
                           >
-                            <PlusIcon aria-hidden="true" />
-                            Add words between these stops
+                            Start a segment here
                           </button>
-                        )}
+                        ) : null}
                       </li>
                     ) : null}
                     <li className={styles.sequenceItem}>
@@ -1225,6 +1467,29 @@ export function ChapterEditor({
                             entry.placeName ||
                             'Pinned place'}
                         </span>
+                        {chapter && segments.length ? (
+                          <label className={styles.sequenceSegmentPicker}>
+                            <span>Segment</span>
+                            <select
+                              value={segmentId ?? ''}
+                              onChange={(event) =>
+                                assignMemoryToSegment(
+                                  entry.id,
+                                  event.target.value,
+                                )
+                              }
+                              aria-label={`Segment for ${memoryName(entry)}`}
+                            >
+                              <option value="">Without a segment</option>
+                              {segments.map((candidate, segmentIndex) => (
+                                <option key={candidate.id} value={candidate.id}>
+                                  {String(segmentIndex + 1).padStart(2, '0')} ·{' '}
+                                  {candidate.title || 'Untitled segment'}
+                                </option>
+                              ))}
+                            </select>
+                          </label>
+                        ) : null}
                       </div>
                       <button
                         type="button"

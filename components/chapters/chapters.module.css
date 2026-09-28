@@ -1419,6 +1419,51 @@
   font-weight: 800;
 }
 
+.segmentGuide {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  padding: 0.9rem 1.4rem;
+  border-bottom: 1px solid var(--chapter-soft-line);
+  background: rgba(182, 109, 66, 0.06);
+  gap: 1rem;
+}
+
+.segmentGuide > div {
+  display: grid;
+  min-width: 0;
+  gap: 0.2rem;
+}
+
+.segmentGuide strong {
+  color: var(--forest-950);
+  font-family: Georgia, 'Times New Roman', serif;
+  font-size: 0.8rem;
+  font-weight: 400;
+}
+
+.segmentGuide span {
+  color: var(--forest-600);
+  font-size: 0.56rem;
+  line-height: 1.5;
+}
+
+.segmentGuide button {
+  min-height: 2.25rem;
+  border: 1px solid rgba(182, 109, 66, 0.34);
+  border-radius: 999px;
+  padding: 0.5rem 0.8rem;
+  color: var(--timber-ink);
+  font-size: 0.55rem;
+  font-weight: 800;
+}
+
+.segmentGuide button:hover,
+.segmentGuide button:focus-visible {
+  border-color: var(--timber);
+  background: rgba(182, 109, 66, 0.1);
+}
+
 .sequenceList {
   display: grid;
   max-height: 28rem;
@@ -1430,7 +1475,7 @@
 
 .sequenceSegmentHeading {
   display: flex;
-  align-items: baseline;
+  align-items: center;
   justify-content: space-between;
   margin: 0.85rem -0.2rem 0.15rem;
   padding: 0.7rem 0.2rem;
@@ -1438,7 +1483,16 @@
   gap: 1rem;
 }
 
-.sequenceSegmentHeading span {
+.sequenceSegmentHeading label,
+.sequenceSegmentHeading > div {
+  display: grid;
+  min-width: 0;
+  flex: 1;
+  gap: 0.22rem;
+}
+
+.sequenceSegmentHeading label > span,
+.sequenceSegmentHeading > div > span {
   color: var(--timber-ink);
   font-size: 0.54rem;
   font-weight: 800;
@@ -1446,7 +1500,25 @@
   text-transform: uppercase;
 }
 
-.sequenceSegmentHeading strong {
+.sequenceSegmentHeading input {
+  min-width: 0;
+  border: 0;
+  border-radius: 0.35rem;
+  background: transparent;
+  color: var(--forest-950);
+  padding: 0.15rem 0;
+  font-family: Georgia, 'Times New Roman', serif;
+  font-size: 0.88rem;
+}
+
+.sequenceSegmentHeading input:hover,
+.sequenceSegmentHeading input:focus {
+  background: var(--paper-light);
+  box-shadow: 0 0 0 3px var(--paper-light);
+  outline: none;
+}
+
+.sequenceSegmentHeading > div > strong {
   min-width: 0;
   overflow: hidden;
   font-family: Georgia, 'Times New Roman', serif;
@@ -1454,6 +1526,27 @@
   font-weight: 400;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+.sequenceSegmentHeading > button {
+  display: inline-flex;
+  align-items: center;
+  border-radius: 999px;
+  padding: 0.45rem 0.55rem;
+  color: var(--forest-600);
+  gap: 0.25rem;
+  font-size: 0.52rem;
+  font-weight: 800;
+}
+
+.sequenceSegmentHeading > button:hover,
+.sequenceSegmentHeading > button:focus-visible {
+  background: rgba(182, 109, 66, 0.1);
+  color: var(--timber-ink);
+}
+
+.sequenceSegmentHeading > button svg {
+  width: 0.72rem;
 }
 
 .sequenceItem {
@@ -1530,6 +1623,39 @@
   font-size: 0.59rem;
 }
 
+.sequenceSegmentPicker {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  align-items: center;
+  margin-top: 0.35rem;
+  gap: 0.4rem;
+}
+
+.sequenceSegmentPicker > span {
+  color: var(--timber-ink);
+  font-size: 0.48rem;
+  font-weight: 800;
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+}
+
+.sequenceSegmentPicker select {
+  min-width: 0;
+  height: 1.75rem;
+  border: 1px solid rgba(16, 35, 29, 0.14);
+  border-radius: 0.45rem;
+  background: var(--paper-light);
+  color: var(--forest-950);
+  padding: 0 1.4rem 0 0.45rem;
+  font-size: 0.56rem;
+}
+
+.sequenceSegmentPicker select:focus {
+  border-color: var(--forest-600);
+  box-shadow: 0 0 0 3px rgba(76, 106, 91, 0.12);
+  outline: none;
+}
+
 .sequenceActions {
   display: flex;
   grid-column: 2 / 4;
@@ -1593,7 +1719,15 @@
   list-style: none;
 }
 
-.transitionEditor > button {
+.transitionActions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.45rem 0.8rem;
+}
+
+.transitionActions button,
+.transitionEditor > .startSegmentButton {
   display: inline-flex;
   align-items: center;
   color: var(--forest-600);
@@ -1602,13 +1736,24 @@
   font-weight: 800;
 }
 
-.transitionEditor > button:hover,
-.transitionEditor > button:focus-visible {
+.transitionActions button:hover,
+.transitionActions button:focus-visible,
+.transitionEditor > .startSegmentButton:hover,
+.transitionEditor > .startSegmentButton:focus-visible {
   color: var(--timber);
 }
 
-.transitionEditor > button svg {
+.transitionActions button:first-child svg {
   width: 0.75rem;
+}
+
+.transitionActions button:last-child,
+.transitionEditor > .startSegmentButton {
+  color: var(--timber-ink);
+}
+
+.transitionEditor > .startSegmentButton {
+  margin-top: 0.45rem;
 }
 
 .transitionEditor label {
@@ -3564,6 +3709,42 @@
 
   .sequenceItem {
     grid-template-columns: auto minmax(0, 1fr) auto;
+  }
+
+  .segmentGuide {
+    grid-template-columns: minmax(0, 1fr);
+    padding: 0.9rem 1rem;
+  }
+
+  .segmentGuide button {
+    width: 100%;
+    min-height: 2.75rem;
+  }
+
+  .sequenceSegmentHeading {
+    gap: 0.5rem;
+  }
+
+  .sequenceSegmentHeading > button span {
+    display: none;
+  }
+
+  .sequenceSegmentHeading input,
+  .sequenceSegmentPicker select {
+    min-height: 2.5rem;
+    font-size: 1rem;
+  }
+
+  .sequenceSegmentPicker {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 0.2rem;
+  }
+
+  .sequenceSegmentHeading > button,
+  .transitionActions button,
+  .transitionEditor > .startSegmentButton {
+    min-width: 2.5rem;
+    min-height: 2.5rem;
   }
 
   .transitionEditor {
