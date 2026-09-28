@@ -8,6 +8,8 @@ import { BlobNotFoundError, del, get, head } from '@vercel/blob';
 import {
   AtlasMediaStorageConflictError,
   deleteAtlasMediaObjects,
+  getAtlasBlobAuthOptions,
+  getAtlasBlobWebhookPublicKey,
   getE2EAtlasMediaStorageConfiguration,
   headAtlasMediaObject,
   putE2EAtlasMediaObject,
@@ -27,6 +29,8 @@ const pathname = `atlas/memories/${entryId}/${mediaId}.jpg`;
 const environmentKeys = [
   'APP_URL',
   'ATLAS_BLOB_READ_WRITE_TOKEN',
+  'ATLAS_BLOB_STORE_ID',
+  'ATLAS_BLOB_WEBHOOK_PUBLIC_KEY',
   'AUTH_URL',
   'DATABASE_URL',
   'E2E_DATABASE_ADAPTER',
@@ -40,6 +44,7 @@ const environmentKeys = [
   'RUNNER_TEMP',
   'VERCEL',
   'VERCEL_ENV',
+  'VERCEL_OIDC_TOKEN',
 ] as const;
 
 function filesystemEnvironment(
@@ -199,8 +204,9 @@ describe('isolated Atlas filesystem media storage', () => {
     });
   });
 
-  it('keeps production reads and deletes on private Vercel Blob storage', async () => {
-    process.env.ATLAS_BLOB_READ_WRITE_TOKEN = 'production-test-token';
+  it('uses short-lived OIDC credentials for production reads and deletes', async () => {
+    process.env.ATLAS_BLOB_STORE_ID = 'store_atlasstore12345';
+    process.env.VERCEL_OIDC_TOKEN = 'short-lived-oidc-token';
     const metadata = {
       pathname,
       contentType: 'image/jpeg',
@@ -228,16 +234,71 @@ describe('isolated Atlas filesystem media storage', () => {
     await expect(deleteAtlasMediaObjects([pathname])).resolves.toBeUndefined();
 
     expect(head).toHaveBeenCalledWith(pathname, {
-      token: 'production-test-token',
+      storeId: 'atlasstore12345',
     });
     expect(get).toHaveBeenCalledWith(pathname, {
       access: 'private',
-      token: 'production-test-token',
+      storeId: 'atlasstore12345',
       ifNoneMatch: 'previous-etag',
     });
     expect(del).toHaveBeenCalledWith([pathname], {
-      token: 'production-test-token',
+      storeId: 'atlasstore12345',
     });
+  });
+
+  it('keeps an explicit read-write token fallback for local development', () => {
+    process.env.ATLAS_BLOB_READ_WRITE_TOKEN =
+      'vercel_blob_rw_atlasstore12345_local-secret';
+    process.env.ATLAS_BLOB_STORE_ID = 'store_atlasstore12345';
+
+    expect(getAtlasBlobAuthOptions()).toEqual({
+      token: 'vercel_blob_rw_atlasstore12345_local-secret',
+    });
+  });
+
+  it('prefers OIDC when a stale legacy credential is also present', () => {
+    expect(
+      getAtlasBlobAuthOptions({
+        ATLAS_BLOB_READ_WRITE_TOKEN:
+          'vercel_blob_rw_atlasstore12345_stale-secret',
+        ATLAS_BLOB_STORE_ID: 'store_atlasstore12345',
+        VERCEL_OIDC_TOKEN: 'short-lived-oidc-token',
+        NODE_ENV: 'test',
+      }),
+    ).toEqual({ storeId: 'atlasstore12345' });
+  });
+
+  it('fails closed when a configured store has no usable credential', () => {
+    expect(() =>
+      getAtlasBlobAuthOptions({
+        ATLAS_BLOB_STORE_ID: 'store_atlasstore12345',
+        NODE_ENV: 'test',
+      }),
+    ).toThrow('VERCEL_OIDC_TOKEN');
+  });
+
+  it('rejects mismatched legacy Blob credentials', () => {
+    expect(() =>
+      getAtlasBlobAuthOptions({
+        ATLAS_BLOB_READ_WRITE_TOKEN:
+          'vercel_blob_rw_otherstore12345_local-secret',
+        ATLAS_BLOB_STORE_ID: 'store_atlasstore12345',
+        NODE_ENV: 'test',
+      }),
+    ).toThrow('does not match');
+  });
+
+  it('requires a PEM public key for presigned upload callbacks', () => {
+    expect(
+      getAtlasBlobWebhookPublicKey({
+        ATLAS_BLOB_WEBHOOK_PUBLIC_KEY:
+          '-----BEGIN PUBLIC KEY-----\npublic-key\n-----END PUBLIC KEY-----',
+        NODE_ENV: 'test',
+      }),
+    ).toContain('BEGIN PUBLIC KEY');
+    expect(() => getAtlasBlobWebhookPublicKey({ NODE_ENV: 'test' })).toThrow(
+      'ATLAS_BLOB_WEBHOOK_PUBLIC_KEY',
+    );
   });
 
   it('rejects symbolic-link boundaries and storage roots', async () => {

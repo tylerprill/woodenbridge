@@ -92,6 +92,32 @@ export async function findPendingRegistrationByChallenge(challengeId: string) {
   return row ? toPendingRegistration(row) : undefined;
 }
 
+/**
+ * Resolves the login prefill only after the opaque challenge has been consumed
+ * and its account is verified. The matching HttpOnly handoff cookie expires in
+ * five minutes; repeating the time bound here prevents an old challenge from
+ * becoming a durable email lookup token if a cookie is replayed.
+ */
+export async function findRecentlyVerifiedEmailByChallenge(
+  challengeId: string,
+) {
+  if (!VERIFICATION_CHALLENGE_PATTERN.test(challengeId)) return undefined;
+
+  const result = await sql<{ email: string }>`
+    SELECT pending.email
+    FROM pending_registrations AS pending
+    INNER JOIN users
+      ON LOWER(users.email) = pending.email
+    WHERE pending.challenge_id = ${challengeId}
+      AND pending.used_at IS NOT NULL
+      AND pending.used_at > NOW() - INTERVAL '5 minutes'
+      AND users.email_verified_at IS NOT NULL
+    LIMIT 1
+  `;
+
+  return result.rows[0]?.email;
+}
+
 export async function recordEmailVerificationRequest(
   emailHash: string,
   ipHash: string,

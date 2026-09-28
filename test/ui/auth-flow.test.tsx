@@ -6,12 +6,14 @@ import { render, screen } from '@testing-library/react';
 
 import type { SignUpState } from '@/app/lib/auth/sign-up';
 import { PHOTO_IMPORT_INTENT } from '@/app/lib/auth/post-auth-intent';
+import LoginForm from '@/components/unclean/login-form';
 import { SignUpFieldsForm } from '@/components/unclean/sign-up-form';
 import VerifyEmailForm, {
   VerificationCodeForm,
 } from '@/components/unclean/verify-email-form';
 
 jest.mock('@/app/lib/actions', () => ({
+  authenticate: jest.fn(),
   createUser: jest.fn(),
 }));
 
@@ -60,6 +62,49 @@ describe('account creation and verification UI', () => {
       screen.getByRole('button', { name: 'Send another code' }),
     ).toBeEnabled();
     expect(screen.getByText(/expires in 10 minutes/i)).toBeVisible();
+  });
+
+  it('keeps real and decoy sent-code markup identical to prevent account enumeration', () => {
+    const realChallenge = render(
+      <VerifyEmailForm
+        hasChallenge
+        codeSent
+        intent={PHOTO_IMPORT_INTENT}
+        verificationEmail="new.explorer@example.com"
+      />,
+    );
+    const realMarkup = realChallenge.container.innerHTML;
+    expect(screen.getByRole('status')).toHaveTextContent(
+      'We sent a six-digit code to new.explorer@example.com',
+    );
+    realChallenge.unmount();
+
+    const decoyChallenge = render(
+      <VerifyEmailForm
+        hasChallenge
+        codeSent
+        intent={PHOTO_IMPORT_INTENT}
+        verificationEmail="new.explorer@example.com"
+      />,
+    );
+    expect(decoyChallenge.container.innerHTML).toBe(realMarkup);
+  });
+
+  it('prefills the just-verified email and moves focus to the password', () => {
+    render(
+      <LoginForm
+        initialEmail="new.explorer@example.com"
+        verificationComplete
+      />,
+    );
+
+    expect(screen.getByLabelText('Email address')).toHaveValue(
+      'new.explorer@example.com',
+    );
+    expect(screen.getByLabelText('Password')).toHaveFocus();
+    expect(screen.getByRole('status')).toHaveTextContent(
+      'Your email is verified',
+    );
   });
 
   it('returns a browser without a challenge to account creation', () => {

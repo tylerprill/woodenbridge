@@ -181,7 +181,7 @@ describe('photo journey import UI', () => {
     ).toBeVisible();
 
     const dropTarget = screen.getByRole('region', {
-      name: 'Upload a journey.',
+      name: 'Upload your photos.',
     });
     const files = [new File(['drop'], 'dropped.jpg', { type: 'image/jpeg' })];
     fireEvent.dragEnter(dropTarget, { dataTransfer: { files } });

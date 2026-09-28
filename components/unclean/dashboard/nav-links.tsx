@@ -46,18 +46,24 @@ function isLinkActive(pathname: string, href: string) {
 }
 
 function NavigationSection({
+  className,
   id,
   label,
   links,
   pathname,
 }: {
+  className?: string;
   id: string;
   label: string;
   links: NavigationLink[];
   pathname: string;
 }) {
   return (
-    <div className="dashboard-nav-section" role="group" aria-labelledby={id}>
+    <div
+      className={clsx('dashboard-nav-section', className)}
+      role="group"
+      aria-labelledby={id}
+    >
       <p id={id} className="dashboard-nav-section-label">
         {label}
       </p>
@@ -99,7 +105,7 @@ export default function NavLinks({ role }: { role: AppRole }) {
   const sectionsRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
-    if (!window.matchMedia?.('(max-width: 900px)').matches) return;
+    if (!window.matchMedia?.('(max-width: 1240px)').matches) return;
     const sections = sectionsRef.current;
     const scroller = sections?.closest<HTMLElement>('.dashboard-nav');
     const activeLink = sections?.querySelector<HTMLElement>(
@@ -121,14 +127,17 @@ export default function NavLinks({ role }: { role: AppRole }) {
         links={atlasLinks}
         pathname={pathname}
       />
-      {canManageAccounts ? (
-        <NavigationSection
-          id="dashboard-account-navigation"
-          label="Account"
-          links={[...accountLinks, ...managementLinks]}
-          pathname={pathname}
-        />
-      ) : null}
+      <NavigationSection
+        className="dashboard-nav-section-account"
+        id="dashboard-account-navigation"
+        label="Account"
+        links={
+          canManageAccounts
+            ? [...accountLinks, ...managementLinks]
+            : accountLinks
+        }
+        pathname={pathname}
+      />
     </div>
   );
 }

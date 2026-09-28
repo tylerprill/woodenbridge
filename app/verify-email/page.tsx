@@ -1,7 +1,10 @@
 import type { Metadata } from 'next';
 import Link from 'next/link';
 
-import { getEmailVerificationChallengeCookie } from '@/app/lib/auth/email-verification-cookie';
+import {
+  getEmailVerificationChallengeCookie,
+  getEmailVerificationDestinationCookie,
+} from '@/app/lib/auth/email-verification-cookie';
 import {
   getPostAuthIntent,
   withPostAuthIntent,
@@ -28,7 +31,10 @@ export default async function VerifyEmailPage({
 }) {
   const params = await searchParams;
   const intent = getPostAuthIntent(params.intent);
-  const challengeId = await getEmailVerificationChallengeCookie();
+  const [challengeId, verificationEmail] = await Promise.all([
+    getEmailVerificationChallengeCookie(),
+    getEmailVerificationDestinationCookie(),
+  ]);
   const hasChallenge = Boolean(challengeId);
 
   return (
@@ -58,6 +64,7 @@ export default async function VerifyEmailPage({
         hasChallenge={hasChallenge}
         codeSent={params.sent === '1'}
         intent={intent}
+        verificationEmail={verificationEmail}
       />
     </AuthShell>
   );

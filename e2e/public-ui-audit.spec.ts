@@ -32,6 +32,7 @@ const sharedChapterPath = sharedChapterId
   : null;
 
 const compactLoginViewport = { width: 393, height: 659 } as const;
+const compactLandingLandscapeViewport = { width: 568, height: 320 } as const;
 // This is Playwright's iPhone 15 landscape content viewport. Keeping the
 // dimensions explicit makes the fold regression identical in every project.
 const compactSharedLandscapeViewport = { width: 734, height: 343 } as const;
@@ -265,6 +266,22 @@ test('login submit fits the compact portrait first fold', async ({ page }) => {
     page,
     page.getByRole('button', { name: /^sign in$/i }),
     `login submit at ${compactLoginViewport.width}x${compactLoginViewport.height}`,
+  );
+});
+
+test('landing photo CTA fits the smallest landscape first fold', async ({
+  page,
+}) => {
+  await page.setViewportSize(compactLandingLandscapeViewport);
+  await page.goto('/');
+  await expect(
+    page.getByRole('heading', { level: 1, name: /Your camera roll/ }),
+  ).toBeVisible();
+
+  await expectInsideInitialViewport(
+    page,
+    page.getByRole('link', { name: 'Start with your photos', exact: true }),
+    `landing photo CTA at ${compactLandingLandscapeViewport.width}x${compactLandingLandscapeViewport.height}`,
   );
 });
 

@@ -489,7 +489,7 @@ export function MemoryDrawer({
         </label>
 
         <fieldset className={styles.fieldGroup}>
-          <legend className={styles.fieldLabel}>Journey</legend>
+          <legend className={styles.fieldLabel}>Place status</legend>
           <div className={styles.segmentedControl}>
             {(
               [

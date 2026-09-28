@@ -18,6 +18,7 @@ import {
   ShieldCheckIcon,
   TrashIcon,
 } from '@heroicons/react/24/outline';
+import clsx from 'clsx';
 import { useRouter } from 'next/navigation';
 import { useEffect, useState, useTransition } from 'react';
 import { startAuthentication, startRegistration } from 'simplewebauthn-browser';
@@ -166,6 +167,8 @@ export function PasskeySecurityPanel({
 
     return () => window.clearTimeout(timeout);
   }, [activeRecoveryGrant, hasActiveRecoveryGrant]);
+
+  if (!isPrivileged && passkeys.length === 0) return null;
 
   function report(tone: 'error' | 'success', nextMessage: string) {
     setMessageTone(tone);
@@ -424,7 +427,11 @@ export function PasskeySecurityPanel({
   }
 
   return (
-    <div className="security-grid">
+    <div
+      className={clsx('security-grid', {
+        'security-grid-legacy': !isPrivileged,
+      })}
+    >
       <section className="security-card security-card-primary">
         <div className="security-card-heading">
           <span className="security-card-icon">
@@ -434,16 +441,14 @@ export function PasskeySecurityPanel({
             <p className="section-kicker">
               {isPrivileged
                 ? 'Phishing-resistant protection'
-                : 'Legacy management credentials'}
+                : 'Previous management access'}
             </p>
             <h2>
               {isPrivileged
                 ? passkeys.length
                   ? 'Your passkeys'
                   : 'Add your first passkey'
-                : passkeys.length
-                  ? 'Inactive passkeys'
-                  : 'No management passkeys'}
+                : 'Legacy passkeys'}
             </h2>
           </div>
         </div>
@@ -451,7 +456,7 @@ export function PasskeySecurityPanel({
         <p className="security-card-description">
           {isPrivileged
             ? 'Passkeys use your device unlock, fingerprint, or face recognition. Field Atlas stores only the public credential—never your biometric.'
-            : 'Passkeys are used only for owner and administrator management checks. They do not change sign-in or ordinary member access.'}
+            : 'These credentials were added for protected management in an earlier role. They are inactive now and do not affect ordinary sign-in.'}
         </p>
 
         {isPrivileged ? (
@@ -467,9 +472,9 @@ export function PasskeySecurityPanel({
           <div className="security-requirement security-requirement-muted">
             <KeyIcon aria-hidden="true" />
             <span>
-              <strong>Inactive for this role.</strong>
-              You can remove a legacy credential below, but members cannot use
-              passkeys for sign-in or account actions.
+              <strong>No action is required.</strong>
+              Keep these for your account history or remove any credential you
+              no longer recognize.
             </span>
           </div>
         ) : null}
@@ -604,24 +609,7 @@ export function PasskeySecurityPanel({
                 : 'Keep more than one passkey when possible so another trusted device can recover protected access.'}
           </p>
         </section>
-      ) : (
-        <section className="security-card security-card-muted">
-          <div className="security-card-heading">
-            <span className="security-card-icon security-card-icon-soft">
-              <ShieldCheckIcon aria-hidden="true" />
-            </span>
-            <div>
-              <p className="section-kicker">Role-aware security</p>
-              <h2>Management step-up is inactive</h2>
-            </div>
-          </div>
-          <p className="security-card-description">
-            If your role changes to administrator or owner, Field Atlas will
-            guide you through passkey setup before protected management becomes
-            available.
-          </p>
-        </section>
-      )}
+      ) : null}
 
       {isPrivileged ? (
         <section className="security-card security-recovery-card">
@@ -741,11 +729,16 @@ export function PasskeySecurityPanel({
             <span className="owner-confirm-icon" aria-hidden="true">
               <ExclamationTriangleIcon />
             </span>
-            <p className="section-kicker">Retire trusted credential</p>
+            <p className="section-kicker">
+              {isPrivileged
+                ? 'Retire trusted credential'
+                : 'Remove legacy credential'}
+            </p>
             <DialogTitle>Remove {passkeyToRemove?.label}?</DialogTitle>
             <DialogDescription>
-              This device will stop unlocking protected actions. Recent passkey
-              verification will also be cleared from every signed-in session.
+              {isPrivileged
+                ? 'This device will stop unlocking protected actions. Recent passkey verification will also be cleared from every signed-in session.'
+                : 'This inactive credential will be permanently removed from your account. Confirm with your current password to continue.'}
             </DialogDescription>
 
             {!isPrivileged ? (

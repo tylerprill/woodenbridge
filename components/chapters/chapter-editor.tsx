@@ -565,8 +565,12 @@ export function ChapterEditor({
           </p>
         </div>
         <p className={styles.editorProgress}>
-          <strong>{String(selectedIds.length).padStart(2, '0')}</strong>
-          memories selected
+          <strong>
+            {selectedIds.length === 0
+              ? '0'
+              : String(selectedIds.length).padStart(2, '0')}
+          </strong>
+          {selectedIds.length === 1 ? 'memory' : 'memories'} selected
         </p>
       </header>
 

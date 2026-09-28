@@ -4,11 +4,11 @@
 
 import { TextEncoder as NodeTextEncoder } from 'node:util';
 
-import { upload } from '@vercel/blob/client';
+import { uploadPresigned } from '@vercel/blob/client';
 
 import { uploadAtlasMedia } from '@/app/lib/atlas/media-upload-client';
 
-jest.mock('@vercel/blob/client', () => ({ upload: jest.fn() }));
+jest.mock('@vercel/blob/client', () => ({ uploadPresigned: jest.fn() }));
 
 const pathname =
   'atlas/memories/f7c0bf19-59fc-49df-9bd7-ae405a69e49c/2df8f2d8-9fae-4c86-9578-3ed6179e262b.jpg';
@@ -33,7 +33,7 @@ describe('Atlas media upload client', () => {
 
   beforeEach(() => {
     delete process.env.NEXT_PUBLIC_E2E_MEDIA_STORAGE_ADAPTER;
-    jest.mocked(upload).mockReset();
+    jest.mocked(uploadPresigned).mockReset();
     global.fetch = jest.fn();
   });
 
@@ -52,7 +52,7 @@ describe('Atlas media upload client', () => {
   it('preserves the production Vercel Blob client upload contract', async () => {
     const body = new Blob(['photo'], { type: 'image/jpeg' });
     const onUploadProgress = jest.fn();
-    jest.mocked(upload).mockResolvedValue({ pathname } as never);
+    jest.mocked(uploadPresigned).mockResolvedValue({ pathname } as never);
 
     await expect(
       uploadAtlasMedia(pathname, body, {
@@ -62,7 +62,7 @@ describe('Atlas media upload client', () => {
       }),
     ).resolves.toEqual({ pathname });
 
-    expect(upload).toHaveBeenCalledWith(pathname, body, {
+    expect(uploadPresigned).toHaveBeenCalledWith(pathname, body, {
       access: 'private',
       handleUploadUrl: '/api/atlas/media/upload',
       clientPayload,
@@ -89,7 +89,7 @@ describe('Atlas media upload client', () => {
       }),
     ).resolves.toEqual({ pathname });
 
-    expect(upload).not.toHaveBeenCalled();
+    expect(uploadPresigned).not.toHaveBeenCalled();
     expect(fetch).toHaveBeenCalledWith(
       `/api/atlas/media/upload?pathname=${encodeURIComponent(pathname)}`,
       expect.objectContaining({

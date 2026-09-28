@@ -1,6 +1,8 @@
 import type { Metadata } from 'next';
 import Link from 'next/link';
 
+import { findRecentlyVerifiedEmailByChallenge } from '@/app/lib/auth/email-verification';
+import { getVerifiedLoginChallengeCookie } from '@/app/lib/auth/email-verification-cookie';
 import {
   getPostAuthIntent,
   withPostAuthIntent,
@@ -26,7 +28,21 @@ export default async function LoginPage({
   const params = await searchParams;
   const intent = getPostAuthIntent(params.intent);
   const resetComplete = params.reset === 'success';
-  const verificationComplete = params.verified === 'success';
+  const verificationRequested = params.verified === 'success';
+  let verifiedEmail: string | undefined;
+
+  if (verificationRequested) {
+    const verifiedChallengeId = await getVerifiedLoginChallengeCookie();
+
+    if (verifiedChallengeId) {
+      try {
+        verifiedEmail =
+          await findRecentlyVerifiedEmailByChallenge(verifiedChallengeId);
+      } catch (error) {
+        console.error('Verified login destination lookup failed:', error);
+      }
+    }
+  }
 
   return (
     <AuthShell
@@ -49,8 +65,9 @@ export default async function LoginPage({
     >
       <LoginForm
         intent={intent}
+        initialEmail={verifiedEmail}
         resetComplete={resetComplete}
-        verificationComplete={verificationComplete}
+        verificationComplete={Boolean(verifiedEmail)}
       />
     </AuthShell>
   );

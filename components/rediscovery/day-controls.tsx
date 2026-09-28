@@ -35,7 +35,13 @@ function subscribeToLocalDay(onChange: () => void) {
 
 const serverDay = () => null;
 
-export function DayControls({ date }: { date: string }) {
+export function DayControls({
+  date,
+  minDate,
+}: {
+  date: string;
+  minDate?: string;
+}) {
   const router = useRouter();
   const today = useSyncExternalStore(
     subscribeToLocalDay,
@@ -44,12 +50,19 @@ export function DayControls({ date }: { date: string }) {
   );
   const previous = shiftCalendarDate(date, -1);
   const next = shiftCalendarDate(date, 1);
+  const effectiveMinDate =
+    minDate && minDate <= date && (today === null || minDate <= today)
+      ? minDate
+      : undefined;
+  const canRewind =
+    previous !== null &&
+    (effectiveMinDate === undefined || previous >= effectiveMinDate);
   const canAdvance = next !== null && today !== null && next <= today;
 
   return (
     <div className={styles.controls}>
       <nav className={styles.browse} aria-label="Browse memory dates">
-        {previous ? (
+        {canRewind ? (
           <Link href={onThisDayHref(previous)} aria-label="Previous day">
             <ChevronLeftIcon aria-hidden="true" />
           </Link>
@@ -88,7 +101,7 @@ export function DayControls({ date }: { date: string }) {
             type="date"
             defaultValue={date}
             max={today ?? undefined}
-            min="0001-01-01"
+            min={effectiveMinDate}
             required
           />
           <button type="submit">Find memories</button>

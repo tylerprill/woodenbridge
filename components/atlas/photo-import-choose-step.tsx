@@ -100,7 +100,7 @@ export function PhotoImportChooseStep({
         </div>
         <p className="section-kicker">Begin with the photographs</p>
         <h2 id="photo-picker-title">
-          {dragging ? 'Drop them right here.' : 'Upload a journey.'}
+          {dragging ? 'Drop them right here.' : 'Upload your photos.'}
         </h2>
         <p>
           Drop photos here or choose up to {MAX_IMPORT_PHOTOS} from your device.

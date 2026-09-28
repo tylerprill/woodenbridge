@@ -100,7 +100,7 @@ export function PhotoImportCompletionStep({
             <Link href="/dashboard">View on the Atlas</Link>
           )}
           <button type="button" onClick={onRestart}>
-            Upload another journey
+            Upload more photos
           </button>
         </div>
       </section>

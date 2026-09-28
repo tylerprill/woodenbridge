@@ -10,7 +10,11 @@ import {
   createDecoyVerificationChallengeId,
   deleteExpiredEmailVerificationData,
 } from './auth/email-verification';
-import { setEmailVerificationChallengeCookie } from './auth/email-verification-cookie';
+import {
+  clearVerifiedLoginChallengeCookie,
+  setEmailVerificationDestinationCookie,
+  setEmailVerificationChallengeCookie,
+} from './auth/email-verification-cookie';
 import { issuePendingRegistrationVerification } from './auth/email-verification-flow';
 import { getClientIpHash, hashRateLimitKey } from './auth/security';
 import {
@@ -42,6 +46,18 @@ function redirectToAuthenticatedHome(formData: FormData) {
   return formData;
 }
 
+async function setPendingRegistrationBrowserContext(
+  challengeId: string,
+  email: string,
+) {
+  // The signed destination is set for both real and decoy challenges so the
+  // verification UI cannot reveal whether an address already has an account.
+  await Promise.all([
+    setEmailVerificationChallengeCookie(challengeId),
+    setEmailVerificationDestinationCookie(email),
+  ]);
+}
+
 export async function authenticate(
   prevState: LoginState,
   formData: FormData,
@@ -49,6 +65,7 @@ export async function authenticate(
   const email = getLoginEmail(formData);
 
   try {
+    await clearVerifiedLoginChallengeCookie();
     await signIn('credentials', redirectToAuthenticatedHome(formData));
   } catch (error) {
     if (error instanceof AuthError) {
@@ -107,7 +124,7 @@ export async function createUser(
 
   if (!allowed) {
     recordSecurityEvent('signup.rate_limited', 'limited');
-    await setEmailVerificationChallengeCookie(challengeId);
+    await setPendingRegistrationBrowserContext(challengeId, user.email);
     redirect(withPostAuthIntent('/verify-email?sent=1', postAuthIntent));
   }
 
@@ -145,7 +162,7 @@ export async function createUser(
     );
   }
 
-  await setEmailVerificationChallengeCookie(challengeId);
+  await setPendingRegistrationBrowserContext(challengeId, user.email);
   after(async () => {
     await Promise.all([
       deleteExpiredEmailVerificationData().catch((error) => {

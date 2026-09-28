@@ -65,9 +65,10 @@ describe('dashboard navigation', () => {
     ]);
   });
 
-  it('shows only atlas navigation to a standard user', () => {
+  it('keeps personal security discoverable without exposing user management', () => {
     renderNavigation('user');
     const atlas = screen.getByRole('group', { name: 'Your atlas' });
+    const account = screen.getByRole('group', { name: 'Account' });
 
     expect(within(atlas).getByRole('link', { name: 'Atlas' })).toHaveAttribute(
       'href',
@@ -89,11 +90,8 @@ describe('dashboard navigation', () => {
       within(atlas).getByRole('link', { name: 'On this day' }),
     ).toHaveAttribute('href', '/dashboard/on-this-day');
     expect(
-      screen.queryByRole('group', { name: 'Account' }),
-    ).not.toBeInTheDocument();
-    expect(
-      screen.queryByRole('link', { name: 'Security' }),
-    ).not.toBeInTheDocument();
+      within(account).getByRole('link', { name: 'Security' }),
+    ).toHaveAttribute('href', '/dashboard/security');
     expect(
       screen.queryByRole('link', { name: 'Users' }),
     ).not.toBeInTheDocument();

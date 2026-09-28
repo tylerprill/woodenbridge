@@ -58,10 +58,16 @@ function mediaRow() {
   };
 }
 
-function installRows(total: number | string, rows = [memoryRow()]) {
+function installRows(
+  total: number | string,
+  rows = [memoryRow()],
+  earliestDate: string | null = rows.length ? '2023-09-15' : null,
+) {
   jest
     .mocked(sql)
-    .mockResolvedValueOnce({ rows: [{ total }] } as never)
+    .mockResolvedValueOnce({
+      rows: [{ total, earliest_date: earliestDate }],
+    } as never)
     .mockResolvedValueOnce({ rows } as never);
 }
 
@@ -111,6 +117,7 @@ describe('On this day private bounded data', () => {
     const data = await getRediscoveryData({ date: '2026-09-15' });
     expect(data).toMatchObject({
       date: '2026-09-15',
+      earliestDate: '2023-09-15',
       mode: 'anniversary',
       total: 25,
       page: 1,
@@ -177,6 +184,7 @@ describe('On this day private bounded data', () => {
     const data = await getRediscoveryData({ date: '2026-09-15', page: 99 });
     expect(data).toMatchObject({
       mode: 'recent',
+      earliestDate: '2023-09-15',
       total: 6,
       page: 1,
       pageSize: 6,
@@ -203,6 +211,7 @@ describe('On this day private bounded data', () => {
     installRows(0, []);
     await expect(getRediscoveryData({ date: '2026-09-15' })).resolves.toEqual({
       date: '2026-09-15',
+      earliestDate: null,
       mode: 'recent',
       total: 0,
       page: 1,
@@ -349,7 +358,7 @@ describe('On this day private bounded data', () => {
         throw new Error('Unscoped query.');
       return {
         rows: query.includes('COUNT(*)')
-          ? [{ total: 1 }]
+          ? [{ total: 1, earliest_date: '2023-09-15' }]
           : [
               memoryRow({
                 id: owner === userId ? 'owner-a-memory' : 'owner-b-memory',

@@ -5,7 +5,10 @@
 import { act, render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 
-import { updateAtlasEntryAction } from '@/app/lib/actions/atlas';
+import {
+  archiveAtlasEntryAction,
+  updateAtlasEntryAction,
+} from '@/app/lib/actions/atlas';
 import { getAtlasEntryMediaAction } from '@/app/lib/actions/atlas-media';
 import type { AtlasData, AtlasMedia } from '@/app/lib/atlas/definitions';
 import { AtlasWorkspace } from '@/components/atlas/atlas-workspace';
@@ -91,6 +94,10 @@ const initialData: AtlasData = {
 describe('Atlas workspace focus restoration', () => {
   beforeEach(() => {
     jest.clearAllMocks();
+    jest.mocked(archiveAtlasEntryAction).mockImplementation(async (id) => ({
+      ok: true,
+      data: { id },
+    }));
     jest.mocked(getAtlasEntryMediaAction).mockResolvedValue({
       ok: true,
       data: [],
@@ -112,6 +119,45 @@ describe('Atlas workspace focus restoration', () => {
 
     await waitFor(() => expect(memoryListToggle).toHaveFocus());
     expect(mockReplace).not.toHaveBeenCalled();
+  });
+
+  it('restarts the removal notice for consecutive memories', async () => {
+    const user = userEvent.setup();
+    const secondEntry = {
+      ...initialData.entries[0],
+      id: 'memory-2',
+      title: 'Lisbon memory',
+      placeLabel: 'Lisbon, Portugal',
+    };
+    render(
+      <AtlasWorkspace
+        displayName="Explorer"
+        initialData={{
+          ...initialData,
+          entries: [initialData.entries[0], secondEntry],
+        }}
+      />,
+    );
+
+    await user.click(screen.getByRole('button', { name: 'Open memory list' }));
+    await user.click(screen.getByRole('button', { name: /Kyoto memory/ }));
+    await user.click(screen.getByRole('button', { name: 'Remove' }));
+    await user.click(
+      screen.getByRole('button', { name: 'Remove this memory?' }),
+    );
+    const firstNotice = await screen.findByRole('status');
+    expect(firstNotice).toHaveTextContent('Memory removed from your atlas.');
+
+    await user.click(screen.getByRole('button', { name: 'Open memory list' }));
+    await user.click(screen.getByRole('button', { name: /Lisbon memory/ }));
+    await user.click(screen.getByRole('button', { name: 'Remove' }));
+    await user.click(
+      screen.getByRole('button', { name: 'Remove this memory?' }),
+    );
+    const secondNotice = await screen.findByRole('status');
+
+    expect(secondNotice).toHaveTextContent('Memory removed from your atlas.');
+    expect(secondNotice).not.toBe(firstNotice);
   });
 
   it('merges a late photo callback into the newest saved memory fields', async () => {

@@ -98,7 +98,7 @@ export function ImportNotice({
         <div
           className={styles.progressBar}
           role="progressbar"
-          aria-label="Photo journey progress"
+          aria-label="Photo upload progress"
           aria-valuemin={0}
           aria-valuemax={100}
           aria-valuenow={progress}
@@ -126,7 +126,7 @@ export function ImportHeading({
       <p className="section-kicker">Photo upload</p>
       <h1 ref={headingRef} tabIndex={-1}>
         {step === 'choose' && 'Turn your camera roll into an atlas.'}
-        {step === 'review' && 'See where the journey took shape.'}
+        {step === 'review' && 'See where your memories took shape.'}
         {step === 'stories' && 'Give every place its voice.'}
         {step === 'chapter' && 'Bring the journey together.'}
         {step === 'complete' &&
@@ -136,7 +136,7 @@ export function ImportHeading({
         {step === 'choose' &&
           'Upload once. Field Atlas suggests dates, places, and titles, then brings only the exceptions to your attention.'}
         {step === 'review' &&
-          'Every pin remains editable. Nothing becomes a memory until you approve the journey.'}
+          'Every pin remains editable. Nothing becomes a memory until you approve its details.'}
         {step === 'stories' &&
           'Suggested titles are ready. Personalize what matters, or move on without filling every field.'}
         {step === 'chapter' &&

@@ -102,7 +102,7 @@ export function FieldJournal({ isLoggedIn = false }: { isLoggedIn?: boolean }) {
           }
           className="callout-action"
         >
-          {isLoggedIn ? 'Upload another journey' : 'Upload your first journey'}
+          {isLoggedIn ? 'Upload more photos' : 'Upload your first photos'}
           <span aria-hidden="true">↗</span>
         </Link>
       </section>

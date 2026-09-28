@@ -40,10 +40,12 @@ function SubmitButton({ pending }: { pending: boolean }) {
 
 export default function LoginForm({
   intent,
+  initialEmail = '',
   resetComplete = false,
   verificationComplete = false,
 }: {
   intent?: PostAuthIntent;
+  initialEmail?: string;
   resetComplete?: boolean;
   verificationComplete?: boolean;
 }) {
@@ -51,12 +53,14 @@ export default function LoginForm({
     authenticate,
     undefined,
   );
-  const [email, setEmail] = useState('');
+  const [email, setEmail] = useState(initialEmail);
   const [password, setPassword] = useState('');
   const [rememberEmail, setRememberEmail] = useState(false);
   const [pending, startTransition] = useTransition();
 
   useEffect(() => {
+    if (initialEmail) return;
+
     const rememberedEmail = readRememberedEmail(window.localStorage);
     if (!rememberedEmail) return;
 
@@ -65,7 +69,7 @@ export default function LoginForm({
       setRememberEmail(true);
     });
     return () => cancelAnimationFrame(frame);
-  }, []);
+  }, [initialEmail]);
 
   useEffect(() => {
     if (!state) return;
@@ -138,6 +142,7 @@ export default function LoginForm({
             autoComplete="current-password"
             placeholder="Enter your password"
             minLength={6}
+            autoFocus={Boolean(initialEmail)}
             value={password}
             onChange={(event) => setPassword(event.target.value)}
             required

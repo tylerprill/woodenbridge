@@ -32,6 +32,8 @@ const PRIVATE_MEDIA_CACHE = 'private, max-age=2592000';
 
 type Environment = NodeJS.ProcessEnv;
 
+export type AtlasBlobAuthOptions = { storeId: string } | { token: string };
+
 export type E2EAtlasMediaStorageConfiguration = {
   appOrigin: string;
   root: string;
@@ -287,17 +289,87 @@ async function localObjectMetadata(
   };
 }
 
-export function getAtlasBlobToken() {
-  const token = process.env.ATLAS_BLOB_READ_WRITE_TOKEN;
-  if (!token) {
-    throw new Error('ATLAS_BLOB_READ_WRITE_TOKEN is not configured.');
+function configuredValue(
+  environment: Environment,
+  key: keyof NodeJS.ProcessEnv,
+) {
+  const value = environment[key]?.trim();
+  return value ? value : null;
+}
+
+function normalizeAtlasBlobStoreId(value: string) {
+  const storeId = value.startsWith('store_') ? value.slice(6) : value;
+  if (!/^[A-Za-z0-9]+$/.test(storeId)) {
+    throw new Error('ATLAS_BLOB_STORE_ID is invalid.');
   }
-  return token;
+  return storeId;
+}
+
+function readWriteTokenStoreId(token: string) {
+  const match = /^vercel_blob_rw_([^_]+)_(.+)$/.exec(token);
+  if (!match) {
+    throw new Error('ATLAS_BLOB_READ_WRITE_TOKEN is invalid.');
+  }
+  return match[1];
+}
+
+export function getAtlasBlobWebhookPublicKey(
+  environment: Environment = process.env,
+) {
+  const publicKey = configuredValue(
+    environment,
+    'ATLAS_BLOB_WEBHOOK_PUBLIC_KEY',
+  );
+  if (
+    !publicKey ||
+    !/^-----BEGIN PUBLIC KEY-----[\s\S]+-----END PUBLIC KEY-----$/.test(
+      publicKey,
+    )
+  ) {
+    throw new Error(
+      'ATLAS_BLOB_WEBHOOK_PUBLIC_KEY is not configured correctly.',
+    );
+  }
+  return publicKey;
+}
+
+export function getAtlasBlobAuthOptions(
+  environment: Environment = process.env,
+): AtlasBlobAuthOptions {
+  const rawStoreId = configuredValue(environment, 'ATLAS_BLOB_STORE_ID');
+  const oidcToken = configuredValue(environment, 'VERCEL_OIDC_TOKEN');
+
+  // Do not pass the OIDC token itself: @vercel/blob reads Vercel's short-lived
+  // runtime credential and scopes it to this store. Webhook verification is a
+  // separate route concern and must not force reads or cleanup onto a legacy
+  // credential.
+  if (rawStoreId && oidcToken) {
+    return { storeId: normalizeAtlasBlobStoreId(rawStoreId) };
+  }
+
+  // Keep local and not-yet-upgraded environments working with an explicitly
+  // configured Atlas token. Presigned uploads still require the store's
+  // webhook public key so completion callbacks can be verified.
+  const token = configuredValue(environment, 'ATLAS_BLOB_READ_WRITE_TOKEN');
+  if (token) {
+    const tokenStoreId = readWriteTokenStoreId(token);
+    if (rawStoreId && normalizeAtlasBlobStoreId(rawStoreId) !== tokenStoreId) {
+      throw new Error(
+        'ATLAS_BLOB_STORE_ID does not match ATLAS_BLOB_READ_WRITE_TOKEN.',
+      );
+    }
+    return { token };
+  }
+
+  if (rawStoreId) {
+    throw new Error('Atlas Blob OIDC requires VERCEL_OIDC_TOKEN.');
+  }
+  throw new Error('Atlas Blob storage is not configured.');
 }
 
 export async function headAtlasMediaObject(pathname: string) {
   if (!isE2EAtlasMediaStorageEnabled()) {
-    return head(pathname, { token: getAtlasBlobToken() });
+    return head(pathname, getAtlasBlobAuthOptions());
   }
   return localObjectMetadata(pathname);
 }
@@ -309,7 +381,7 @@ export async function readAtlasMediaObject(
   if (!isE2EAtlasMediaStorageEnabled()) {
     return get(pathname, {
       access: 'private',
-      token: getAtlasBlobToken(),
+      ...getAtlasBlobAuthOptions(),
       ifNoneMatch: options.ifNoneMatch,
     });
   }
@@ -407,7 +479,7 @@ export async function putE2EAtlasMediaObject({
 export async function deleteAtlasMediaObjects(pathnames: string[]) {
   if (!pathnames.length) return;
   if (!isE2EAtlasMediaStorageEnabled()) {
-    await del(pathnames, { token: getAtlasBlobToken() });
+    await del(pathnames, getAtlasBlobAuthOptions());
     return;
   }
 

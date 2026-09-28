@@ -612,7 +612,7 @@ export function PhotoImportWorkspace({
     const valid = accepted.slice(0, Math.max(room, 0));
     if (accepted.length > room) {
       nextRejections.push(
-        `This journey has room for ${room} more ${room === 1 ? 'photo' : 'photos'}. ${accepted.length - Math.max(room, 0)} valid ${accepted.length - Math.max(room, 0) === 1 ? 'photo was' : 'photos were'} left out.`,
+        `This upload has room for ${room} more ${room === 1 ? 'photo' : 'photos'}. ${accepted.length - Math.max(room, 0)} valid ${accepted.length - Math.max(room, 0) === 1 ? 'photo was' : 'photos were'} left out.`,
       );
     }
     setRejections(nextRejections);
@@ -1237,7 +1237,7 @@ export function PhotoImportWorkspace({
       setStoryIndex(Math.max(activeItems.indexOf(unconfirmedFileDate), 0));
       goToStep('stories');
       setMessage(
-        'Confirm this low-confidence file date, edit it, or clear it before creating the journey.',
+        'Confirm this low-confidence file date, edit it, or clear it before saving.',
       );
       window.requestAnimationFrame(() =>
         document.getElementById('confirm-import-memory-date')?.focus(),
@@ -1285,7 +1285,7 @@ export function PhotoImportWorkspace({
           (candidate) => candidate.clientItemId === mapping.clientItemId,
         );
         if (!item)
-          throw new Error('One photograph is no longer in this journey.');
+          throw new Error('One photograph is no longer in this upload.');
         try {
           await prepareUploadAndRegisterItem(item, mapping, batch, index);
         } catch (error) {
@@ -1327,7 +1327,9 @@ export function PhotoImportWorkspace({
       setMessage(
         error instanceof Error
           ? error.message
-          : 'Your photographs and writing are still here. Try creating the journey again.',
+          : createChapter
+            ? 'Your photographs and writing are still here. Try creating the journey again.'
+            : 'Your photographs and writing are still here. Try creating the memories again.',
       );
     } finally {
       setBusy(false);
@@ -1380,9 +1382,7 @@ export function PhotoImportWorkspace({
         }),
       );
       setOpenRecovery(null);
-      setMessage(
-        'The interrupted draft was cleared. Choose a journey to begin.',
-      );
+      setMessage('The interrupted draft was cleared. Choose photos to begin.');
       router.refresh();
     } catch (error) {
       setMessage(
@@ -1465,7 +1465,15 @@ export function PhotoImportWorkspace({
   };
 
   return (
-    <div className={`dashboard-page ${styles.page}`} data-step={step}>
+    <div
+      className={`dashboard-page ${styles.page}`}
+      data-step={step}
+      data-pristine={
+        !openRecovery && !items.length && !rejections.length
+          ? 'true'
+          : undefined
+      }
+    >
       <header className={styles.header}>
         <div>
           {items.length && step !== 'complete' ? (

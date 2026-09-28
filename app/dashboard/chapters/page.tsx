@@ -42,19 +42,21 @@ export default async function ChaptersPage({
           <h1>My Journeys.</h1>
           <p>Connect the places that belong to the same story.</p>
         </div>
-        <div className={styles.chaptersHeaderActions}>
-          <p className={styles.chapterCount}>
-            <BookOpenIcon aria-hidden="true" />
-            <span>
-              <strong>{String(data.total).padStart(2, '0')}</strong>
-              {data.total === 1 ? 'journey' : 'journeys'}
-            </span>
-          </p>
-          <Link href={journeyActionHref} className={styles.newChapterButton}>
-            <PlusIcon aria-hidden="true" />
-            {journeyActionLabel}
-          </Link>
-        </div>
+        {data.total > 0 ? (
+          <div className={styles.chaptersHeaderActions}>
+            <p className={styles.chapterCount}>
+              <BookOpenIcon aria-hidden="true" />
+              <span>
+                <strong>{String(data.total).padStart(2, '0')}</strong>
+                {data.total === 1 ? 'journey' : 'journeys'}
+              </span>
+            </p>
+            <Link href={journeyActionHref} className={styles.newChapterButton}>
+              <PlusIcon aria-hidden="true" />
+              {journeyActionLabel}
+            </Link>
+          </div>
+        ) : null}
       </header>
 
       {data.chapters.length ? (

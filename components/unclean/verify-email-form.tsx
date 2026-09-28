@@ -81,9 +81,11 @@ function StartRegistration({ intent }: { intent?: PostAuthIntent }) {
 export function VerificationCodeForm({
   codeSent,
   intent,
+  verificationEmail,
 }: {
   codeSent: boolean;
   intent?: PostAuthIntent;
+  verificationEmail?: string;
 }) {
   const [verifyState, verifyDispatch] = useActionState(
     submitEmailVerificationCode,
@@ -98,7 +100,14 @@ export function VerificationCodeForm({
     <div className="auth-form">
       {codeSent ? (
         <p className="auth-notice" role="status">
-          Check your inbox. Your six-digit code expires in 10 minutes.
+          {verificationEmail ? (
+            <>
+              We sent a six-digit code to <strong>{verificationEmail}</strong>.
+              It expires in 10 minutes.
+            </>
+          ) : (
+            'Check the email address you entered. Your six-digit code expires in 10 minutes.'
+          )}
         </p>
       ) : null}
 
@@ -159,13 +168,19 @@ export default function VerifyEmailForm({
   hasChallenge,
   codeSent,
   intent,
+  verificationEmail,
 }: {
   hasChallenge: boolean;
   codeSent: boolean;
   intent?: PostAuthIntent;
+  verificationEmail?: string;
 }) {
   return hasChallenge ? (
-    <VerificationCodeForm codeSent={codeSent} intent={intent} />
+    <VerificationCodeForm
+      codeSent={codeSent}
+      intent={intent}
+      verificationEmail={verificationEmail}
+    />
   ) : (
     <StartRegistration intent={intent} />
   );

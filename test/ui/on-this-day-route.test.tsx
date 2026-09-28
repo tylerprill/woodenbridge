@@ -54,6 +54,7 @@ jest.mock('@/components/rediscovery/on-this-day', () => ({
 
 const data: RediscoveryData = {
   date: '2026-09-15',
+  earliestDate: '2023-09-15',
   mode: 'anniversary',
   total: 30,
   page: 2,
@@ -98,6 +99,10 @@ describe('On this day route and date controls', () => {
       '2026-09-15',
     );
     expect(screen.getByLabelText('Choose a date')).toHaveValue('2026-09-15');
+    expect(screen.getByLabelText('Choose a date')).toHaveAttribute(
+      'min',
+      '2023-09-15',
+    );
     expect(mockReplace).not.toHaveBeenCalled();
   });
 
@@ -206,6 +211,7 @@ describe('On this day route and date controls', () => {
     expect(input).toHaveAttribute('type', 'date');
     expect(input).toHaveAttribute('name', 'date');
     expect(input).toHaveAttribute('max', '2026-09-15');
+    expect(input).not.toHaveAttribute('min');
     expect(screen.getByRole('link', { name: 'Previous day' })).toHaveAttribute(
       'href',
       '/dashboard/on-this-day?date=2026-09-14',
@@ -217,6 +223,26 @@ describe('On this day route and date controls', () => {
     expect(mockPush).toHaveBeenCalledWith(
       '/dashboard/on-this-day?date=2026-09-16',
     );
+  });
+
+  it('keeps the date picker usable when the account only has future-dated memories', async () => {
+    jest.mocked(getRediscoveryData).mockResolvedValue({
+      ...data,
+      mode: 'recent',
+      total: 0,
+      earliestDate: '2027-01-01',
+      memories: [],
+    });
+
+    render(
+      await OnThisDayPage({
+        searchParams: Promise.resolve({ date: '2026-09-15' }),
+      }),
+    );
+
+    const input = screen.getByLabelText('Choose a date');
+    expect(input).not.toHaveAttribute('min');
+    expect(input).toHaveAttribute('max', '2026-09-15');
   });
 
   it('handles year boundaries and resets the field after date navigation', () => {
@@ -232,6 +258,15 @@ describe('On this day route and date controls', () => {
 
     rerender(<DayControls date="2025-12-31" />);
     expect(screen.getByLabelText('Choose a date')).toHaveValue('2025-12-31');
+  });
+
+  it('disables previous-day navigation at the account memory boundary', () => {
+    render(<DayControls date="1899-09-15" minDate="1899-09-15" />);
+
+    expect(screen.getByRole('button', { name: 'Previous day' })).toBeDisabled();
+    expect(
+      screen.queryByRole('link', { name: 'Previous day' }),
+    ).not.toBeInTheDocument();
   });
 
   it('refreshes Next day and the input maximum at local midnight', () => {

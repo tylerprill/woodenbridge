@@ -57,7 +57,15 @@ export default async function OnThisDayPage({
 
   return (
     <div data-rediscovery-state="ready" data-rediscovery-mode={data.mode}>
-      <OnThisDay data={data} controls={<DayControls date={data.date} />} />
+      <OnThisDay
+        data={data}
+        controls={
+          <DayControls
+            date={data.date}
+            minDate={data.earliestDate ?? undefined}
+          />
+        }
+      />
     </div>
   );
 }

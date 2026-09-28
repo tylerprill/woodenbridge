@@ -14,6 +14,7 @@ jest.mock('@vercel/postgres', () => {
 
 import {
   createPendingRegistrationChallenge,
+  findRecentlyVerifiedEmailByChallenge,
   verifyPendingRegistrationCode,
 } from '@/app/lib/auth/email-verification';
 import { hashEmailVerificationCode } from '@/app/lib/auth/security';
@@ -45,6 +46,33 @@ describe('pending registration security boundary', () => {
     mockRelease.mockReset();
     mockDbConnect.mockClear();
     mockSql.mockReset();
+  });
+
+  it('recovers a login email only from a recent consumed challenge for a verified user', async () => {
+    mockSql.mockResolvedValueOnce({
+      rows: [{ email: 'explorer@example.com' }],
+    });
+
+    await expect(
+      findRecentlyVerifiedEmailByChallenge(challengeId),
+    ).resolves.toBe('explorer@example.com');
+
+    const [strings, suppliedChallenge] = mockSql.mock.calls[0] as [
+      TemplateStringsArray,
+      string,
+    ];
+    const query = queryText(strings);
+    expect(suppliedChallenge).toBe(challengeId);
+    expect(query).toContain('pending.used_at IS NOT NULL');
+    expect(query).toContain("pending.used_at > NOW() - INTERVAL '5 minutes'");
+    expect(query).toContain('users.email_verified_at IS NOT NULL');
+  });
+
+  it('does not query for a malformed verified-login challenge', async () => {
+    await expect(
+      findRecentlyVerifiedEmailByChallenge('not-a-challenge'),
+    ).resolves.toBeUndefined();
+    expect(mockSql).not.toHaveBeenCalled();
   });
 
   it('binds the normalized email, proposed profile, and proposed hash to the challenge', async () => {
