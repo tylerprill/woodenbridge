@@ -37,6 +37,7 @@ import type {
   AtlasJourneyDetail,
   AtlasJourneyIndex,
 } from '@/app/lib/atlas/journeys/definitions';
+import type { AtlasJourneyContinuation } from '@/app/lib/chapters/definitions';
 import {
   getAtlasPlaceContextLabel,
   withAtlasPlaceContext,
@@ -63,6 +64,7 @@ type AtlasWorkspaceProps = {
   initialJourneyId?: string | null;
   initialJourneyStopId?: string | null;
   initialPlacementMode?: boolean;
+  continuationJourney?: AtlasJourneyContinuation | null;
 };
 
 type JourneyLoadState = 'idle' | 'loading' | 'ready' | 'error';
@@ -115,6 +117,10 @@ function replaceJourneyDashboardLocation(
   );
 }
 
+function journeyReaderHref(journeyId: string) {
+  return `/dashboard/chapters/${encodeURIComponent(journeyId)}`;
+}
+
 function viewsAreEquivalent(first: AtlasView, second: AtlasView) {
   return (
     Math.abs(first.latitude - second.latitude) < 0.00001 &&
@@ -133,6 +139,7 @@ export function AtlasWorkspace({
   initialJourneyId = null,
   initialJourneyStopId = null,
   initialPlacementMode = false,
+  continuationJourney = null,
 }: AtlasWorkspaceProps) {
   const router = useRouter();
   const [experience, dispatchExperience] = useReducer(
@@ -207,6 +214,7 @@ export function AtlasWorkspace({
     initialJourneyId,
     initialJourneyStopId,
     initialPlacementMode,
+    continuationJourney?.id ?? null,
   ]);
   const lastLocationStateKeyRef = useRef(locationStateKey);
 
@@ -233,6 +241,7 @@ export function AtlasWorkspace({
     const url = new URL(window.location.href);
     if (url.searchParams.get('new') !== 'memory') return;
     url.searchParams.delete('new');
+    url.searchParams.delete('continueJourney');
     const queryString = url.searchParams.toString();
     window.history.replaceState(
       window.history.state,
@@ -1030,6 +1039,9 @@ export function AtlasWorkspace({
         } else {
           setPlacementMode(false);
           dispatchExperience({ type: 'show-overview' });
+          if (continuationJourney) {
+            router.push(journeyReaderHref(continuationJourney.id));
+          }
         }
       }
     };
@@ -1038,6 +1050,7 @@ export function AtlasWorkspace({
   }, [
     closeJourneyPanel,
     closeOverlapChooser,
+    continuationJourney,
     experience,
     mode,
     overlapJourneyIds.length,
@@ -1386,6 +1399,12 @@ export function AtlasWorkspace({
               aria-pressed={placementMode}
               aria-label={placementMode ? 'Cancel pin' : 'Add memory'}
               onClick={() => {
+                if (placementMode && continuationJourney) {
+                  setPlacementMode(false);
+                  dispatchExperience({ type: 'show-overview' });
+                  router.push(journeyReaderHref(continuationJourney.id));
+                  return;
+                }
                 setPlacementMode((current) => !current);
                 dispatchExperience(
                   placementMode
@@ -1482,11 +1501,16 @@ export function AtlasWorkspace({
           <span className={styles.pinPulse} aria-hidden="true" />
           <div role="status" aria-live="polite">
             <strong>
-              {placementBusy ? 'Placing your pin…' : 'Choose a place'}
+              {placementBusy
+                ? 'Placing your pin…'
+                : continuationJourney
+                  ? `Continue ${continuationJourney.title}`
+                  : 'Choose a place'}
             </strong>
             <p>
-              Move through the atlas, then tap or click exactly where the memory
-              belongs.
+              {continuationJourney
+                ? 'Choose where the next memory in this journey happened.'
+                : 'Move through the atlas, then tap or click exactly where the memory belongs.'}
             </p>
           </div>
           <button
@@ -1640,9 +1664,26 @@ export function AtlasWorkspace({
             setDrawerDirty(false);
             loadedMediaIdsRef.current.delete(id);
             setEntries((current) => current.filter((entry) => entry.id !== id));
+            if (continuationJourney) {
+              setSelectedId(null);
+              setPlacementMode(false);
+              dispatchExperience({ type: 'show-overview' });
+              router.push(journeyReaderHref(continuationJourney.id));
+              return;
+            }
             closeSelectedEntry();
             setNotice('Memory removed from your atlas.');
           }}
+          continuationJourney={continuationJourney}
+          onContinuationSaved={
+            continuationJourney
+              ? () => {
+                  router.push(
+                    `${journeyReaderHref(continuationJourney.id)}?saved=continued#chapter-memories`,
+                  );
+                }
+              : undefined
+          }
           mediaLoading={mediaLoadingId === selectedEntry.id}
           placeResolving={placeResolvingId === selectedEntry.id}
         />

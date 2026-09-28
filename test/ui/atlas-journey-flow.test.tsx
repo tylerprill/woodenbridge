@@ -239,6 +239,32 @@ describe('Atlas Journey Lens', () => {
     expect(screen.getByRole('button', { name: 'Cancel pin' })).toBeVisible();
   });
 
+  it('keeps Journey context while placing its next memory', async () => {
+    const user = userEvent.setup();
+    render(
+      <AtlasWorkspace
+        displayName="Explorer"
+        initialData={initialData}
+        initialPlacementMode
+        continuationJourney={{
+          id: JOURNEY_ID,
+          title: 'Leelanau weekend',
+          memoryCount: 2,
+        }}
+      />,
+    );
+
+    expect(screen.getByText('Continue Leelanau weekend')).toBeVisible();
+    expect(
+      screen.getByText(
+        'Choose where the next memory in this journey happened.',
+      ),
+    ).toBeVisible();
+
+    await user.click(screen.getByRole('button', { name: 'Cancel pin' }));
+    expect(mockPush).toHaveBeenCalledWith(`/dashboard/chapters/${JOURNEY_ID}`);
+  });
+
   it('keeps journey creation and suggestions off Atlas', async () => {
     render(
       <AtlasWorkspace

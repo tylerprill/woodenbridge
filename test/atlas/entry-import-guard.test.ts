@@ -25,6 +25,7 @@ import {
   updateAtlasEntryAction,
 } from '@/app/lib/actions/atlas';
 import { requireVerifiedSession } from '@/app/lib/auth/session';
+import { revalidatePath } from 'next/cache';
 
 const { __testMocks } = jest.requireMock('@vercel/postgres') as {
   __testMocks: {
@@ -38,6 +39,8 @@ const { __testMocks } = jest.requireMock('@vercel/postgres') as {
 const userId = '17d69b97-9d24-4e07-a461-271263c71c52';
 const batchId = '3fe3cf16-c676-42cf-b3e6-87158c836fd9';
 const entryId = 'f7c0bf19-59fc-49df-9bd7-ae405a69e49c';
+const journeyId = '78daf767-13e6-4f2f-a7bf-8a087824c005';
+const shareId = '742dbb48-7be8-4d8f-b8b4-1f8d82725025';
 
 function normalizeQuery(query: unknown) {
   return String(query).replace(/\s+/g, ' ').trim();
@@ -191,5 +194,165 @@ describe('Atlas entry active-import mutation guard', () => {
       userId,
       1,
     ]);
+  });
+
+  it('saves a Memory and appends it to the locked owner Journey atomically', async () => {
+    __testMocks.clientQuery.mockImplementation(
+      async (query: string, values?: unknown[]) => {
+        const text = normalizeQuery(query);
+        if (text.includes('FROM atlas_import_items')) {
+          return { rows: [], rowCount: 0 };
+        }
+        if (text.includes('SELECT version FROM atlas_entries')) {
+          return { rows: [{ version: 1 }], rowCount: 1 };
+        }
+        if (
+          text.includes('FROM atlas_chapters') &&
+          text.includes('FOR UPDATE')
+        ) {
+          return { rows: [{ id: journeyId, shareId }], rowCount: 1 };
+        }
+        if (text.includes('COUNT(*)::int AS "memoryCount"')) {
+          return {
+            rows: [{ memoryCount: 2, alreadyIncluded: false }],
+            rowCount: 1,
+          };
+        }
+        if (text.startsWith('UPDATE atlas_entries')) {
+          return {
+            rows: [
+              {
+                id: entryId,
+                title: String(values?.[0]),
+                description: String(values?.[1]),
+                place_label: String(values?.[2]),
+                place_name: null,
+                place_locality: null,
+                place_region: null,
+                place_country: null,
+                place_country_code: null,
+                place_geocoder: null,
+                place_geocoded_at: null,
+                visited_on: values?.[3],
+                occurred_time: null,
+                occurred_utc_offset_minutes: null,
+                record_state: 'saved',
+                journey_state: values?.[6],
+                latitude: 44.9,
+                longitude: -86,
+                version: 2,
+                created_at: '2026-09-28T00:00:00.000Z',
+                updated_at: '2026-09-28T00:00:00.000Z',
+              },
+            ],
+            rowCount: 1,
+          };
+        }
+        if (text.startsWith('INSERT INTO atlas_chapter_entries')) {
+          return { rows: [{ entryId }], rowCount: 1 };
+        }
+        return { rows: [], rowCount: 0 };
+      },
+    );
+
+    await expect(
+      updateAtlasEntryAction({
+        id: entryId,
+        version: 1,
+        title: 'Lunch beside the lake',
+        description: '',
+        placeLabel: 'Lake Michigan',
+        visitedOn: '2026-09-28',
+        occurredTime: null,
+        occurredUtcOffsetMinutes: null,
+        journeyState: 'visited',
+        appendToJourneyId: journeyId,
+      }),
+    ).resolves.toMatchObject({
+      ok: true,
+      data: { id: entryId, recordState: 'saved', version: 2 },
+    });
+
+    const queries = __testMocks.clientQuery.mock.calls.map(([query]) =>
+      normalizeQuery(query),
+    );
+    expect(
+      queries.findIndex((query) => query.startsWith('UPDATE atlas_entries')),
+    ).toBeLessThan(
+      queries.findIndex((query) =>
+        query.startsWith('INSERT INTO atlas_chapter_entries'),
+      ),
+    );
+    expect(
+      queries.some((query) => query.startsWith('UPDATE atlas_chapters')),
+    ).toBe(true);
+    expect(queries).toContain('COMMIT');
+    expect(revalidatePath).toHaveBeenCalledWith(
+      `/dashboard/chapters/${journeyId}`,
+    );
+    expect(revalidatePath).toHaveBeenCalledWith(`/shared/chapters/${shareId}`);
+  });
+
+  it.each([
+    {
+      name: 'is no longer available',
+      journeyRows: [],
+      membershipRows: [],
+      error: 'not-found',
+    },
+    {
+      name: 'already contains the maximum number of Memories',
+      journeyRows: [{ id: journeyId, shareId }],
+      membershipRows: [{ memoryCount: 50, alreadyIncluded: false }],
+      error: 'invalid',
+    },
+  ])('rolls back when the Journey $name', async (scenario) => {
+    __testMocks.clientQuery.mockImplementation(async (query: string) => {
+      const text = normalizeQuery(query);
+      if (text.includes('FROM atlas_import_items')) {
+        return { rows: [], rowCount: 0 };
+      }
+      if (text.includes('SELECT version FROM atlas_entries')) {
+        return { rows: [{ version: 1 }], rowCount: 1 };
+      }
+      if (text.includes('FROM atlas_chapters') && text.includes('FOR UPDATE')) {
+        return {
+          rows: scenario.journeyRows,
+          rowCount: scenario.journeyRows.length,
+        };
+      }
+      if (text.includes('COUNT(*)::int AS "memoryCount"')) {
+        return { rows: scenario.membershipRows, rowCount: 1 };
+      }
+      return { rows: [], rowCount: 0 };
+    });
+
+    await expect(
+      updateAtlasEntryAction({
+        id: entryId,
+        version: 1,
+        title: 'Lunch beside the lake',
+        description: '',
+        placeLabel: 'Lake Michigan',
+        visitedOn: '2026-09-28',
+        occurredTime: null,
+        occurredUtcOffsetMinutes: null,
+        journeyState: 'visited',
+        appendToJourneyId: journeyId,
+      }),
+    ).resolves.toMatchObject({ ok: false, error: scenario.error });
+
+    const queries = __testMocks.clientQuery.mock.calls.map(([query]) =>
+      normalizeQuery(query),
+    );
+    expect(queries).toContain('ROLLBACK');
+    expect(
+      queries.some((query) => query.startsWith('UPDATE atlas_entries')),
+    ).toBe(false);
+    expect(
+      queries.some((query) =>
+        query.startsWith('INSERT INTO atlas_chapter_entries'),
+      ),
+    ).toBe(false);
   });
 });

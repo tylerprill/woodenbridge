@@ -38,6 +38,11 @@ export type AtlasChapter = AtlasChapterSummary & {
   entries: AtlasChapterEntry[];
 };
 
+export type AtlasJourneyContinuation = Pick<
+  AtlasChapterSummary,
+  'id' | 'title' | 'memoryCount'
+>;
+
 type SharedAtlasChapterEntryWithoutCoordinates = Omit<
   AtlasChapterEntry,
   'latitude' | 'longitude'

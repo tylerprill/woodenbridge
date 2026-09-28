@@ -20,7 +20,9 @@ export default async function ChapterPage({
       chapter={chapter}
       mode="owner"
       saveNotice={
-        saved === 'created' || saved === 'updated' ? saved : undefined
+        saved === 'created' || saved === 'updated' || saved === 'continued'
+          ? saved
+          : undefined
       }
     />
   );

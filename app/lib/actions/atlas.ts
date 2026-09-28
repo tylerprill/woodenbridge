@@ -15,6 +15,7 @@ import { reverseGeocodeAtlasPlace } from '@/app/lib/atlas/geocoding';
 import type { AtlasPlaceContext } from '@/app/lib/atlas/place';
 import { type AtlasEntryRow, toAtlasEntry } from '@/app/lib/atlas/rows';
 import { deleteAtlasMediaObjects } from '@/app/lib/atlas/media-storage';
+import { CHAPTER_MAX_MEMORIES } from '@/app/lib/chapters/validation';
 import {
   atlasDraftSchema,
   atlasEntryIdSchema,
@@ -203,6 +204,54 @@ export async function updateAtlasEntryAction(
       };
     }
 
+    let continuationJourney: { id: string; shareId: string } | null = null;
+    if (entry.appendToJourneyId) {
+      const journey = await client.query<{ id: string; shareId: string }>(
+        `
+          SELECT id, share_id AS "shareId"
+          FROM atlas_chapters
+          WHERE id = $1 AND user_id = $2
+          FOR UPDATE
+        `,
+        [entry.appendToJourneyId, session.user.id],
+      );
+      continuationJourney = journey.rows[0] ?? null;
+      if (!continuationJourney) {
+        await client.query('ROLLBACK');
+        return {
+          ok: false,
+          error: 'not-found',
+          message: 'That journey no longer exists.',
+        };
+      }
+
+      const membership = await client.query<{
+        memoryCount: number | string;
+        alreadyIncluded: boolean;
+      }>(
+        `
+          SELECT
+            COUNT(*)::int AS "memoryCount",
+            COALESCE(BOOL_OR(entry_id = $3), FALSE) AS "alreadyIncluded"
+          FROM atlas_chapter_entries
+          WHERE chapter_id = $1 AND user_id = $2
+        `,
+        [continuationJourney.id, session.user.id, entry.id],
+      );
+      const memoryCount = Number(membership.rows[0]?.memoryCount ?? 0);
+      if (
+        !membership.rows[0]?.alreadyIncluded &&
+        memoryCount >= CHAPTER_MAX_MEMORIES
+      ) {
+        await client.query('ROLLBACK');
+        return {
+          ok: false,
+          error: 'invalid',
+          message: `This journey already holds ${CHAPTER_MAX_MEMORIES} memories.`,
+        };
+      }
+    }
+
     const result = await client.query<AtlasEntryRow>(
       `
         UPDATE atlas_entries
@@ -240,11 +289,52 @@ export async function updateAtlasEntryAction(
     if (!result.rows[0]) {
       throw new Error('Locked Atlas entry update returned no row.');
     }
+
+    if (continuationJourney) {
+      const appended = await client.query<{ entryId: string }>(
+        `
+          INSERT INTO atlas_chapter_entries (
+            chapter_id,
+            entry_id,
+            user_id,
+            position,
+            transition_note
+          )
+          SELECT
+            $1,
+            $2,
+            $3,
+            (COALESCE(MAX(position), -1) + 1)::smallint,
+            ''
+          FROM atlas_chapter_entries
+          WHERE chapter_id = $1 AND user_id = $3
+          ON CONFLICT (chapter_id, entry_id) DO NOTHING
+          RETURNING entry_id AS "entryId"
+        `,
+        [continuationJourney.id, entry.id, session.user.id],
+      );
+      if (appended.rows[0]) {
+        await client.query(
+          `
+            UPDATE atlas_chapters
+            SET version = version + 1, updated_at = NOW()
+            WHERE id = $1 AND user_id = $2
+          `,
+          [continuationJourney.id, session.user.id],
+        );
+      }
+    }
     await client.query('COMMIT');
 
     revalidatePath('/dashboard');
     revalidatePath('/dashboard/places');
     revalidatePath(`/dashboard/card/${entry.id}`);
+    if (continuationJourney) {
+      revalidatePath('/dashboard/chapters');
+      revalidatePath(`/dashboard/chapters/${continuationJourney.id}`);
+      revalidatePath(`/dashboard/chapters/${continuationJourney.id}/edit`);
+      revalidatePath(`/shared/chapters/${continuationJourney.shareId}`);
+    }
     return { ok: true, data: toAtlasEntry(result.rows[0]) };
   } catch (error) {
     await client.query('ROLLBACK').catch(() => undefined);

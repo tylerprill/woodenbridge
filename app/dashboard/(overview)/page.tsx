@@ -2,6 +2,8 @@ import { getAccountDisplayName } from '@/app/lib/auth/account-display';
 import { requireVerifiedSession } from '@/app/lib/auth/session';
 import { getAtlasData } from '@/app/lib/atlas/data';
 import { atlasJourneyIdSchema } from '@/app/lib/atlas/journeys/validation';
+import { getAtlasJourneyContinuation } from '@/app/lib/chapters/data';
+import { atlasChapterIdSchema } from '@/app/lib/chapters/validation';
 import { AtlasWorkspace } from '@/components/atlas/atlas-workspace';
 
 export default async function DashboardPage({
@@ -13,12 +15,17 @@ export default async function DashboardPage({
     journey?: string;
     stop?: string;
     new?: string;
+    continueJourney?: string;
   }>;
 }) {
-  const [session, initialData, query] = await Promise.all([
+  const query = await searchParams;
+  const continuationId = atlasChapterIdSchema.safeParse(query.continueJourney);
+  const [session, initialData, continuationJourney] = await Promise.all([
     requireVerifiedSession(),
     getAtlasData(),
-    searchParams,
+    query.new === 'memory' && continuationId.success
+      ? getAtlasJourneyContinuation(continuationId.data)
+      : Promise.resolve(null),
   ]);
   const displayName = getAccountDisplayName(session.user);
   const initialMode = query.view === 'journeys' ? 'journeys' : 'places';
@@ -39,8 +46,12 @@ export default async function DashboardPage({
       initialJourneyId={journeyId.success ? journeyId.data : null}
       initialJourneyStopId={stopId.success ? stopId.data : null}
       initialPlacementMode={
-        initialMode === 'places' && !initialSelectedId && query.new === 'memory'
+        initialMode === 'places' &&
+        !initialSelectedId &&
+        query.new === 'memory' &&
+        (!query.continueJourney || Boolean(continuationJourney))
       }
+      continuationJourney={continuationJourney}
     />
   );
 }

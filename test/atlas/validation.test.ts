@@ -113,4 +113,27 @@ describe('atlas validation', () => {
       }).success,
     ).toBe(false);
   });
+
+  it('accepts only a valid Journey id when saving into a Journey', () => {
+    const memory = {
+      id: 'f7c0bf19-59fc-49df-9bd7-ae405a69e49c',
+      version: 1,
+      title: 'Lunch beside the lake',
+      description: '',
+      placeLabel: 'Lake Michigan',
+      visitedOn: '2026-09-28',
+      occurredTime: '12:30',
+      occurredUtcOffsetMinutes: -360,
+      journeyState: 'visited' as const,
+      appendToJourneyId: '78daf767-13e6-4f2f-a7bf-8a087824c005',
+    };
+
+    expect(atlasEntryUpdateSchema.safeParse(memory).success).toBe(true);
+    expect(
+      atlasEntryUpdateSchema.safeParse({
+        ...memory,
+        appendToJourneyId: 'not-a-journey-id',
+      }).success,
+    ).toBe(false);
+  });
 });
