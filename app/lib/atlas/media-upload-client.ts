@@ -1,6 +1,6 @@
 'use client';
 
-import { upload } from '@vercel/blob/client';
+import { uploadPresigned } from '@vercel/blob/client';
 
 type AtlasMediaUploadProgress = {
   loaded: number;
@@ -80,7 +80,7 @@ export function uploadAtlasMedia(
     return uploadToE2EFilesystem(pathname, body, options);
   }
 
-  return upload(pathname, body, {
+  return uploadPresigned(pathname, body, {
     access: 'private',
     handleUploadUrl: '/api/atlas/media/upload',
     ...options,
