@@ -34,9 +34,23 @@ async function signIn(page: Page) {
   });
 }
 
-async function capture(page: Page, testInfo: TestInfo, label: string) {
+async function capture(
+  page: Page,
+  testInfo: TestInfo,
+  label: string,
+  fullPage = true,
+) {
+  await page.evaluate(() => {
+    if (document.activeElement instanceof HTMLElement) {
+      document.activeElement.blur();
+    }
+  });
   const screenshotPath = testInfo.outputPath(`${label}.png`);
-  await page.screenshot({ path: screenshotPath, fullPage: true });
+  await page.screenshot({
+    path: screenshotPath,
+    fullPage,
+    animations: 'disabled',
+  });
   await testInfo.attach(label, {
     path: screenshotPath,
     contentType: 'image/png',
@@ -72,6 +86,79 @@ async function expectViewportFits(page: Page, label: string) {
   }
 }
 
+async function captureStepAtViewports(
+  page: Page,
+  testInfo: TestInfo,
+  label: string,
+) {
+  for (const viewport of viewports) {
+    await page.setViewportSize({
+      width: viewport.width,
+      height: viewport.height,
+    });
+    await page.evaluate(() => window.scrollTo({ top: 0, behavior: 'instant' }));
+    await expectViewportFits(page, `${label} ${viewport.label}`);
+    await capture(page, testInfo, `${label}-${viewport.label}`);
+  }
+  await page.setViewportSize({ width: 1440, height: 900 });
+}
+
+async function auditJourneyEditor(
+  page: Page,
+  testInfo: TestInfo,
+  journeyId: string,
+) {
+  await page.goto(`/dashboard/chapters/${journeyId}/edit`);
+  const steps = page.getByRole('navigation', { name: 'Journey maker steps' });
+  const story = steps.getByRole('button', { name: /Story & places/i });
+  const arrange = steps.getByRole('button', { name: /Arrange & share/i });
+  const addMemory = steps.getByRole('button', { name: /Add a memory/i });
+  await expect(story).toHaveAttribute('aria-current', 'step');
+  await expect(addMemory).toBeEnabled();
+  await captureStepAtViewports(
+    page,
+    testInfo,
+    'continue-journey-workshop-story',
+  );
+
+  await arrange.click();
+  await expect(page).toHaveURL(
+    new RegExp(`/dashboard/chapters/${journeyId}/edit\\?step=arrange$`),
+  );
+  await expect(arrange).toHaveAttribute('aria-current', 'step');
+  await expect(arrange).toBeEnabled();
+  await captureStepAtViewports(
+    page,
+    testInfo,
+    'continue-journey-workshop-arrange',
+  );
+
+  await addMemory.click();
+  await expect(page).toHaveURL(
+    new RegExp(`/dashboard/chapters/${journeyId}/edit\\?step=continue$`),
+  );
+  await expect(addMemory).toHaveAttribute('aria-current', 'step');
+  await expect(addMemory).toBeEnabled();
+  await expect(page.locator('[data-map-state="ready"]')).toBeVisible({
+    timeout: 20_000,
+  });
+  await captureStepAtViewports(
+    page,
+    testInfo,
+    'continue-journey-workshop-place',
+  );
+
+  await page.goto(
+    `/dashboard?new=memory&continueJourney=${encodeURIComponent(journeyId)}`,
+  );
+  await expect(page).toHaveURL(
+    new RegExp(`/dashboard/chapters/${journeyId}/edit\\?step=continue$`),
+  );
+  await expect(
+    page.getByRole('heading', { name: 'Place the next memory.' }),
+  ).toBeVisible();
+}
+
 async function openContinuation(page: Page, testInfo?: TestInfo) {
   await page.getByRole('link', { name: 'Continue journey' }).click();
   await expect(page).toHaveURL(
@@ -86,21 +173,7 @@ async function openContinuation(page: Page, testInfo?: TestInfo) {
     page.getByRole('heading', { name: 'Place the next memory.' }),
   ).toBeVisible();
   if (testInfo) {
-    for (const viewport of viewports) {
-      await page.setViewportSize({
-        width: viewport.width,
-        height: viewport.height,
-      });
-      await placement.scrollIntoViewIfNeeded();
-      await expect(placement).toBeVisible();
-      await expectViewportFits(page, `Journey workshop ${viewport.label}`);
-      await capture(
-        page,
-        testInfo,
-        `continue-journey-workshop-${viewport.label}`,
-      );
-    }
-    await page.setViewportSize({ width: 1440, height: 900 });
+    await captureStepAtViewports(page, testInfo, 'continue-journey-workshop');
   }
   await placement.getByRole('button', { name: 'Use map center' }).click();
   const editor = page.getByRole('dialog', { name: 'Create memory' });
@@ -161,6 +234,7 @@ test('a Journey can be continued with a new Memory', async ({
   try {
     await page.setViewportSize({ width: 1440, height: 900 });
     await signIn(page);
+    monitor = monitorBrowserIssues(page);
     await page.goto('/dashboard/chapters');
     const journeyList = page.getByRole('region', { name: 'Your journeys' });
     await expect(journeyList).toBeVisible();
@@ -189,6 +263,9 @@ test('a Journey can be continued with a new Memory', async ({
       await page.goto(`/dashboard/chapters/${journeyId}`);
     }
 
+    await auditJourneyEditor(page, testInfo, journeyId);
+    await page.goto(`/dashboard/chapters/${journeyId}`);
+
     const cancelledEditor = await openContinuation(page);
     draftOpen = true;
     await expect(cancelledEditor.getByText('Continuing journey')).toBeVisible();
@@ -207,7 +284,6 @@ test('a Journey can be continued with a new Memory', async ({
 
     const editor = await openContinuation(page, testInfo);
     draftOpen = true;
-    monitor = monitorBrowserIssues(page);
     await editor.getByLabel('Journey segment').selectOption('new');
     await editor.getByLabel('New segment name').fill(segmentTitle);
     await editor.getByRole('textbox', { name: 'Title' }).fill(title);
@@ -229,11 +305,42 @@ test('a Journey can be continued with a new Memory', async ({
       });
       await editor.getByText('Continuing journey').scrollIntoViewIfNeeded();
       await expect(editor.getByText('Continuing journey')).toBeVisible();
+      await expect(
+        editor.getByRole('button', { name: 'Add to journey' }),
+      ).toBeVisible();
       await expectViewportFits(page, `continuation editor ${viewport.label}`);
       await capture(
         page,
         testInfo,
-        `continue-journey-editor-${viewport.label}`,
+        `continue-journey-editor-top-${viewport.label}`,
+        false,
+      );
+
+      const fieldNote = editor.getByRole('textbox', { name: 'Field note' });
+      await fieldNote.scrollIntoViewIfNeeded();
+      await expect(fieldNote).toBeVisible();
+      await expect(
+        editor.getByRole('button', { name: 'Add to journey' }),
+      ).toBeVisible();
+      await capture(
+        page,
+        testInfo,
+        `continue-journey-editor-details-${viewport.label}`,
+        false,
+      );
+
+      const uploadedPhoto = editor.getByRole('img', { name: title });
+      await uploadedPhoto.scrollIntoViewIfNeeded();
+      await expect(uploadedPhoto).toBeVisible();
+      await expect(editor.getByText('Upload photos')).toBeVisible();
+      await expect(
+        editor.getByRole('button', { name: 'Add to journey' }),
+      ).toBeVisible();
+      await capture(
+        page,
+        testInfo,
+        `continue-journey-editor-photos-${viewport.label}`,
+        false,
       );
     }
 

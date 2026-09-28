@@ -1101,7 +1101,7 @@
 .titleField textarea {
   width: 100%;
   min-height: 44px;
-  max-height: 5.75rem;
+  max-height: 9rem;
   resize: none;
   overflow-y: auto;
   border: 0;

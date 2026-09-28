@@ -167,7 +167,7 @@ export function MemoryDrawer({
     if (!title) return;
 
     title.style.height = 'auto';
-    title.style.height = `${Math.min(Math.max(title.scrollHeight, 44), 92)}px`;
+    title.style.height = `${Math.min(Math.max(title.scrollHeight, 44), 144)}px`;
   }, [form.title]);
 
   useEffect(() => {
@@ -731,6 +731,9 @@ export function MemoryDrawer({
             aria-invalid={saveState === 'error' && !form.title.trim()}
             aria-describedby={message ? 'memory-drawer-message' : undefined}
             onChange={(event) => setField('title', event.target.value)}
+            onBlur={(event) => {
+              event.currentTarget.scrollTop = 0;
+            }}
           />
         </label>
 
