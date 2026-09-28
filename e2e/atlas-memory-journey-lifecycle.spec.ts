@@ -500,10 +500,12 @@ async function removeMemory(page: Page, title: string, removePhoto = false) {
   }
   await editor.getByRole('button', { name: 'Remove', exact: true }).click();
   await editor.getByRole('button', { name: 'Remove this memory?' }).click();
+  await expect(
+    page
+      .getByRole('status')
+      .filter({ hasText: 'Memory removed from your atlas.' }),
+  ).toBeVisible({ timeout: 30_000 });
   await expect(editor).toBeHidden({ timeout: 30_000 });
-  await expect(page.getByRole('status')).toContainText(
-    'Memory removed from your atlas.',
-  );
 }
 
 test.beforeEach(async () => {
