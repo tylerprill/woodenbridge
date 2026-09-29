@@ -4,6 +4,7 @@ import {
   MapPinIcon,
 } from '@heroicons/react/24/outline';
 import Link from 'next/link';
+import type { ReactNode } from 'react';
 
 import type { AtlasEntryPresentation } from '@/app/lib/atlas/definitions';
 import {
@@ -23,6 +24,7 @@ type KeepsakeCardProps = {
   href?: string;
   eager?: boolean;
   showDescription?: boolean;
+  actions?: ReactNode;
 };
 
 function getKeepsakeTone(entry: AtlasEntryPresentation): KeepsakeTone {
@@ -51,9 +53,11 @@ function CardContents({
   href,
   eager,
   showDescription,
+  hasActions,
 }: Omit<KeepsakeCardProps, 'tone'> & {
   tone: KeepsakeTone;
   variant: KeepsakeVariant;
+  hasActions: boolean;
 }) {
   const place = getAtlasPlaceContextLabel(entry);
   const date = formatAtlasDateTime(entry);
@@ -135,7 +139,9 @@ function CardContents({
           </span>
           <small>{status}</small>
         </div>
-        {variant === 'grid' ? <ArrowUpRightIcon aria-hidden="true" /> : null}
+        {variant === 'grid' && !hasActions ? (
+          <ArrowUpRightIcon aria-hidden="true" />
+        ) : null}
       </div>
     </div>
   );
@@ -177,6 +183,7 @@ export function KeepsakeCard({
   href,
   eager,
   showDescription,
+  actions,
 }: KeepsakeCardProps) {
   const className = `keepsake-card keepsake-card-${variant}`;
   const resolvedTone = tone ?? getKeepsakeTone(entry);
@@ -189,6 +196,7 @@ export function KeepsakeCard({
       href={href}
       eager={eager}
       showDescription={showDescription}
+      hasActions={Boolean(actions)}
     />
   );
 
@@ -196,8 +204,10 @@ export function KeepsakeCard({
     <article
       className={className}
       data-has-carousel={entry.media.length > 1 ? 'true' : undefined}
+      data-has-actions={actions ? 'true' : undefined}
     >
       {contents}
+      {actions}
     </article>
   );
 }

@@ -1,4 +1,4 @@
-import { ArrowLeftIcon, ArrowRightIcon } from '@heroicons/react/24/outline';
+import { ArrowLeftIcon } from '@heroicons/react/24/outline';
 import type { Metadata } from 'next';
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
@@ -6,6 +6,7 @@ import { cache } from 'react';
 
 import { getSavedAtlasEntry } from '@/app/lib/atlas/data';
 import { KeepsakeCard } from '@/components/atlas/keepsake-card';
+import { MemoryActions } from '@/components/atlas/memory-actions';
 import { PrintCardButton } from '@/components/atlas/print-card-button';
 
 const getKeepsake = cache((entryId: string) => getSavedAtlasEntry(entryId));
@@ -41,7 +42,11 @@ export default async function KeepsakePage({
   return (
     <div className="dashboard-page keepsake-page">
       <header className="keepsake-page-heading">
-        <div>
+        <div className="keepsake-page-intro">
+          <Link className="keepsake-page-back" href="/dashboard/places">
+            <ArrowLeftIcon aria-hidden="true" />
+            Back to memories
+          </Link>
           <p className="section-kicker">A field keepsake</p>
           <h1>Keep the feeling close.</h1>
           <p>
@@ -49,22 +54,16 @@ export default async function KeepsakePage({
           </p>
         </div>
         <div className="keepsake-page-actions">
-          <Link className="dashboard-header-action" href="/dashboard/places">
-            <ArrowLeftIcon aria-hidden="true" />
-            Back to memories
-          </Link>
+          <MemoryActions
+            entryId={entry.id}
+            title={entry.title}
+            variant="detail"
+          />
           <PrintCardButton />
         </div>
       </header>
 
       <KeepsakeCard entry={entry} variant="feature" />
-
-      <div className="keepsake-page-footer">
-        <Link href={`/dashboard?memory=${entry.id}`}>
-          Open in atlas
-          <ArrowRightIcon aria-hidden="true" />
-        </Link>
-      </div>
     </div>
   );
 }
