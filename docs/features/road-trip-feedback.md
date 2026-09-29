@@ -71,12 +71,12 @@ one new Memory in the list containing every successful photograph.
 
 ### 2. Resolve the deployed multi-image upload failure
 
-**Status:** Fixed, merged, and deployed. Post-deployment authenticated browser
-verification remains.
+**Status:** Fixed, merged, deployed, and verified in the authenticated
+production application on September 29, 2026.
 
-On the deployed Atlas, the multi-image upload currently fails with a Vercel
-client-ID or token error. The original failing network response was not
-captured, so this is not a forensic confirmation of that exact error.
+In the original deployed flow, multi-image upload failed with a Vercel client-ID
+or token error. The original failing network response was not captured, so this
+is not a forensic confirmation of that exact error.
 
 Both the Memory drawer and bulk importer use the same media-upload client and
 server route. The repaired path no longer derives browser upload credentials
@@ -93,9 +93,9 @@ presigned upload, metadata read, and exact-object deletion all completed
 successfully. Unit coverage also exercises the installed Blob SDK's presigning
 contract and verifies valid, missing, and tampered completion signatures.
 
-- [ ] Reproduce the failure in the deployed application with realistic files.
-- [ ] Record the exact browser-console and network response without exposing
-      credentials.
+- [x] Exercise the previously affected deployed flow with realistic files.
+- [x] Confirm that the deployed browser console and network requests complete
+      without the client-ID or token error.
 - [x] Remove the legacy client-token authorization path shared by Atlas bulk
       import and the Memory drawer.
 - [x] Prefer the connected store's OIDC identity even when a stale legacy Blob
@@ -108,9 +108,10 @@ contract and verifies valid, missing, and tampered completion signatures.
 - [x] Run a disposable OIDC + presigned-upload canary against the configured
       private Blob store and delete the exact test object.
 - [x] Deploy the repaired upload path.
-- [ ] Confirm whether the deployed error affected both the Atlas importer and
-      the existing Memory drawer's multi-photo control.
-- [ ] Verify successful upload and recovery on desktop and mobile browsers.
+- [x] Confirm the retained Memories-page multi-photo control uses the repaired
+      shared upload path; the retired Atlas bulk importer is no longer in scope.
+- [x] Verify successful multi-photo upload on desktop, mobile portrait, the
+      smallest supported portrait, and mobile landscape viewports.
 
 **Scope decision:** The current Atlas bulk importer can create multiple
 Memories and optionally a Journey. Item 6 removes Journey creation and separate
@@ -249,29 +250,28 @@ multiple photographs, and inspect an existing Journey.
 
 ### 7. Start Atlas near the user's current location
 
-**Status:** Not started.
+**Status:** Implemented and browser-verified; deployment remains.
 
 When possible, initialize the Atlas map near the user's current approximate
 coordinates. Exact or continuous tracking is not required.
 
-Geolocation is not currently implemented and the application's
-`Permissions-Policy` explicitly disables it. Atlas currently starts from the
-user's saved map view when one exists, otherwise from a world-level fallback.
-Implementation therefore needs both a narrowly scoped policy change and a
-decision about whether a fresh location or the saved view takes precedence.
+Atlas preserves the user's saved map view when one exists. For an account with
+no saved view, it makes one browser-managed, approximate location request per
+session and otherwise keeps the existing world-level fallback.
 
-- [ ] Allow same-origin geolocation in the `Permissions-Policy` while keeping
+- [x] Allow same-origin geolocation in the `Permissions-Policy` while keeping
       it unavailable to other origins.
-- [ ] Use browser geolocation only with the user's browser-managed permission.
-- [ ] Request a one-shot, low-accuracy location rather than continuous or
+- [x] Use browser geolocation only with the user's browser-managed permission.
+- [x] Request a one-shot, low-accuracy location rather than continuous or
       high-accuracy tracking.
-- [ ] Use the result to set the initial map camera without creating or storing
+- [x] Use the result to set the initial map camera without creating or storing
       a Memory or silently persisting the user's live location.
-- [ ] Avoid repeatedly recentering after the user begins moving the map.
-- [ ] Fall back to the existing default camera when permission is denied, the
+- [x] Avoid repeatedly recentering after the user begins moving the map.
+- [x] Fall back to the existing default camera when permission is denied, the
       request times out, geolocation is unavailable, or the result is invalid.
-- [ ] Keep the rest of Atlas usable while location is pending or unavailable.
-- [ ] Verify the permission, success, denial, timeout, and unsupported cases.
+- [x] Keep the rest of Atlas usable while location is pending or unavailable.
+- [x] Verify the permission, success, denial, timeout, unsupported, saved-view,
+      and user-interruption cases.
 
 **Acceptance criteria:** With permission, Atlas begins near the user's current
 location. Without it, Atlas opens normally at its safe default with no blocked
@@ -317,10 +317,6 @@ happened. Memories with no known time remain visible in a consistent position.
 - Retire the existing Atlas bulk importer completely, or reuse parts of it
   behind the Memories **New memory** flow?
 - Should On this day live within Memories or on Atlas?
-- Should Atlas request location on first load, or wait for an explicit
-  location action before triggering the browser permission prompt?
-- When both exist, should the user's current approximate location or their
-  previously saved Atlas view determine the initial camera?
 
 ## Prioritized delivery sequence
 

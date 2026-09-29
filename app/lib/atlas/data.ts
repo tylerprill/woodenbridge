@@ -162,6 +162,7 @@ export async function getAtlasData(): Promise<AtlasData> {
   return {
     entries: entriesResult.rows.map((entry) => toAtlasEntry(entry)),
     view: toAtlasView(viewResult.rows[0]),
+    hasSavedView: Boolean(viewResult.rows[0]),
   };
 }
 

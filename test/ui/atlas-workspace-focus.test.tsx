@@ -11,6 +11,7 @@ import type { AtlasData, AtlasMedia } from '@/app/lib/atlas/definitions';
 import { AtlasWorkspace } from '@/components/atlas/atlas-workspace';
 
 const mockReplace = jest.fn();
+const mockAtlasMapRender = jest.fn<void, [{ locateOnLoad?: boolean }]>();
 const mockMemoryPhotosRender = jest.fn<
   void,
   [
@@ -40,7 +41,10 @@ jest.mock('@/app/lib/actions/atlas-media', () => ({
 
 jest.mock('@/components/atlas/atlas-map-loader', () => ({
   __esModule: true,
-  default: () => <div data-testid="atlas-map">Atlas map</div>,
+  default: (props: { locateOnLoad?: boolean }) => {
+    mockAtlasMapRender(props);
+    return <div data-testid="atlas-map">Atlas map</div>;
+  },
 }));
 
 jest.mock('@/components/atlas/memory-photos', () => ({
@@ -55,6 +59,7 @@ jest.mock('@/components/atlas/memory-photos', () => ({
 }));
 
 const initialData: AtlasData = {
+  hasSavedView: true,
   entries: [
     {
       id: 'memory-1',
@@ -114,6 +119,21 @@ describe('Atlas workspace focus restoration', () => {
 
     await waitFor(() => expect(memoryListToggle).toHaveFocus());
     expect(mockReplace).not.toHaveBeenCalled();
+  });
+
+  it('requests an initial location only when the account has no saved Atlas view', () => {
+    const { rerender } = render(
+      <AtlasWorkspace displayName="Explorer" initialData={initialData} />,
+    );
+    expect(mockAtlasMapRender.mock.calls.at(-1)?.[0].locateOnLoad).toBe(false);
+
+    rerender(
+      <AtlasWorkspace
+        displayName="Explorer"
+        initialData={{ ...initialData, hasSavedView: false }}
+      />,
+    );
+    expect(mockAtlasMapRender.mock.calls.at(-1)?.[0].locateOnLoad).toBe(true);
   });
 
   it('merges a late photo callback into the newest saved memory fields', async () => {

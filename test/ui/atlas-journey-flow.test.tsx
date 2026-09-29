@@ -63,6 +63,7 @@ const SECOND_MEMORY_ID = '00000000-0000-4000-8000-000000000002';
 const JOURNEY_ID = '00000000-0000-4000-8000-000000000010';
 
 const initialData: AtlasData = {
+  hasSavedView: true,
   entries: [
     {
       id: FIRST_MEMORY_ID,

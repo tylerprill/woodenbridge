@@ -14,7 +14,7 @@ function createSecurityHeaders({ isProduction }) {
         'accelerometer=()',
         'browsing-topics=()',
         'camera=()',
-        'geolocation=()',
+        'geolocation=(self)',
         'gyroscope=()',
         'magnetometer=()',
         'microphone=()',
