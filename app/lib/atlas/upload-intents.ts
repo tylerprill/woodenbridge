@@ -114,17 +114,21 @@ export async function reserveAtlasMediaUploadVariant(
       [`atlas-upload:${intent.userId}`],
     );
 
-    const importAssociation = await client.query<{ batch_id: string }>(
+    const importAssociation = await client.query<{
+      batch_id: string;
+      expected_media_id: string;
+    }>(
       `
-        SELECT batch_id
+        SELECT batch_id, expected_media_id
         FROM atlas_import_items
-        WHERE entry_id = $1 AND user_id = $2
+        WHERE entry_id = $1
+          AND user_id = $2
         LIMIT 1
       `,
       [intent.entryId, intent.userId],
     );
-    const importBatchId = importAssociation.rows[0]?.batch_id ?? null;
-    if (importBatchId) {
+    const importedItem = importAssociation.rows[0] ?? null;
+    if (importedItem) {
       const importBatch = await client.query<{ status: string }>(
         `
           SELECT status
@@ -133,40 +137,53 @@ export async function reserveAtlasMediaUploadVariant(
           LIMIT 1
           FOR UPDATE
         `,
-        [importBatchId, intent.userId],
+        [importedItem.batch_id, intent.userId],
       );
-      if (importBatch.rows[0]?.status !== 'uploading') {
+      const importBatchStatus = importBatch.rows[0]?.status ?? null;
+      const isExpectedImportMedia =
+        importedItem.expected_media_id === intent.mediaId;
+      if (
+        (isExpectedImportMedia && importBatchStatus !== 'uploading') ||
+        (!isExpectedImportMedia && importBatchStatus !== 'completed')
+      ) {
         throw new AtlasUploadIntentError(
           'not-found',
           'That memory cannot accept a photo.',
         );
       }
 
-      const importItem = await client.query<{ id: string }>(
-        `
-          SELECT id
-          FROM atlas_import_items
-          WHERE batch_id = $1
-            AND entry_id = $2
-            AND user_id = $3
-            AND expected_media_id = $4
-            AND status = 'pending'
-            AND source_width IS NOT NULL
-            AND source_height IS NOT NULL
-            AND media_width IS NOT NULL
-            AND media_height IS NOT NULL
-            AND prepared_byte_size IS NOT NULL
-            AND thumbnail_byte_size IS NOT NULL
-          LIMIT 1
-          FOR UPDATE
-        `,
-        [importBatchId, intent.entryId, intent.userId, intent.mediaId],
-      );
-      if (!importItem.rows[0]) {
-        throw new AtlasUploadIntentError(
-          'not-found',
-          'That memory cannot accept a photo.',
+      if (isExpectedImportMedia) {
+        const importItem = await client.query<{ id: string }>(
+          `
+            SELECT id
+            FROM atlas_import_items
+            WHERE batch_id = $1
+              AND entry_id = $2
+              AND user_id = $3
+              AND expected_media_id = $4
+              AND status = 'pending'
+              AND source_width IS NOT NULL
+              AND source_height IS NOT NULL
+              AND media_width IS NOT NULL
+              AND media_height IS NOT NULL
+              AND prepared_byte_size IS NOT NULL
+              AND thumbnail_byte_size IS NOT NULL
+            LIMIT 1
+            FOR UPDATE
+          `,
+          [
+            importedItem.batch_id,
+            intent.entryId,
+            intent.userId,
+            intent.mediaId,
+          ],
         );
+        if (!importItem.rows[0]) {
+          throw new AtlasUploadIntentError(
+            'not-found',
+            'That memory cannot accept a photo.',
+          );
+        }
       }
     }
 

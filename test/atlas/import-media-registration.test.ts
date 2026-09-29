@@ -82,6 +82,10 @@ function normalizeQuery(query: unknown) {
   return String(query).replace(/\s+/g, ' ').trim();
 }
 
+function taggedQueryText(strings: TemplateStringsArray) {
+  return strings.join(' ? ').replace(/\s+/g, ' ').trim();
+}
+
 function privateBlob(bytes: string) {
   return {
     statusCode: 200,
@@ -163,8 +167,14 @@ describe('Atlas import media registration', () => {
     __testMocks.clientQuery.mockImplementation(
       async (query: string, values?: unknown[]) => {
         const text = normalizeQuery(query);
-        if (text.includes('SELECT batch_id FROM atlas_import_items')) {
-          return { rows: [{ batch_id: batchId }] };
+        if (
+          text.includes(
+            'SELECT batch_id, expected_media_id FROM atlas_import_items',
+          )
+        ) {
+          return {
+            rows: [{ batch_id: batchId, expected_media_id: mediaId }],
+          };
         }
         if (text.includes('SELECT status FROM atlas_import_batches')) {
           return { rows: [{ status: 'uploading' }] };
@@ -256,6 +266,145 @@ describe('Atlas import media registration', () => {
       normalizeQuery(query).includes('INSERT INTO atlas_media'),
     );
     expect(insertCall?.[1]).toContain(sourceHash);
+  });
+
+  it('registers a normal photo appended to a completed imported memory', async () => {
+    const appendedMediaId = '7807e2ed-8ee5-48c2-a311-9ace65cbb1d0';
+    const appendedPathname = `atlas/memories/${entryId}/${appendedMediaId}.jpg`;
+    const appendedThumbnailPathname = `atlas/memories/${entryId}/${appendedMediaId}.thumbnail.webp`;
+
+    __testMocks.taggedQuery.mockResolvedValue({
+      rows: [
+        {
+          id: entryId,
+          import_item_id: null,
+          import_batch_id: null,
+          import_batch_status: null,
+          expected_media_id: null,
+          source_hash: null,
+          source_width: null,
+          source_height: null,
+          media_width: null,
+          media_height: null,
+          prepared_byte_size: null,
+          expected_thumbnail_byte_size: null,
+          already_registered: false,
+        },
+      ],
+      rowCount: 1,
+    });
+    jest
+      .mocked(headAtlasMediaObject)
+      .mockImplementation(async (requestedPath) => {
+        if (requestedPath === appendedPathname) {
+          return {
+            pathname: appendedPathname,
+            contentType: 'image/jpeg',
+            size: 4,
+          } as never;
+        }
+        return {
+          pathname: appendedThumbnailPathname,
+          contentType: 'image/webp',
+          size: 5,
+        } as never;
+      });
+    __testMocks.clientQuery.mockImplementation(
+      async (query: string, values?: unknown[]) => {
+        const text = normalizeQuery(query);
+        if (
+          text.includes(
+            'SELECT batch_id, expected_media_id FROM atlas_import_items',
+          )
+        ) {
+          expect(text).toContain('SELECT batch_id, expected_media_id');
+          expect(values).toEqual([entryId, userId]);
+          return {
+            rows: [{ batch_id: batchId, expected_media_id: mediaId }],
+            rowCount: 1,
+          };
+        }
+        if (text.includes('SELECT status FROM atlas_import_batches')) {
+          return { rows: [{ status: 'completed' }], rowCount: 1 };
+        }
+        if (text.includes('SELECT title, place_label FROM atlas_entries')) {
+          return {
+            rows: [{ title: 'Covered Arch Hike', place_label: '' }],
+          };
+        }
+        if (
+          text.includes('FROM atlas_media') &&
+          text.includes('WHERE id = $1')
+        ) {
+          return { rows: [], rowCount: 0 };
+        }
+        if (text.includes('SELECT COUNT(*)::int AS count FROM atlas_media')) {
+          return { rows: [{ count: 1 }], rowCount: 1 };
+        }
+        if (text.includes('INSERT INTO atlas_media')) {
+          return {
+            rows: [
+              {
+                id: appendedMediaId,
+                entry_id: entryId,
+                storage_path: appendedPathname,
+                thumbnail_path: appendedThumbnailPathname,
+                mime_type: 'image/jpeg',
+                width: 1000,
+                height: 750,
+                byte_size: 4,
+                alt_text: 'Covered Arch Hike',
+                sort_order: 1,
+                created_at: new Date('2026-09-28T12:00:00.000Z'),
+              },
+            ],
+            rowCount: 1,
+          };
+        }
+        return { rows: [], rowCount: 1 };
+      },
+    );
+
+    await expect(
+      registerAtlasMediaAction({
+        entryId,
+        mediaId: appendedMediaId,
+        pathname: appendedPathname,
+        thumbnailPathname: appendedThumbnailPathname,
+        width: 1000,
+        height: 750,
+        altText: '',
+      }),
+    ).resolves.toMatchObject({
+      ok: true,
+      data: { id: appendedMediaId, entryId },
+    });
+
+    const preflightQuery = taggedQueryText(
+      __testMocks.taggedQuery.mock.calls[0]?.[0] as TemplateStringsArray,
+    );
+    expect(preflightQuery).toContain('AND import_item.expected_media_id = ?');
+    expect(preflightQuery).toContain(
+      "AND unfinished_import_batch.status <> 'completed'",
+    );
+    const queries = __testMocks.clientQuery.mock.calls.map(([query]) =>
+      normalizeQuery(query),
+    );
+    expect(
+      queries.some((query) =>
+        query.includes('SELECT status FROM atlas_import_batches'),
+      ),
+    ).toBe(true);
+    expect(
+      queries.some(
+        (query) =>
+          query.includes('FROM atlas_import_items') &&
+          query.includes('media_width = $5'),
+      ),
+    ).toBe(false);
+    expect(
+      queries.some((query) => query.includes("SET status = 'uploaded'")),
+    ).toBe(false);
   });
 
   it('reports a committed original and missing thumbnail without allowing overwrite', async () => {
