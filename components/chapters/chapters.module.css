@@ -2940,7 +2940,7 @@
 .journeySegmentToggle {
   display: flex;
   width: 100%;
-  min-height: 2.4rem;
+  min-height: 44px;
   align-items: center;
   justify-content: space-between;
   border: 0;
@@ -4066,11 +4066,19 @@
 @media (max-width: 760px), (max-height: 480px), (any-pointer: coarse) {
   .editorField :is(input, textarea),
   .memorySearch input,
+  .sequenceSegmentHeading input,
+  .sequenceSegmentPicker select,
   .transitionEditor textarea {
     font-size: 1rem;
   }
 
+  .sequenceSegmentHeading input,
+  .sequenceSegmentPicker select {
+    min-height: 44px;
+  }
+
   .sequenceRemove,
+  .sequenceSegmentHeading > button,
   .sequenceActions button,
   .sequenceActions button:first-child,
   .transitionEditor > button,
