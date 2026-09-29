@@ -43,7 +43,9 @@ describe('static response security headers', () => {
       'publickey-credentials-get=(self)',
     );
     expect(production.get('Permissions-Policy')).toContain('camera=()');
-    expect(production.get('Permissions-Policy')).toContain('geolocation=()');
+    expect(production.get('Permissions-Policy')).toContain(
+      'geolocation=(self)',
+    );
   });
 
   it('sandboxes API responses that are opened as top-level documents', async () => {

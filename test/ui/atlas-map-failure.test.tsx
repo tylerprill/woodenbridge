@@ -398,12 +398,21 @@ function addAttributionControl(
 describe('Atlas map failure recovery', () => {
   beforeEach(() => {
     jest.clearAllMocks();
+    window.sessionStorage.clear();
     mockEventHandlers.clear();
     mockMarkerElements.length = 0;
     mockMarkerOptions.length = 0;
     mockBoundsExtends.length = 0;
     mockMarkers.length = 0;
     mockMapConstructor.mockImplementation(() => createMapMock());
+    Object.defineProperty(navigator, 'geolocation', {
+      configurable: true,
+      value: undefined,
+    });
+    Object.defineProperty(navigator, 'permissions', {
+      configurable: true,
+      value: undefined,
+    });
   });
 
   afterEach(() => {
@@ -450,6 +459,371 @@ describe('Atlas map failure recovery', () => {
     );
 
     expect(mockMapConstructor).toHaveBeenCalledTimes(1);
+  });
+
+  it('centers once on an approximate browser location without saving it as the Atlas view', async () => {
+    let resolveLocation: PositionCallback | undefined;
+    const getCurrentPosition = jest.fn(
+      (success: PositionCallback, _error?: PositionErrorCallback | null) => {
+        resolveLocation = success;
+      },
+    );
+    Object.defineProperty(navigator, 'geolocation', {
+      configurable: true,
+      value: { getCurrentPosition },
+    });
+    Object.defineProperty(navigator, 'permissions', {
+      configurable: true,
+      value: {
+        query: jest.fn(async () => ({ state: 'prompt' })),
+      },
+    });
+    const map = createMapMock();
+    const onViewChange = jest.fn();
+    mockMapConstructor.mockReturnValue(map);
+
+    render(
+      <AtlasMap
+        entries={[]}
+        initialView={initialView}
+        locateOnLoad
+        interactionLocked={false}
+        selectedId={null}
+        placementMode={false}
+        focusRequest={{ id: null, nonce: 0 }}
+        fitRequest={0}
+        onSelect={jest.fn()}
+        onPlace={jest.fn()}
+        onViewChange={onViewChange}
+      />,
+    );
+
+    await waitFor(() => expect(getCurrentPosition).toHaveBeenCalledTimes(1));
+    expect(getCurrentPosition).toHaveBeenCalledWith(
+      expect.any(Function),
+      expect.any(Function),
+      {
+        enableHighAccuracy: false,
+        maximumAge: 600_000,
+        timeout: 6_000,
+      },
+    );
+    act(() => mockEventHandlers.get('load')?.());
+    act(() =>
+      resolveLocation?.({
+        coords: {
+          accuracy: 1_500,
+          altitude: null,
+          altitudeAccuracy: null,
+          heading: null,
+          latitude: 39.7392,
+          longitude: -104.9903,
+          speed: null,
+        },
+        timestamp: Date.now(),
+      } as GeolocationPosition),
+    );
+
+    await waitFor(() =>
+      expect(map.easeTo).toHaveBeenCalledWith({
+        center: [-104.9903, 39.7392],
+        zoom: 9,
+        duration: 850,
+        essential: true,
+      }),
+    );
+    map.getCenter.mockReturnValue({ lng: -104.9903, lat: 39.7392 });
+    map.getZoom.mockReturnValue(9);
+    act(() => mockEventHandlers.get('moveend')?.());
+
+    expect(onViewChange).not.toHaveBeenCalled();
+    expect(document.querySelector('[data-map-state]')).toHaveAttribute(
+      'data-location-start',
+      'centered',
+    );
+    act(() => mockEventHandlers.get('moveend')?.());
+    expect(onViewChange).not.toHaveBeenCalled();
+
+    act(() =>
+      mockEventHandlers.get('movestart')?.({
+        originalEvent: new MouseEvent('mousedown'),
+      }),
+    );
+    act(() => mockEventHandlers.get('moveend')?.());
+    expect(onViewChange).toHaveBeenCalledTimes(1);
+  });
+
+  it('settles on the location target when an earlier map movement finishes first', async () => {
+    let resolveLocation: PositionCallback | undefined;
+    Object.defineProperty(navigator, 'geolocation', {
+      configurable: true,
+      value: {
+        getCurrentPosition: jest.fn((success: PositionCallback) => {
+          resolveLocation = success;
+        }),
+      },
+    });
+    const map = createMapMock();
+    mockMapConstructor.mockReturnValue(map);
+
+    render(
+      <AtlasMap
+        entries={[]}
+        initialView={initialView}
+        locateOnLoad
+        interactionLocked={false}
+        selectedId={null}
+        placementMode={false}
+        focusRequest={{ id: null, nonce: 0 }}
+        fitRequest={0}
+        onSelect={jest.fn()}
+        onPlace={jest.fn()}
+        onViewChange={jest.fn()}
+      />,
+    );
+    act(() => mockEventHandlers.get('load')?.());
+    await waitFor(() => expect(resolveLocation).toBeDefined());
+    act(() =>
+      resolveLocation?.({
+        coords: { latitude: 39.7392, longitude: -104.9903 },
+        timestamp: Date.now(),
+      } as GeolocationPosition),
+    );
+    await waitFor(() => expect(map.easeTo).toHaveBeenCalledTimes(1));
+
+    act(() => mockEventHandlers.get('moveend')?.());
+
+    expect(map.easeTo).toHaveBeenLastCalledWith({
+      center: [-104.9903, 39.7392],
+      zoom: 9,
+      duration: 0,
+      essential: true,
+    });
+    expect(document.querySelector('[data-map-state]')).toHaveAttribute(
+      'data-location-start',
+      'ready',
+    );
+
+    map.getCenter.mockReturnValue({ lng: -104.9903, lat: 39.7392 });
+    map.getZoom.mockReturnValue(9);
+    act(() => mockEventHandlers.get('moveend')?.());
+
+    expect(document.querySelector('[data-map-state]')).toHaveAttribute(
+      'data-location-start',
+      'centered',
+    );
+  });
+
+  it('keeps the fallback camera when location is denied or unavailable', async () => {
+    const getCurrentPosition = jest.fn();
+    const queryPermission = jest.fn(async () => ({ state: 'denied' }));
+    Object.defineProperty(navigator, 'geolocation', {
+      configurable: true,
+      value: { getCurrentPosition },
+    });
+    Object.defineProperty(navigator, 'permissions', {
+      configurable: true,
+      value: {
+        query: queryPermission,
+      },
+    });
+    const map = createMapMock();
+    mockMapConstructor.mockReturnValue(map);
+
+    render(
+      <AtlasMap
+        entries={[]}
+        initialView={initialView}
+        locateOnLoad
+        interactionLocked={false}
+        selectedId={null}
+        placementMode={false}
+        focusRequest={{ id: null, nonce: 0 }}
+        fitRequest={0}
+        onSelect={jest.fn()}
+        onPlace={jest.fn()}
+        onViewChange={jest.fn()}
+      />,
+    );
+    act(() => mockEventHandlers.get('load')?.());
+
+    await waitFor(() => expect(queryPermission).toHaveBeenCalledTimes(1));
+    expect(getCurrentPosition).not.toHaveBeenCalled();
+    expect(map.easeTo).not.toHaveBeenCalled();
+  });
+
+  it('falls back quietly when an approximate location request times out', async () => {
+    const getCurrentPosition = jest.fn(
+      (_success: PositionCallback, error?: PositionErrorCallback | null) => {
+        error?.({ code: 3, message: 'Timed out' } as GeolocationPositionError);
+      },
+    );
+    Object.defineProperty(navigator, 'geolocation', {
+      configurable: true,
+      value: { getCurrentPosition },
+    });
+    Object.defineProperty(navigator, 'permissions', {
+      configurable: true,
+      value: {
+        query: jest.fn(async () => ({ state: 'prompt' })),
+      },
+    });
+    const map = createMapMock();
+    mockMapConstructor.mockReturnValue(map);
+
+    render(
+      <AtlasMap
+        entries={[]}
+        initialView={initialView}
+        locateOnLoad
+        interactionLocked={false}
+        selectedId={null}
+        placementMode={false}
+        focusRequest={{ id: null, nonce: 0 }}
+        fitRequest={0}
+        onSelect={jest.fn()}
+        onPlace={jest.fn()}
+        onViewChange={jest.fn()}
+      />,
+    );
+    act(() => mockEventHandlers.get('load')?.());
+
+    await waitFor(() => expect(getCurrentPosition).toHaveBeenCalledTimes(1));
+    expect(map.easeTo).not.toHaveBeenCalled();
+    expect(document.querySelector('[data-map-state]')).toHaveAttribute(
+      'data-location-start',
+      'fallback',
+    );
+  });
+
+  it('keeps the fallback camera when browser geolocation is unsupported', async () => {
+    const map = createMapMock();
+    mockMapConstructor.mockReturnValue(map);
+
+    render(
+      <AtlasMap
+        entries={[]}
+        initialView={initialView}
+        locateOnLoad
+        interactionLocked={false}
+        selectedId={null}
+        placementMode={false}
+        focusRequest={{ id: null, nonce: 0 }}
+        fitRequest={0}
+        onSelect={jest.fn()}
+        onPlace={jest.fn()}
+        onViewChange={jest.fn()}
+      />,
+    );
+    act(() => mockEventHandlers.get('load')?.());
+
+    await waitFor(() =>
+      expect(document.querySelector('[data-map-state]')).toHaveAttribute(
+        'data-location-start',
+        'fallback',
+      ),
+    );
+    expect(map.easeTo).not.toHaveBeenCalled();
+  });
+
+  it('does not repeat the browser location request within one session', async () => {
+    const getCurrentPosition = jest.fn();
+    Object.defineProperty(navigator, 'geolocation', {
+      configurable: true,
+      value: { getCurrentPosition },
+    });
+    Object.defineProperty(navigator, 'permissions', {
+      configurable: true,
+      value: {
+        query: jest.fn(async () => ({ state: 'prompt' })),
+      },
+    });
+    const first = render(
+      <AtlasMap
+        entries={[]}
+        initialView={initialView}
+        locateOnLoad
+        interactionLocked={false}
+        selectedId={null}
+        placementMode={false}
+        focusRequest={{ id: null, nonce: 0 }}
+        fitRequest={0}
+        onSelect={jest.fn()}
+        onPlace={jest.fn()}
+        onViewChange={jest.fn()}
+      />,
+    );
+    await waitFor(() => expect(getCurrentPosition).toHaveBeenCalledTimes(1));
+    first.unmount();
+
+    render(
+      <AtlasMap
+        entries={[]}
+        initialView={initialView}
+        locateOnLoad
+        interactionLocked={false}
+        selectedId={null}
+        placementMode={false}
+        focusRequest={{ id: null, nonce: 0 }}
+        fitRequest={0}
+        onSelect={jest.fn()}
+        onPlace={jest.fn()}
+        onViewChange={jest.fn()}
+      />,
+    );
+
+    await waitFor(() => expect(getCurrentPosition).toHaveBeenCalledTimes(1));
+  });
+
+  it('does not recenter after the traveler starts moving the map', async () => {
+    let resolveLocation: PositionCallback | undefined;
+    Object.defineProperty(navigator, 'geolocation', {
+      configurable: true,
+      value: {
+        getCurrentPosition: jest.fn((success: PositionCallback) => {
+          resolveLocation = success;
+        }),
+      },
+    });
+    Object.defineProperty(navigator, 'permissions', {
+      configurable: true,
+      value: {
+        query: jest.fn(async () => ({ state: 'granted' })),
+      },
+    });
+    const map = createMapMock();
+    mockMapConstructor.mockReturnValue(map);
+
+    render(
+      <AtlasMap
+        entries={[]}
+        initialView={initialView}
+        locateOnLoad
+        interactionLocked={false}
+        selectedId={null}
+        placementMode={false}
+        focusRequest={{ id: null, nonce: 0 }}
+        fitRequest={0}
+        onSelect={jest.fn()}
+        onPlace={jest.fn()}
+        onViewChange={jest.fn()}
+      />,
+    );
+    await waitFor(() => expect(resolveLocation).toBeDefined());
+    act(() => mockEventHandlers.get('load')?.());
+    act(() =>
+      mockEventHandlers.get('movestart')?.({
+        originalEvent: new MouseEvent('mousedown'),
+      }),
+    );
+    act(() =>
+      resolveLocation?.({
+        coords: { latitude: 39.7392, longitude: -104.9903 },
+        timestamp: Date.now(),
+      } as GeolocationPosition),
+    );
+
+    await waitFor(() => expect(map.easeTo).not.toHaveBeenCalled());
   });
 
   it('attaches error handling before applying the sanitized remote style', () => {

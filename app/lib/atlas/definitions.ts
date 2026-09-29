@@ -63,6 +63,7 @@ export type AtlasView = {
 export type AtlasData = {
   entries: AtlasEntry[];
   view: AtlasView;
+  hasSavedView: boolean;
 };
 
 export type AtlasActionError = 'invalid' | 'not-found' | 'conflict' | 'failed';

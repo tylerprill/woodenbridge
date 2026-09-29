@@ -1091,6 +1091,7 @@ export function AtlasWorkspace({
       <AtlasMap
         entries={visibleEntries}
         initialView={initialData.view}
+        locateOnLoad={!initialData.hasSavedView}
         interactionLocked={Boolean(selectedEntry)}
         selectedId={mode === 'places' ? selectedId : null}
         placementMode={mode === 'places' && placementMode}

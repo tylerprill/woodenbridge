@@ -90,6 +90,7 @@ export type AtlasMapMode = 'places' | 'journeys';
 type AtlasMapProps = {
   entries: AtlasEntry[];
   initialView: AtlasView;
+  locateOnLoad?: boolean;
   interactionLocked: boolean;
   selectedId: string | null;
   placementMode: boolean;
@@ -116,6 +117,10 @@ const MAP_LOAD_TIMEOUT_MS = 15_000;
 const PLACES_MIN_ZOOM = 1;
 const JOURNEYS_MIN_ZOOM = -2;
 const MAP_MAX_ZOOM = 18;
+const APPROXIMATE_LOCATION_ZOOM = 9;
+const LOCATION_REQUEST_TIMEOUT_MS = 6_000;
+const LOCATION_MAXIMUM_AGE_MS = 10 * 60 * 1_000;
+const LOCATION_SESSION_KEY = 'field-atlas:initial-location-requested';
 const MERCATOR_MAX_LATITUDE = 85.0511287798066;
 const EMPTY_MAP_PADDING = { top: 0, right: 0, bottom: 0, left: 0 } as const;
 const BUILDER_PIN_HIT_RADIUS = 22;
@@ -126,6 +131,15 @@ type PreparedJourneyMarkerFit = {
   center: [number, number];
   zoom: number;
 };
+
+type LocationStartState =
+  | 'disabled'
+  | 'requesting'
+  | 'ready'
+  | 'centered'
+  | 'fallback'
+  | 'cancelled'
+  | 'skipped';
 
 // Mercator normally zooms in until the world fills the entire canvas height.
 // A Journey bottom sheet covers most of a tall phone canvas, so that default
@@ -681,6 +695,7 @@ function nearestBuilderPin(
 export default function AtlasMap({
   entries,
   initialView,
+  locateOnLoad = false,
   interactionLocked,
   selectedId,
   placementMode,
@@ -763,6 +778,24 @@ export default function AtlasMap({
     null,
   );
   const journeyRouteProjectionRef = useRef<ChapterRouteProjection>('mercator');
+  const cameraChangedBeforeLocationRef = useRef(false);
+  const applyingInitialLocationRef = useRef(false);
+  const initialLocationInterruptedRef = useRef(false);
+  const suppressLocationCameraPersistenceRef = useRef(false);
+  const appliedInitialLocationMapRef = useRef<MapLibreMap | null>(null);
+  const pendingInitialLocationRef = useRef<{
+    map: MapLibreMap;
+    latitude: number;
+    longitude: number;
+    zoom: number;
+    settlementAttempted: boolean;
+  } | null>(null);
+  const [initialLocation, setInitialLocation] = useState<{
+    latitude: number;
+    longitude: number;
+  } | null>(null);
+  const [locationStartState, setLocationStartState] =
+    useState<LocationStartState>(locateOnLoad ? 'requesting' : 'disabled');
 
   function prepareJourneyMarkerFit(
     map: MapLibreMap,
@@ -835,6 +868,118 @@ export default function AtlasMap({
   useEffect(() => {
     onJourneyStopSelectRef.current = onJourneyStopSelect;
   }, [onJourneyStopSelect]);
+
+  useEffect(() => {
+    if (!locateOnLoad) return;
+    const hasExplicitCameraIntent =
+      mode !== 'places' ||
+      builderActive ||
+      Boolean(selectedId) ||
+      Boolean(focusRequest.id) ||
+      fitRequest !== 0;
+    if (!hasExplicitCameraIntent) {
+      return;
+    }
+    suppressLocationCameraPersistenceRef.current = false;
+    if (!['requesting', 'ready'].includes(locationStartState)) return;
+    cameraChangedBeforeLocationRef.current = true;
+    initialLocationInterruptedRef.current = true;
+    const cancellationTimer = window.setTimeout(
+      () => setLocationStartState('cancelled'),
+      0,
+    );
+    return () => window.clearTimeout(cancellationTimer);
+  }, [
+    builderActive,
+    fitRequest,
+    focusRequest.id,
+    locateOnLoad,
+    locationStartState,
+    mode,
+    selectedId,
+  ]);
+
+  useEffect(() => {
+    let active = true;
+    const requestLocation = async () => {
+      await Promise.resolve();
+      if (!active) return;
+      if (!locateOnLoad) {
+        setLocationStartState('disabled');
+        return;
+      }
+      if (!navigator.geolocation) {
+        setLocationStartState('fallback');
+        return;
+      }
+      if (cameraChangedBeforeLocationRef.current) {
+        setLocationStartState('cancelled');
+        return;
+      }
+
+      try {
+        if (window.sessionStorage.getItem(LOCATION_SESSION_KEY)) {
+          setLocationStartState('skipped');
+          return;
+        }
+        window.sessionStorage.setItem(LOCATION_SESSION_KEY, '1');
+      } catch {
+        // A blocked storage API should not disable the browser-managed prompt.
+      }
+
+      setLocationStartState('requesting');
+      try {
+        const permission = await navigator.permissions?.query({
+          name: 'geolocation',
+        });
+        if (!active) return;
+        if (permission?.state === 'denied') {
+          setLocationStartState('fallback');
+          return;
+        }
+      } catch {
+        // Some browsers expose geolocation without the Permissions API.
+      }
+      if (!active) return;
+      if (cameraChangedBeforeLocationRef.current) {
+        setLocationStartState('cancelled');
+        return;
+      }
+
+      navigator.geolocation.getCurrentPosition(
+        (position) => {
+          if (!active) return;
+          const { latitude, longitude } = position.coords;
+          if (
+            !Number.isFinite(latitude) ||
+            !Number.isFinite(longitude) ||
+            latitude < -90 ||
+            latitude > 90 ||
+            longitude < -180 ||
+            longitude > 180
+          ) {
+            setLocationStartState('fallback');
+            return;
+          }
+          setLocationStartState('ready');
+          setInitialLocation({ latitude, longitude });
+        },
+        () => {
+          if (active) setLocationStartState('fallback');
+        },
+        {
+          enableHighAccuracy: false,
+          maximumAge: LOCATION_MAXIMUM_AGE_MS,
+          timeout: LOCATION_REQUEST_TIMEOUT_MS,
+        },
+      );
+    };
+
+    void requestLocation();
+    return () => {
+      active = false;
+    };
+  }, [locateOnLoad]);
 
   useEffect(() => {
     if (!containerRef.current || mapRef.current) return;
@@ -1085,6 +1230,51 @@ export default function AtlasMap({
           setJourneyMarkerFitVersion((version) => version + 1);
         }
       }
+      const pendingInitialLocation = pendingInitialLocationRef.current;
+      if (pendingInitialLocation?.map === map) {
+        const locationWorldShift =
+          360 *
+          Math.round((center.lng - pendingInitialLocation.longitude) / 360);
+        const reachedLocation =
+          Math.abs(
+            center.lng - pendingInitialLocation.longitude - locationWorldShift,
+          ) < 1e-3 &&
+          Math.abs(center.lat - pendingInitialLocation.latitude) < 1e-3 &&
+          Math.abs(map.getZoom() - pendingInitialLocation.zoom) < 1e-2;
+        const wasInterrupted = initialLocationInterruptedRef.current;
+        if (
+          !wasInterrupted &&
+          !reachedLocation &&
+          !pendingInitialLocation.settlementAttempted
+        ) {
+          pendingInitialLocation.settlementAttempted = true;
+          map.easeTo({
+            center: [
+              pendingInitialLocation.longitude,
+              pendingInitialLocation.latitude,
+            ],
+            zoom: pendingInitialLocation.zoom,
+            duration: 0,
+            essential: true,
+          });
+          return;
+        }
+        pendingInitialLocationRef.current = null;
+        applyingInitialLocationRef.current = false;
+        initialLocationInterruptedRef.current = false;
+        if (!wasInterrupted && reachedLocation) {
+          setLocationStartState('centered');
+          return;
+        }
+        if (!wasInterrupted) {
+          suppressLocationCameraPersistenceRef.current = false;
+          setLocationStartState('fallback');
+          return;
+        }
+        cameraChangedBeforeLocationRef.current = true;
+        setLocationStartState('cancelled');
+      }
+      if (suppressLocationCameraPersistenceRef.current) return;
       onViewChangeRef.current({
         latitude: center.lat,
         longitude: center.lng,
@@ -1117,6 +1307,25 @@ export default function AtlasMap({
         latitude: event.lngLat.lat,
         longitude: event.lngLat.lng,
       });
+    };
+
+    const handleMoveStart = (event?: { originalEvent?: unknown }) => {
+      setTooltip(null);
+      const originalEvent = event?.originalEvent;
+      const startedByTraveler =
+        originalEvent instanceof MouseEvent ||
+        originalEvent instanceof WheelEvent ||
+        originalEvent instanceof KeyboardEvent ||
+        (typeof TouchEvent !== 'undefined' &&
+          originalEvent instanceof TouchEvent);
+      if (startedByTraveler) {
+        suppressLocationCameraPersistenceRef.current = false;
+        if (applyingInitialLocationRef.current) {
+          initialLocationInterruptedRef.current = true;
+        } else {
+          cameraChangedBeforeLocationRef.current = true;
+        }
+      }
     };
 
     const handlePinClick = (event: MapLayerMouseEvent) => {
@@ -1298,10 +1507,17 @@ export default function AtlasMap({
     map.on('mouseenter', ATLAS_JOURNEY_ROUTE_HIT_LAYER, handleJourneyEnter);
     map.on('mousemove', ATLAS_JOURNEY_ROUTE_HIT_LAYER, showJourneyTooltip);
     map.on('mouseleave', ATLAS_JOURNEY_ROUTE_HIT_LAYER, handleJourneyLeave);
-    map.on('movestart', () => setTooltip(null));
+    map.on('movestart', handleMoveStart);
 
     const cleanupMap = () => {
       pendingJourneyMarkerFitRef.current = null;
+      pendingInitialLocationRef.current = null;
+      applyingInitialLocationRef.current = false;
+      initialLocationInterruptedRef.current = false;
+      suppressLocationCameraPersistenceRef.current = false;
+      if (appliedInitialLocationMapRef.current === map) {
+        appliedInitialLocationMapRef.current = null;
+      }
       settledJourneyMarkerFitRef.current = null;
       focusedJourneyMarkerRef.current = null;
       window.clearTimeout(loadTimer);
@@ -1331,6 +1547,57 @@ export default function AtlasMap({
 
     return cleanupMap;
   }, [mapAttempt]);
+
+  useEffect(() => {
+    const map = mapRef.current;
+    if (
+      !map ||
+      !mapLoaded ||
+      !initialLocation ||
+      appliedInitialLocationMapRef.current === map
+    ) {
+      return;
+    }
+    if (cameraChangedBeforeLocationRef.current) {
+      const cancellationTimer = window.setTimeout(
+        () => setLocationStartState('cancelled'),
+        0,
+      );
+      return () => window.clearTimeout(cancellationTimer);
+    }
+
+    const zoom = Math.max(map.getZoom(), APPROXIMATE_LOCATION_ZOOM);
+    suppressLocationCameraPersistenceRef.current = true;
+    pendingInitialLocationRef.current = {
+      map,
+      latitude: initialLocation.latitude,
+      longitude: initialLocation.longitude,
+      zoom,
+      settlementAttempted: false,
+    };
+    applyingInitialLocationRef.current = true;
+    initialLocationInterruptedRef.current = false;
+    appliedInitialLocationMapRef.current = map;
+    try {
+      map.easeTo({
+        center: [initialLocation.longitude, initialLocation.latitude],
+        zoom,
+        duration: mapAnimationDuration(850),
+        essential: true,
+      });
+    } catch (error) {
+      pendingInitialLocationRef.current = null;
+      applyingInitialLocationRef.current = false;
+      initialLocationInterruptedRef.current = false;
+      suppressLocationCameraPersistenceRef.current = false;
+      console.warn('Atlas could not center on the current location:', error);
+      const fallbackTimer = window.setTimeout(
+        () => setLocationStartState('fallback'),
+        0,
+      );
+      return () => window.clearTimeout(fallbackTimer);
+    }
+  }, [initialLocation, mapLoaded]);
 
   useEffect(() => {
     const map = mapRef.current;
@@ -1762,6 +2029,7 @@ export default function AtlasMap({
     <div
       className={styles.mapFrame}
       data-map-state={mapError ? 'error' : mapLoaded ? 'ready' : 'loading'}
+      data-location-start={locationStartState}
       data-atlas-mode={mode}
       data-builder-active={builderActive ? 'true' : 'false'}
       data-placement={placementMode && mode === 'places' ? 'true' : 'false'}
