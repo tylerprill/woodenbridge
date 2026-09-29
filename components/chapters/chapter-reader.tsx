@@ -9,7 +9,6 @@ import {
 } from '@heroicons/react/24/outline';
 import Image from 'next/image';
 import Link from 'next/link';
-import { Fragment } from 'react';
 
 import type {
   AtlasChapter,
@@ -27,8 +26,55 @@ import {
   ChapterSaveNotice,
   type ChapterSaveNoticeKind,
 } from './chapter-save-notice';
+import {
+  ChapterSegmentedTimeline,
+  type ChapterSegmentGroup,
+} from './chapter-segmented-timeline';
 import { ChapterShareControl } from './chapter-share-control';
 import styles from './chapters.module.css';
+
+type ChapterReaderEntry = (
+  AtlasChapter | SharedAtlasChapter
+)['entries'][number];
+
+function ChapterStop({
+  entry,
+  index,
+  mode,
+  showTransition,
+}: {
+  entry: ChapterReaderEntry;
+  index: number;
+  mode: 'owner' | 'shared';
+  showTransition: boolean;
+}) {
+  return (
+    <li className={styles.chapterStopGroup}>
+      {showTransition && entry.transitionNote ? (
+        <div className={styles.chapterTransition}>
+          <span aria-hidden="true" />
+          <div className={styles.chapterTransitionCopy}>
+            <span>Between stops</span>
+            <p>{entry.transitionNote}</p>
+          </div>
+        </div>
+      ) : null}
+      <div className={styles.chapterStop}>
+        <div className={styles.chapterStopMarker} aria-hidden="true">
+          <span>{String(index + 1).padStart(2, '0')}</span>
+        </div>
+        <KeepsakeCard
+          entry={entry}
+          index={String(index + 1).padStart(2, '0')}
+          variant="row"
+          href={mode === 'owner' ? `/dashboard/card/${entry.id}` : undefined}
+          eager={false}
+          showDescription
+        />
+      </div>
+    </li>
+  );
+}
 
 export function ChapterReader({
   chapter,
@@ -39,8 +85,53 @@ export function ChapterReader({
   mode: 'owner' | 'shared';
   saveNotice?: ChapterSaveNoticeKind;
 }) {
-  const places = chapter.entries
-    .map((entry) => entry.placeLabel || entry.placeName)
+  const defaultContinuationSegmentId = chapter.segments.at(-1)?.id ?? null;
+  const segmentsById = new Map(
+    chapter.segments.map((segment) => [segment.id, segment]),
+  );
+  const entriesBySegmentId = new Map<
+    string,
+    Array<{ entry: ChapterReaderEntry; index: number }>
+  >();
+  const unsegmentedEntries: Array<{
+    entry: ChapterReaderEntry;
+    index: number;
+  }> = [];
+  chapter.entries.forEach((entry, index) => {
+    if (entry.segmentId && segmentsById.has(entry.segmentId)) {
+      const entries = entriesBySegmentId.get(entry.segmentId) ?? [];
+      entries.push({ entry, index });
+      entriesBySegmentId.set(entry.segmentId, entries);
+      return;
+    }
+    unsegmentedEntries.push({ entry, index });
+  });
+  const segmentGroups = chapter.segments.length
+    ? [
+        ...(unsegmentedEntries.length
+          ? [
+              {
+                key: 'unsegmented',
+                segmentId: null,
+                entries: unsegmentedEntries,
+              },
+            ]
+          : []),
+        ...chapter.segments.map((segment) => ({
+          key: segment.id,
+          segmentId: segment.id,
+          entries: entriesBySegmentId.get(segment.id) ?? [],
+        })),
+      ]
+    : [];
+  const orderedEntries = chapter.segments.length
+    ? segmentGroups.flatMap((group) => group.entries)
+    : chapter.entries.map((entry, index) => ({ entry, index }));
+  const displayIndexByEntryId = new Map(
+    orderedEntries.map(({ entry }, index) => [entry.id, index]),
+  );
+  const places = orderedEntries
+    .map(({ entry }) => entry.placeLabel || entry.placeName)
     .filter((place): place is string => Boolean(place));
   const journeyStart = places[0];
   const journeyEnd =
@@ -49,7 +140,7 @@ export function ChapterReader({
       : null;
   const showMap = mode === 'owner' || chapter.shareMap;
   const mapEntries = showMap
-    ? chapter.entries.flatMap((entry) =>
+    ? orderedEntries.flatMap(({ entry }) =>
         typeof entry.latitude === 'number' &&
         typeof entry.longitude === 'number'
           ? [
@@ -70,10 +161,61 @@ export function ChapterReader({
     : showMap
       ? '#chapter-route'
       : '#chapter-memories';
-  const segmentsById = new Map(
-    chapter.segments.map((segment) => [segment.id, segment]),
+  const segmentedTimelineGroups: ChapterSegmentGroup[] = segmentGroups.map(
+    (group, groupIndex) => {
+      const segment = group.segmentId
+        ? segmentsById.get(group.segmentId)
+        : null;
+      const targetId = segment
+        ? `journey-segment-${segment.id}`
+        : groupIndex === 0
+          ? 'journey-segment-unsegmented'
+          : `journey-segment-unsegmented-${groupIndex + 1}`;
+
+      return {
+        key: group.key,
+        segmentId: segment?.id ?? null,
+        targetId,
+        eyebrow: segment
+          ? `Segment ${String(segment.position + 1).padStart(2, '0')}`
+          : 'Journey start',
+        title: segment?.title ?? 'Before the first segment',
+        meta: segment
+          ? `${formatChapterDateRange(segment.startDate, segment.endDate)} · ${chapterMemoryLabel(segment.memoryCount)}`
+          : 'Memories kept outside a segment',
+        empty: group.entries.length === 0,
+        addMemoryHref:
+          mode === 'owner'
+            ? segment
+              ? continueJourneyEditorHref(chapter.id, {
+                  segmentId: segment.id,
+                })
+              : continueJourneyEditorHref(chapter.id, {
+                  withoutSegment: true,
+                })
+            : undefined,
+        content: group.entries.length ? (
+          group.entries.map(({ entry, index }, entryIndex) => (
+            <ChapterStop
+              key={entry.id}
+              entry={entry}
+              index={displayIndexByEntryId.get(entry.id) ?? index}
+              mode={mode}
+              showTransition={
+                entryIndex > 0 &&
+                index > 0 &&
+                chapter.entries[index - 1]?.segmentId === entry.segmentId
+              }
+            />
+          ))
+        ) : (
+          <li className={styles.journeySegmentEmpty}>
+            No memories saved here yet.
+          </li>
+        ),
+      };
+    },
   );
-  const defaultContinuationSegmentId = chapter.segments.at(-1)?.id ?? null;
 
   return (
     <article
@@ -279,115 +421,31 @@ export function ChapterReader({
           <p>{chapterMemoryLabel(chapter.memoryCount)}, held in sequence.</p>
         </div>
         {chapter.segments.length ? (
-          <nav
-            className={styles.journeySegmentIndex}
-            aria-label="Journey segments"
+          <ChapterSegmentedTimeline
+            segments={chapter.segments.map((segment) => ({
+              id: segment.id,
+              positionLabel: String(segment.position + 1).padStart(2, '0'),
+              title: segment.title,
+              memoryLabel: chapterMemoryLabel(segment.memoryCount),
+            }))}
+            groups={segmentedTimelineGroups}
+          />
+        ) : (
+          <ol
+            className={styles.chapterTimeline}
+            aria-label="Journey memories in route order"
           >
-            <ol>
-              {chapter.segments.map((segment) => (
-                <li key={segment.id}>
-                  <a href={`#journey-segment-${segment.id}`}>
-                    <span>{String(segment.position + 1).padStart(2, '0')}</span>
-                    <strong>{segment.title}</strong>
-                    <small>{chapterMemoryLabel(segment.memoryCount)}</small>
-                  </a>
-                </li>
-              ))}
-            </ol>
-          </nav>
-        ) : null}
-        <ol
-          className={styles.chapterTimeline}
-          aria-label="Journey memories in route order"
-        >
-          {chapter.entries.map((entry, index) => {
-            const segment = entry.segmentId
-              ? segmentsById.get(entry.segmentId)
-              : null;
-            const previousSegmentId =
-              index > 0 ? chapter.entries[index - 1].segmentId : null;
-            const beginsSegment =
-              chapter.segments.length > 0 &&
-              (index === 0 || entry.segmentId !== previousSegmentId);
-
-            return (
-              <Fragment key={entry.id}>
-                {beginsSegment ? (
-                  <li
-                    id={
-                      segment
-                        ? `journey-segment-${segment.id}`
-                        : 'journey-segment-unsegmented'
-                    }
-                    className={styles.journeySegmentHeading}
-                    role="presentation"
-                  >
-                    <div>
-                      <span>
-                        {segment
-                          ? `Segment ${String(segment.position + 1).padStart(2, '0')}`
-                          : 'Journey start'}
-                      </span>
-                      <h3>{segment?.title ?? 'Before the first segment'}</h3>
-                      <p>
-                        {segment
-                          ? `${formatChapterDateRange(segment.startDate, segment.endDate)} · ${chapterMemoryLabel(segment.memoryCount)}`
-                          : 'Memories kept outside a segment'}
-                      </p>
-                    </div>
-                    {mode === 'owner' ? (
-                      <Link
-                        href={
-                          segment
-                            ? continueJourneyEditorHref(chapter.id, {
-                                segmentId: segment.id,
-                              })
-                            : continueJourneyEditorHref(chapter.id, {
-                                withoutSegment: true,
-                              })
-                        }
-                      >
-                        <PlusIcon aria-hidden="true" />
-                        Add memory
-                      </Link>
-                    ) : null}
-                  </li>
-                ) : null}
-                <li className={styles.chapterStopGroup}>
-                  {index > 0 && !beginsSegment && entry.transitionNote ? (
-                    <div className={styles.chapterTransition}>
-                      <span aria-hidden="true" />
-                      <div className={styles.chapterTransitionCopy}>
-                        <span>Between stops</span>
-                        <p>{entry.transitionNote}</p>
-                      </div>
-                    </div>
-                  ) : null}
-                  <div className={styles.chapterStop}>
-                    <div
-                      className={styles.chapterStopMarker}
-                      aria-hidden="true"
-                    >
-                      <span>{String(index + 1).padStart(2, '0')}</span>
-                    </div>
-                    <KeepsakeCard
-                      entry={entry}
-                      index={String(index + 1).padStart(2, '0')}
-                      variant="row"
-                      href={
-                        mode === 'owner'
-                          ? `/dashboard/card/${entry.id}`
-                          : undefined
-                      }
-                      eager={false}
-                      showDescription
-                    />
-                  </div>
-                </li>
-              </Fragment>
-            );
-          })}
-        </ol>
+            {chapter.entries.map((entry, index) => (
+              <ChapterStop
+                key={entry.id}
+                entry={entry}
+                index={index}
+                mode={mode}
+                showTransition={index > 0}
+              />
+            ))}
+          </ol>
+        )}
       </section>
 
       {mode === 'shared' ? (
