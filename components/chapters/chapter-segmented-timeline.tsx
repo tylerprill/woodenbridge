@@ -218,8 +218,10 @@ export function ChapterSegmentedTimeline({
                   className={styles.journeySegmentHeading}
                   data-expanded={isExpanded ? 'true' : 'false'}
                 >
-                  <div>
-                    <span>{group.eyebrow}</span>
+                  <div className={styles.journeySegmentSummary}>
+                    <span className={styles.journeySegmentEyebrow}>
+                      {group.eyebrow}
+                    </span>
                     <h3>
                       <button
                         type="button"
@@ -239,7 +241,7 @@ export function ChapterSegmentedTimeline({
                   {group.addMemoryHref ? (
                     <Link href={group.addMemoryHref}>
                       <PlusIcon aria-hidden="true" />
-                      Add memory
+                      <span>Add memory</span>
                     </Link>
                   ) : null}
                 </div>
