@@ -50,6 +50,30 @@ function safeName(value: string) {
     .toLowerCase();
 }
 
+function isExpectedNextCssPreloadTimingWarning(
+  messageText: string,
+  level: string,
+  origin: URL,
+) {
+  if (level !== 'warning') return false;
+
+  const match = messageText.match(
+    /^The resource (https?:\/\/\S+) was preloaded using link preload but not used within a few seconds from the window's load event\. Please make sure it has an appropriate `as` value and it is preloaded intentionally\.$/,
+  );
+  if (!match?.[1]) return false;
+
+  try {
+    const resourceUrl = new URL(match[1]);
+    return (
+      resourceUrl.origin === origin.origin &&
+      resourceUrl.pathname.startsWith('/_next/static/css/') &&
+      resourceUrl.pathname.endsWith('.css')
+    );
+  } catch {
+    return false;
+  }
+}
+
 export function monitorBrowserIssues(page: Page): BrowserIssueMonitor {
   let issues: BrowserIssue[] = [];
   const origin = new URL(process.env.E2E_BASE_URL ?? 'http://127.0.0.1:3100');
@@ -67,7 +91,9 @@ export function monitorBrowserIssues(page: Page): BrowserIssueMonitor {
       level === 'warning' &&
       messageText.includes('GL Driver Message') &&
       messageText.includes('GPU stall due to ReadPixels');
-    if (isHeadlessGpuDiagnostic) return;
+    const isNextCssPreloadTimingDiagnostic =
+      isExpectedNextCssPreloadTimingWarning(messageText, level, origin);
+    if (isHeadlessGpuDiagnostic || isNextCssPreloadTimingDiagnostic) return;
 
     if (level === 'error' || level === 'warning') {
       const location = message.location();

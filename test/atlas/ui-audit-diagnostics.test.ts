@@ -184,3 +184,58 @@ describe('Intentional MapLibre removal diagnostics', () => {
     ).toBe(false);
   });
 });
+
+describe('Next CSS preload timing diagnostics', () => {
+  const origin = process.env.E2E_BASE_URL ?? 'http://127.0.0.1:3100';
+  const pageUrl = `${origin}/dashboard/places`;
+  const exactWarning =
+    `The resource ${origin}/_next/static/css/237df7b3d3d501ac.css was preloaded using link preload but not used within a few seconds from the window's load event. ` +
+    'Please make sure it has an appropriate `as` value and it is preloaded intentionally.';
+
+  function capture(messageText: string, level = 'warning') {
+    const listeners = new Map<string, (message: ConsoleMessage) => void>();
+    const page = {
+      url: () => pageUrl,
+      on: (event: string, listener: (message: ConsoleMessage) => void) => {
+        listeners.set(event, listener);
+      },
+      off: (event: string) => listeners.delete(event),
+    } as unknown as Page;
+    const monitor = monitorBrowserIssues(page);
+    listeners.get('console')!({
+      text: () => messageText,
+      type: () => level,
+      location: () => ({ url: pageUrl }),
+    } as unknown as ConsoleMessage);
+    const issues = monitor.flush();
+    monitor.stop();
+    return issues;
+  }
+
+  it('ignores the exact same-origin Next stylesheet timing warning', () => {
+    expect(capture(exactWarning)).toEqual([]);
+  });
+
+  it.each([
+    ['an application warning', 'The application preload failed.', 'warning'],
+    [
+      'a non-Next stylesheet',
+      exactWarning.replace('/_next/static/css/', '/styles/'),
+      'warning',
+    ],
+    ['a JavaScript resource', exactWarning.replace('.css', '.js'), 'warning'],
+    [
+      'a foreign origin',
+      exactWarning.replace(origin, 'https://example.com'),
+      'warning',
+    ],
+    ['the same message at error level', exactWarning, 'error'],
+    [
+      'extra warning detail',
+      `${exactWarning} Extra warning detail.`,
+      'warning',
+    ],
+  ])('keeps %s visible to the audit', (_label, messageText, level) => {
+    expect(capture(messageText, level)).toHaveLength(1);
+  });
+});
