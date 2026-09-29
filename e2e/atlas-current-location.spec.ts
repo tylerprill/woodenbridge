@@ -293,28 +293,46 @@ test('a saved Atlas view wins without requesting a fresh location', async ({
     );
   }
 
+  const managesSavedView = Boolean(e2eDatabaseUrl());
+  const originalSavedView = managesSavedView
+    ? await removeSavedView(email)
+    : null;
+  if (originalSavedView) {
+    await restoreSavedView({
+      userId: originalSavedView.userId,
+      preference: {
+        latitude: currentLocation.latitude,
+        longitude: currentLocation.longitude,
+        zoom: 9,
+        bearing: 0,
+        pitch: 0,
+      },
+    });
+  }
   let monitor: ReturnType<typeof monitorBrowserIssues> | null = null;
   try {
     await page.setViewportSize({ width: 1440, height: 900 });
     await signIn(page, email, password);
-    await page.route('**/dashboard**', async (route) => {
-      if (
-        route.request().method() !== 'GET' ||
-        new URL(route.request().url()).pathname !== '/dashboard'
-      ) {
-        await route.continue();
-        return;
-      }
-      const response = await route.fetch();
-      const body = (await response.text()).replace(
-        /(hasSavedView(?:\\+)?":)false/g,
-        (match) => match.replace(':false', ':true'),
-      );
-      await route.fulfill({ response, body });
-    });
+    if (!managesSavedView) {
+      await page.route('**/dashboard**', async (route) => {
+        if (
+          route.request().method() !== 'GET' ||
+          new URL(route.request().url()).pathname !== '/dashboard'
+        ) {
+          await route.continue();
+          return;
+        }
+        const response = await route.fetch();
+        const body = (await response.text()).replace(
+          /(hasSavedView(?:\\+)?":)false/g,
+          (match) => match.replace(':false', ':true'),
+        );
+        await route.fulfill({ response, body });
+      });
+    }
     monitor = monitorBrowserIssues(page);
     await page.goto('/dashboard');
-    await page.unroute('**/dashboard**');
+    if (!managesSavedView) await page.unroute('**/dashboard**');
     const atlas = page.locator('[data-map-state="ready"]');
     await expect(atlas).toHaveAttribute('data-location-start', 'disabled', {
       timeout: 20_000,
@@ -327,5 +345,6 @@ test('a saved Atlas view wins without requesting a fresh location', async ({
     expect(monitor.flush()).toEqual([]);
   } finally {
     monitor?.stop();
+    if (originalSavedView) await restoreSavedView(originalSavedView);
   }
 });
