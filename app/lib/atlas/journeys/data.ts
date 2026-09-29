@@ -8,6 +8,7 @@ import type {
   AtlasJourneyDetailStop,
   AtlasJourneyIndex,
   AtlasJourneyListOptions,
+  AtlasJourneySegment,
   AtlasJourneyStop,
   AtlasJourneySummary,
   AtlasJourneySuggestion,
@@ -30,6 +31,7 @@ type JourneyIndexRow = {
   chapter_version: number;
   chapter_updated_at: Date | string;
   entry_id: string | null;
+  segment_id?: string | null;
   position: number | null;
   entry_title: string | null;
   place_label: string | null;
@@ -37,6 +39,13 @@ type JourneyIndexRow = {
   visited_on: Date | string | null;
   latitude: number | string | null;
   longitude: number | string | null;
+  segments?: unknown;
+};
+
+type JourneySegmentJson = {
+  id: unknown;
+  title: unknown;
+  position: unknown;
 };
 
 type JourneyDetailRow = JourneyIndexRow & {
@@ -105,6 +114,7 @@ function rowToStop(row: JourneyIndexRow): AtlasJourneyStop | null {
 
   return {
     entryId: row.entry_id,
+    segmentId: row.segment_id ?? null,
     position: row.position,
     title: row.entry_title,
     placeLabel: row.place_label ?? '',
@@ -113,6 +123,43 @@ function rowToStop(row: JourneyIndexRow): AtlasJourneyStop | null {
     latitude,
     longitude,
   };
+}
+
+function rowToSegments(value: unknown): AtlasJourneySegment[] {
+  if (!Array.isArray(value)) return [];
+
+  const seenIds = new Set<string>();
+  const segments = value.flatMap((candidate): AtlasJourneySegment[] => {
+    if (!candidate || typeof candidate !== 'object') return [];
+    const { id, title, position } = candidate as JourneySegmentJson;
+    const normalizedPosition = Number(position);
+    if (
+      typeof id !== 'string' ||
+      !id ||
+      seenIds.has(id) ||
+      typeof title !== 'string' ||
+      !Number.isFinite(normalizedPosition)
+    ) {
+      return [];
+    }
+
+    seenIds.add(id);
+    return [
+      {
+        id,
+        title,
+        position: normalizedPosition,
+        memoryCount: 0,
+        startDate: null,
+        endDate: null,
+      },
+    ];
+  });
+
+  return segments.sort(
+    (first, second) =>
+      first.position - second.position || first.id.localeCompare(second.id),
+  );
 }
 
 function stopDateRange(stops: AtlasJourneyStop[]) {
@@ -124,6 +171,46 @@ function stopDateRange(stops: AtlasJourneyStop[]) {
     startDate: dates[0] ?? null,
     endDate: dates.at(-1) ?? null,
   };
+}
+
+function compareStops(first: AtlasJourneyStop, second: AtlasJourneyStop) {
+  return (
+    first.position - second.position ||
+    first.entryId.localeCompare(second.entryId)
+  );
+}
+
+function organizeJourneyStops<Stop extends AtlasJourneyStop>(
+  segments: AtlasJourneySegment[],
+  stops: Stop[],
+) {
+  const segmentIds = new Set(segments.map((segment) => segment.id));
+  const unassignedStops: Stop[] = [];
+  const stopsBySegmentId = new Map<string, Stop[]>();
+
+  for (const stop of stops) {
+    if (!stop.segmentId || !segmentIds.has(stop.segmentId)) {
+      stop.segmentId = null;
+      unassignedStops.push(stop);
+      continue;
+    }
+    const segmentStops = stopsBySegmentId.get(stop.segmentId) ?? [];
+    segmentStops.push(stop);
+    stopsBySegmentId.set(stop.segmentId, segmentStops);
+  }
+
+  unassignedStops.sort(compareStops);
+  const segmentedStops = segments.flatMap((segment) => {
+    const segmentStops = stopsBySegmentId.get(segment.id) ?? [];
+    segmentStops.sort(compareStops);
+    const range = stopDateRange(segmentStops);
+    segment.memoryCount = segmentStops.length;
+    segment.startDate = range.startDate;
+    segment.endDate = range.endDate;
+    return segmentStops;
+  });
+
+  return [...unassignedStops, ...segmentedStops];
 }
 
 export function mapAtlasJourneyIndexRows(rows: JourneyIndexRow[]) {
@@ -141,6 +228,7 @@ export function mapAtlasJourneyIndexRows(rows: JourneyIndexRow[]) {
         endDate: null,
         memoryCount: 0,
         drawable: false,
+        segments: rowToSegments(row.segments),
         stops: [],
       };
       journeys.set(row.chapter_id, journey);
@@ -152,11 +240,7 @@ export function mapAtlasJourneyIndexRows(rows: JourneyIndexRow[]) {
 
   const mappedJourneys = Array.from(journeys.values());
   for (const journey of mappedJourneys) {
-    journey.stops.sort(
-      (first, second) =>
-        first.position - second.position ||
-        first.entryId.localeCompare(second.entryId),
-    );
+    journey.stops = organizeJourneyStops(journey.segments, journey.stops);
     const range = stopDateRange(journey.stops);
     journey.startDate = range.startDate;
     journey.endDate = range.endDate;
@@ -183,6 +267,13 @@ export async function loadAtlasJourneyIndex(
         AND (
           ${search}::text IS NULL
           OR chapter.title ILIKE '%' || ${search}::text || '%'
+          OR EXISTS (
+            SELECT 1
+            FROM atlas_chapter_segments AS searchable_segment
+            WHERE searchable_segment.chapter_id = chapter.id
+              AND searchable_segment.user_id = ${userId}
+              AND searchable_segment.title ILIKE '%' || ${search}::text || '%'
+          )
           OR EXISTS (
             SELECT 1
             FROM atlas_chapter_entries AS searchable_chapter_entry
@@ -216,13 +307,24 @@ export async function loadAtlasJourneyIndex(
       chapter.version AS chapter_version,
       chapter.updated_at AS chapter_updated_at,
       entry.id AS entry_id,
+      chapter_entry.segment_id,
       chapter_entry.position,
       entry.title AS entry_title,
       entry.place_label,
       entry.place_name,
       entry.visited_on,
       ST_Y(entry.location::geometry)::float8 AS latitude,
-      ST_X(entry.location::geometry)::float8 AS longitude
+      ST_X(entry.location::geometry)::float8 AS longitude,
+      CASE
+        WHEN ROW_NUMBER() OVER (
+          PARTITION BY chapter.id
+          ORDER BY
+            chapter_entry.position NULLS FIRST,
+            chapter_entry.entry_id NULLS FIRST
+        ) = 1
+        THEN chapter_segments.segments
+        ELSE NULL
+      END AS segments
     FROM requested_chapters
     INNER JOIN atlas_chapters AS chapter
       ON chapter.id = requested_chapters.id
@@ -235,7 +337,27 @@ export async function loadAtlasJourneyIndex(
       AND entry.user_id = ${userId}
       AND entry.record_state = 'saved'
       AND entry.deleted_at IS NULL
-    ORDER BY chapter.updated_at DESC, chapter.id, chapter_entry.position
+    LEFT JOIN LATERAL (
+      SELECT COALESCE(
+        jsonb_agg(
+          jsonb_build_object(
+            'id', journey_segment.id,
+            'title', journey_segment.title,
+            'position', journey_segment.position
+          )
+          ORDER BY journey_segment.position, journey_segment.id
+        ),
+        '[]'::jsonb
+      ) AS segments
+      FROM atlas_chapter_segments AS journey_segment
+      WHERE journey_segment.chapter_id = chapter.id
+        AND journey_segment.user_id = ${userId}
+    ) AS chapter_segments ON TRUE
+    ORDER BY
+      chapter.updated_at DESC,
+      chapter.id,
+      chapter_entry.position NULLS FIRST,
+      chapter_entry.entry_id NULLS FIRST
   `;
 
   const [journeyRows, suggestions] = await Promise.all([
@@ -263,6 +385,7 @@ export async function loadAtlasJourneyDetail(
       chapter.version AS chapter_version,
       chapter.updated_at AS chapter_updated_at,
       entry.id AS entry_id,
+      chapter_entry.segment_id,
       chapter_entry.position,
       entry.title AS entry_title,
       entry.description AS entry_description,
@@ -276,7 +399,17 @@ export async function loadAtlasJourneyDetail(
       cover_media.storage_path,
       cover_media.thumbnail_path,
       cover_media.mime_type,
-      cover_media.alt_text
+      cover_media.alt_text,
+      CASE
+        WHEN ROW_NUMBER() OVER (
+          PARTITION BY chapter.id
+          ORDER BY
+            chapter_entry.position NULLS FIRST,
+            chapter_entry.entry_id NULLS FIRST
+        ) = 1
+        THEN chapter_segments.segments
+        ELSE NULL
+      END AS segments
     FROM atlas_chapters AS chapter
     LEFT JOIN atlas_chapter_entries AS chapter_entry
       ON chapter_entry.chapter_id = chapter.id
@@ -286,6 +419,22 @@ export async function loadAtlasJourneyDetail(
       AND entry.user_id = ${userId}
       AND entry.record_state = 'saved'
       AND entry.deleted_at IS NULL
+    LEFT JOIN LATERAL (
+      SELECT COALESCE(
+        jsonb_agg(
+          jsonb_build_object(
+            'id', journey_segment.id,
+            'title', journey_segment.title,
+            'position', journey_segment.position
+          )
+          ORDER BY journey_segment.position, journey_segment.id
+        ),
+        '[]'::jsonb
+      ) AS segments
+      FROM atlas_chapter_segments AS journey_segment
+      WHERE journey_segment.chapter_id = chapter.id
+        AND journey_segment.user_id = ${userId}
+    ) AS chapter_segments ON TRUE
     LEFT JOIN LATERAL (
       SELECT
         media.id,
@@ -302,44 +451,50 @@ export async function loadAtlasJourneyDetail(
     ) AS cover_media ON TRUE
     WHERE chapter.id = ${chapterId}
       AND chapter.user_id = ${userId}
-    ORDER BY chapter_entry.position
+    ORDER BY
+      chapter_entry.position NULLS FIRST,
+      chapter_entry.entry_id NULLS FIRST
   `;
 
   const firstRow = result.rows[0];
   if (!firstRow) return null;
 
-  const stops = result.rows.flatMap((row): AtlasJourneyDetailStop[] => {
-    const stop = rowToStop(row);
-    if (!stop) return [];
-    let thumbnailUrl: string | null = null;
-    if (
-      row.media_id &&
-      row.storage_path &&
-      row.thumbnail_path &&
-      row.mime_type
-    ) {
-      thumbnailUrl = createAuthenticatedAtlasMediaUrls(
-        {
-          id: row.media_id,
-          entryId: stop.entryId,
-          storagePath: row.storage_path,
-          thumbnailPath: row.thumbnail_path,
-          mimeType: row.mime_type,
-        },
-        userId,
-      ).thumbnailUrl;
-    }
+  const unorderedStops = result.rows.flatMap(
+    (row): AtlasJourneyDetailStop[] => {
+      const stop = rowToStop(row);
+      if (!stop) return [];
+      let thumbnailUrl: string | null = null;
+      if (
+        row.media_id &&
+        row.storage_path &&
+        row.thumbnail_path &&
+        row.mime_type
+      ) {
+        thumbnailUrl = createAuthenticatedAtlasMediaUrls(
+          {
+            id: row.media_id,
+            entryId: stop.entryId,
+            storagePath: row.storage_path,
+            thumbnailPath: row.thumbnail_path,
+            mimeType: row.mime_type,
+          },
+          userId,
+        ).thumbnailUrl;
+      }
 
-    return [
-      {
-        ...stop,
-        description: row.entry_description ?? '',
-        transitionNote: row.transition_note ?? '',
-        thumbnailUrl,
-        thumbnailAlt: row.alt_text ?? '',
-      },
-    ];
-  });
+      return [
+        {
+          ...stop,
+          description: row.entry_description ?? '',
+          transitionNote: row.transition_note ?? '',
+          thumbnailUrl,
+          thumbnailAlt: row.alt_text ?? '',
+        },
+      ];
+    },
+  );
+  const segments = rowToSegments(firstRow.segments);
+  const stops = organizeJourneyStops(segments, unorderedStops);
   const range = stopDateRange(stops);
 
   return {
@@ -352,6 +507,7 @@ export async function loadAtlasJourneyDetail(
     endDate: range.endDate,
     memoryCount: stops.length,
     drawable: stops.length >= 2,
+    segments,
     stops,
   };
 }

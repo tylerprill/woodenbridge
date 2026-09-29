@@ -184,9 +184,15 @@ function journeyMapDataKey(journeys: AtlasJourneySummary[]) {
       journey.id,
       journey.title,
       journey.drawable,
+      journey.segments.map((segment) => [
+        segment.id,
+        segment.position,
+        segment.title,
+      ]),
       journey.stops.map((stop) => [
         stop.entryId,
         stop.position,
+        stop.segmentId,
         stop.latitude,
         stop.longitude,
         stop.title,

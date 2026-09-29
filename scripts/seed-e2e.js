@@ -20,6 +20,10 @@ const E2E_FIXTURE = Object.freeze({
   ],
   overlapChapterId: '7b78c0ed-8790-4fb7-9d73-52c72f91540e',
   overlapShareId: 'b6752ec2-f201-4ee4-a044-36d25e73f436',
+  segmentIds: [
+    '8c89d1fe-98a1-4fc8-ae84-63d830a2651f',
+    '9d90e20f-a9b2-40d9-bf95-74e941b37620',
+  ],
   shareId: 'a5641db1-e1f0-4dd1-9876-21444a0cc325',
   userId: 'f2b7d9e0-44d8-4a8d-9b44-0c2e1f47a513',
 });
@@ -427,6 +431,18 @@ async function seedE2EDatabase(environment = process.env) {
           'Four remembered stops from the Detroit River to the Lake Michigan dunes.',
         shareId: E2E_FIXTURE.shareId,
         entryIds: E2E_FIXTURE.entryIds,
+        segments: [
+          {
+            id: E2E_FIXTURE.segmentIds[0],
+            title: 'Detroit river morning',
+            entryIds: E2E_FIXTURE.entryIds.slice(0, 2),
+          },
+          {
+            id: E2E_FIXTURE.segmentIds[1],
+            title: 'West to the dunes',
+            entryIds: E2E_FIXTURE.entryIds.slice(2),
+          },
+        ],
       },
       {
         id: E2E_FIXTURE.overlapChapterId,
@@ -435,6 +451,7 @@ async function seedE2EDatabase(environment = process.env) {
           'A shorter path through three memories shared with the longer Michigan journey.',
         shareId: E2E_FIXTURE.overlapShareId,
         entryIds: E2E_FIXTURE.entryIds.slice(0, 3),
+        segments: [],
       },
     ];
 
@@ -475,7 +492,27 @@ async function seedE2EDatabase(environment = process.env) {
         ],
       );
 
+      for (const [position, segment] of chapter.segments.entries()) {
+        await client.query(
+          `
+            INSERT INTO atlas_chapter_segments (
+              id,
+              chapter_id,
+              user_id,
+              title,
+              position
+            )
+            VALUES ($1, $2, $3, $4, $5)
+          `,
+          [segment.id, chapter.id, E2E_FIXTURE.userId, segment.title, position],
+        );
+      }
+
       for (const [position, entryId] of chapter.entryIds.entries()) {
+        const segmentId =
+          chapter.segments.find((segment) => segment.entryIds.includes(entryId))
+            ?.id ?? null;
+
         await client.query(
           `
             INSERT INTO atlas_chapter_entries (
@@ -483,15 +520,17 @@ async function seedE2EDatabase(environment = process.env) {
               entry_id,
               user_id,
               position,
+              segment_id,
               transition_note
             )
-            VALUES ($1, $2, $3, $4, $5)
+            VALUES ($1, $2, $3, $4, $5, $6)
           `,
           [
             chapter.id,
             entryId,
             E2E_FIXTURE.userId,
             position,
+            segmentId,
             position === 0
               ? ''
               : 'The road carried the story toward the next remembered place.',

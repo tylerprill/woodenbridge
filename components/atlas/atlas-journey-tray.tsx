@@ -4,22 +4,129 @@ import {
   ArrowLeftIcon,
   ArrowRightIcon,
   BookOpenIcon,
+  ChevronDownIcon,
   MapPinIcon,
   PencilIcon,
   PlayIcon,
   XMarkIcon,
 } from '@heroicons/react/24/outline';
 import Link from 'next/link';
-import { useEffect, useRef } from 'react';
+import { type RefObject, useEffect, useMemo, useRef, useState } from 'react';
 
 import type { AtlasJourneySummary } from '@/app/lib/atlas/journeys/definitions';
 import { formatChapterDateRange } from '@/app/lib/chapters/format';
 import styles from './atlas.module.css';
 
 type JourneyLoadState = 'idle' | 'loading' | 'ready' | 'error';
+type JourneyStop = AtlasJourneySummary['stops'][number];
+
+type JourneySegmentGroup = {
+  key: string;
+  eyebrow: string;
+  title: string;
+  startDate: string | null;
+  endDate: string | null;
+  stops: JourneyStop[];
+};
 
 function journeyPlace(stop: AtlasJourneySummary['stops'][number] | undefined) {
   return stop?.placeLabel || stop?.placeName || 'Pinned place';
+}
+
+function journeyStopDateRange(stops: JourneyStop[]) {
+  const dates = stops
+    .map((stop) => stop.visitedOn)
+    .filter((date): date is string => Boolean(date))
+    .sort();
+
+  return {
+    startDate: dates[0] ?? null,
+    endDate: dates.at(-1) ?? null,
+  };
+}
+
+function journeySegmentGroups(journey: AtlasJourneySummary) {
+  if (!journey.segments.length) return [];
+
+  const knownSegmentIds = new Set(
+    journey.segments.map((segment) => segment.id),
+  );
+  const unassignedStops = journey.stops.filter(
+    (stop) => !stop.segmentId || !knownSegmentIds.has(stop.segmentId),
+  );
+  const groups: JourneySegmentGroup[] = [];
+
+  if (unassignedStops.length) {
+    const range = journeyStopDateRange(unassignedStops);
+    groups.push({
+      key: 'journey-start',
+      eyebrow: 'Journey start',
+      title: 'Before the first segment',
+      startDate: range.startDate,
+      endDate: range.endDate,
+      stops: unassignedStops,
+    });
+  }
+
+  journey.segments.forEach((segment) => {
+    groups.push({
+      key: segment.id,
+      eyebrow: `Segment ${String(segment.position + 1).padStart(2, '0')}`,
+      title: segment.title,
+      startDate: segment.startDate,
+      endDate: segment.endDate,
+      stops: journey.stops.filter((stop) => stop.segmentId === segment.id),
+    });
+  });
+
+  return groups;
+}
+
+function JourneyMemoryList({
+  journey,
+  stops,
+  selectedStopId,
+  onSelectStop,
+  label,
+  activeStopRef,
+}: {
+  journey: AtlasJourneySummary;
+  stops: JourneyStop[];
+  selectedStopId: string | null;
+  onSelectStop: (id: string) => void;
+  label: string;
+  activeStopRef: RefObject<HTMLButtonElement | null>;
+}) {
+  const stopNumbers = new Map(
+    journey.stops.map((stop, index) => [stop.entryId, index + 1]),
+  );
+
+  return (
+    <ol className={styles.journeyStopList} aria-label={label}>
+      {stops.map((stop) => (
+        <li key={stop.entryId}>
+          <button
+            ref={selectedStopId === stop.entryId ? activeStopRef : undefined}
+            type="button"
+            data-active={selectedStopId === stop.entryId ? 'true' : 'false'}
+            aria-current={selectedStopId === stop.entryId ? 'step' : undefined}
+            onClick={() => onSelectStop(stop.entryId)}
+          >
+            <span className={styles.journeyStopNumber}>
+              {stopNumbers.get(stop.entryId)}
+            </span>
+            <span>
+              <strong>{stop.title || 'Untitled memory'}</strong>
+              <small>
+                <MapPinIcon aria-hidden="true" />
+                {journeyPlace(stop)}
+              </small>
+            </span>
+          </button>
+        </li>
+      ))}
+    </ol>
+  );
 }
 
 function JourneySummaryCopy({ journey }: { journey: AtlasJourneySummary }) {
@@ -34,9 +141,14 @@ function JourneySummaryCopy({ journey }: { journey: AtlasJourneySummary }) {
     <span className={styles.journeyRowCopy}>
       <strong>{journey.title}</strong>
       <small>
-        {formatChapterDateRange(journey.startDate, journey.endDate)} ·{' '}
+        {journey.segments.length
+          ? `${journey.segments.length} ${
+              journey.segments.length === 1 ? 'segment' : 'segments'
+            } · `
+          : ''}
         {journey.memoryCount}{' '}
-        {journey.memoryCount === 1 ? 'memory' : 'memories'}
+        {journey.memoryCount === 1 ? 'memory' : 'memories'} ·{' '}
+        {formatChapterDateRange(journey.startDate, journey.endDate)}
       </small>
       <em>
         {journeyPlace(first)}
@@ -56,6 +168,7 @@ export function AtlasJourneyTray({
   onRetry,
   onSelectJourney,
   onSelectStop,
+  onClearStop,
   onShowOverview,
   onStartPlayback,
 }: {
@@ -68,14 +181,52 @@ export function AtlasJourneyTray({
   onRetry: () => void;
   onSelectJourney: (id: string) => void;
   onSelectStop: (id: string) => void;
+  onClearStop: () => void;
   onShowOverview: () => void;
   onStartPlayback: (id: string) => void;
 }) {
   const headingRef = useRef<HTMLHeadingElement>(null);
+  const activeStopRef = useRef<HTMLButtonElement>(null);
+  const segmentGroups = useMemo(
+    () => (selectedJourney ? journeySegmentGroups(selectedJourney) : []),
+    [selectedJourney],
+  );
+  const [segmentDisclosure, setSegmentDisclosure] = useState<{
+    journeyId: string;
+    selectedStopId: string | null;
+    openKey: string | null;
+  } | null>(null);
+  const selectedGroupKey = selectedStopId
+    ? segmentGroups.find((group) =>
+        group.stops.some((stop) => stop.entryId === selectedStopId),
+      )?.key
+    : null;
+  const defaultOpenKey =
+    selectedGroupKey ??
+    segmentGroups.find((group) => group.stops.length)?.key ??
+    segmentGroups[0]?.key ??
+    null;
+  const disclosureMatchesView =
+    segmentDisclosure !== null &&
+    segmentDisclosure.journeyId === selectedJourney?.id &&
+    segmentDisclosure.selectedStopId === selectedStopId &&
+    (segmentDisclosure.openKey === null ||
+      segmentGroups.some((group) => group.key === segmentDisclosure.openKey));
+  const openSegmentKey = disclosureMatchesView
+    ? segmentDisclosure.openKey
+    : defaultOpenKey;
 
   useEffect(() => {
     headingRef.current?.focus({ preventScroll: true });
   }, [selectedJourney?.id]);
+
+  useEffect(() => {
+    if (!selectedStopId) return;
+    activeStopRef.current?.scrollIntoView?.({
+      block: 'center',
+      inline: 'nearest',
+    });
+  }, [openSegmentKey, selectedStopId]);
 
   return (
     <section
@@ -121,6 +272,12 @@ export function AtlasJourneyTray({
                 selectedJourney.endDate,
               )}
             </span>
+            {selectedJourney.segments.length ? (
+              <span>
+                {selectedJourney.segments.length}{' '}
+                {selectedJourney.segments.length === 1 ? 'segment' : 'segments'}
+              </span>
+            ) : null}
             <span>
               {selectedJourney.memoryCount}{' '}
               {selectedJourney.memoryCount === 1 ? 'memory' : 'memories'}
@@ -132,34 +289,91 @@ export function AtlasJourneyTray({
               <p>Add another available memory before drawing its path.</p>
             </div>
           ) : null}
-          <ol
-            className={styles.journeyStopList}
-            aria-label={`${selectedJourney.title} stops`}
-          >
-            {selectedJourney.stops.map((stop, index) => (
-              <li key={stop.entryId}>
-                <button
-                  type="button"
-                  data-active={
-                    selectedStopId === stop.entryId ? 'true' : 'false'
-                  }
-                  aria-current={
-                    selectedStopId === stop.entryId ? 'step' : undefined
-                  }
-                  onClick={() => onSelectStop(stop.entryId)}
-                >
-                  <span className={styles.journeyStopNumber}>{index + 1}</span>
-                  <span>
-                    <strong>{stop.title || 'Untitled memory'}</strong>
-                    <small>
-                      <MapPinIcon aria-hidden="true" />
-                      {journeyPlace(stop)}
-                    </small>
-                  </span>
-                </button>
-              </li>
-            ))}
-          </ol>
+          {segmentGroups.length ? (
+            <ol
+              className={styles.journeySegmentList}
+              aria-label={`${selectedJourney.title} segments`}
+            >
+              {segmentGroups.map((group) => {
+                const panelId = `journey-segment-${selectedJourney.id}-${group.key}`;
+                const expanded = openSegmentKey === group.key;
+
+                return (
+                  <li className={styles.journeySegment} key={group.key}>
+                    <h3>
+                      <button
+                        type="button"
+                        className={styles.journeySegmentHeading}
+                        aria-expanded={expanded}
+                        aria-controls={panelId}
+                        onClick={() => {
+                          const nextOpenKey =
+                            openSegmentKey === group.key ? null : group.key;
+                          const ownsSelectedStop = group.stops.some(
+                            (stop) => stop.entryId === selectedStopId,
+                          );
+                          const shouldClearStop = Boolean(
+                            selectedStopId &&
+                            (nextOpenKey === null || !ownsSelectedStop),
+                          );
+
+                          setSegmentDisclosure({
+                            journeyId: selectedJourney.id,
+                            selectedStopId: shouldClearStop
+                              ? null
+                              : selectedStopId,
+                            openKey: nextOpenKey,
+                          });
+                          if (shouldClearStop) onClearStop();
+                        }}
+                      >
+                        <span>
+                          <small>{group.eyebrow}</small>
+                          <strong>{group.title}</strong>
+                          <em>
+                            {group.stops.length
+                              ? `${formatChapterDateRange(
+                                  group.startDate,
+                                  group.endDate,
+                                )} · `
+                              : ''}
+                            {group.stops.length}{' '}
+                            {group.stops.length === 1 ? 'memory' : 'memories'}
+                          </em>
+                        </span>
+                        <ChevronDownIcon aria-hidden="true" />
+                      </button>
+                    </h3>
+                    <div id={panelId} hidden={!expanded}>
+                      {group.stops.length ? (
+                        <JourneyMemoryList
+                          journey={selectedJourney}
+                          stops={group.stops}
+                          selectedStopId={selectedStopId}
+                          onSelectStop={onSelectStop}
+                          label={`${group.eyebrow}: ${group.title} memories`}
+                          activeStopRef={activeStopRef}
+                        />
+                      ) : (
+                        <p className={styles.journeySegmentEmpty}>
+                          No memories here yet.
+                        </p>
+                      )}
+                    </div>
+                  </li>
+                );
+              })}
+            </ol>
+          ) : (
+            <JourneyMemoryList
+              journey={selectedJourney}
+              stops={selectedJourney.stops}
+              selectedStopId={selectedStopId}
+              onSelectStop={onSelectStop}
+              label={`${selectedJourney.title} stops`}
+              activeStopRef={activeStopRef}
+            />
+          )}
         </div>
       ) : (
         <div className={styles.journeyOverview}>
@@ -224,18 +438,27 @@ export function AtlasJourneyTray({
         <footer className={styles.journeyActions}>
           <button
             type="button"
+            aria-label="Relive"
             onClick={() => onStartPlayback(selectedJourney.id)}
             disabled={!selectedJourney.drawable}
           >
-            <PlayIcon aria-hidden="true" /> Relive
+            <PlayIcon aria-hidden="true" /> <span>Relive</span>
           </button>
-          <Link href={`/dashboard/chapters/${selectedJourney.id}`}>
-            <BookOpenIcon aria-hidden="true" /> Read journey
+          <Link
+            href={`/dashboard/chapters/${selectedJourney.id}`}
+            aria-label="Read journey"
+          >
+            <BookOpenIcon aria-hidden="true" />
+            <span className={styles.journeyActionFull}>Read journey</span>
+            <span className={styles.journeyActionCompact} aria-hidden="true">
+              Read
+            </span>
           </Link>
           <Link
             href={`/dashboard/chapters/${selectedJourney.id}/edit?source=atlas`}
+            aria-label="Edit journey"
           >
-            <PencilIcon aria-hidden="true" /> Edit
+            <PencilIcon aria-hidden="true" /> <span>Edit</span>
           </Link>
         </footer>
       ) : null}

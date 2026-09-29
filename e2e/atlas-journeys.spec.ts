@@ -34,6 +34,16 @@ const memories = [
     title: 'Dunes above Lake Michigan',
   },
 ] as const;
+const journeySegments = [
+  {
+    title: 'Detroit river morning',
+    memories: memories.slice(0, 2),
+  },
+  {
+    title: 'West to the dunes',
+    memories: memories.slice(2),
+  },
+] as const;
 
 function isMobileProject(testInfo: TestInfo) {
   return testInfo.project.name.startsWith('mobile-');
@@ -159,6 +169,9 @@ test('Journey Lens connects the Atlas, playback, and Journey workshop', async ({
     page.getByRole('button', { name: new RegExp(primaryJourney.title, 'i') }),
   ).toBeVisible();
   await expect(
+    page.getByRole('button', { name: new RegExp(primaryJourney.title, 'i') }),
+  ).toContainText('2 segments · 4 memories');
+  await expect(
     page.getByRole('button', {
       name: new RegExp(overlappingJourney.title, 'i'),
     }),
@@ -175,12 +188,67 @@ test('Journey Lens connects the Atlas, playback, and Journey workshop', async ({
   await expect(page.getByRole('button', { name: 'Relive' })).toBeInViewport({
     ratio: 1,
   });
+  const firstSegment = page.getByRole('button', {
+    name: new RegExp(`Segment 01 ${journeySegments[0].title}`, 'i'),
+  });
+  const secondSegment = page.getByRole('button', {
+    name: new RegExp(`Segment 02 ${journeySegments[1].title}`, 'i'),
+  });
+  await expect(firstSegment).toHaveAttribute(
+    'aria-controls',
+    /^journey-segment-/,
+  );
+  await expect(secondSegment).toHaveAttribute(
+    'aria-controls',
+    /^journey-segment-/,
+  );
+  await expect(firstSegment).toHaveAttribute('aria-expanded', 'true');
+  await expect(secondSegment).toHaveAttribute('aria-expanded', 'false');
+  const firstSegmentMemories = page.getByRole('list', {
+    name: `Segment 01: ${journeySegments[0].title} memories`,
+  });
+  await expect(firstSegmentMemories.getByRole('listitem')).toHaveCount(2);
+  await expect(
+    firstSegmentMemories.getByRole('button', {
+      name: new RegExp(`^1 ${memories[0].title}`, 'i'),
+    }),
+  ).toBeVisible();
+  await expect(
+    firstSegmentMemories.getByRole('button', {
+      name: new RegExp(`^2 ${memories[1].title}`, 'i'),
+    }),
+  ).toBeVisible();
+  await expect(
+    page.getByRole('list', {
+      name: `Segment 02: ${journeySegments[1].title} memories`,
+    }),
+  ).toHaveCount(0);
+
+  await secondSegment.click();
+  await expect(firstSegment).toHaveAttribute('aria-expanded', 'false');
+  await expect(secondSegment).toHaveAttribute('aria-expanded', 'true');
+  const secondSegmentPanelId =
+    await secondSegment.getAttribute('aria-controls');
+  expect(secondSegmentPanelId).toBeTruthy();
+  await expect(page.locator(`#${secondSegmentPanelId}`)).toBeVisible();
+  const manuallyOpenedSecondSegment = page.getByRole('list', {
+    name: `Segment 02: ${journeySegments[1].title} memories`,
+  });
+  await expect(
+    manuallyOpenedSecondSegment.getByRole('button', {
+      name: new RegExp(`^3 ${memories[2].title}`, 'i'),
+    }),
+  ).toBeVisible();
+  await secondSegment.click();
+  await expect(secondSegment).toHaveAttribute('aria-expanded', 'false');
+  await firstSegment.click();
+  await expect(firstSegment).toHaveAttribute('aria-expanded', 'true');
   await auditJourneyState(page, testInfo, 'fitted-detail', monitor);
 
   const detailUrl = new URL('/dashboard', 'http://field-atlas.test');
   detailUrl.searchParams.set('view', 'journeys');
   detailUrl.searchParams.set('journey', primaryJourney.id);
-  detailUrl.searchParams.set('stop', memories[1].id);
+  detailUrl.searchParams.set('stop', memories[2].id);
   await page.goto(`${detailUrl.pathname}${detailUrl.search}`, {
     waitUntil: 'domcontentloaded',
   });
@@ -191,24 +259,41 @@ test('Journey Lens connects the Atlas, playback, and Journey workshop', async ({
   await expect(
     page.getByRole('heading', { level: 2, name: primaryJourney.title }),
   ).toBeVisible();
-  const journeyStops = page.getByRole('list', {
-    name: `${primaryJourney.title} stops`,
+  await expect(firstSegment).toHaveAttribute('aria-expanded', 'false');
+  await expect(secondSegment).toHaveAttribute('aria-expanded', 'true');
+  const secondSegmentMemories = page.getByRole('list', {
+    name: `Segment 02: ${journeySegments[1].title} memories`,
   });
-  await expect(journeyStops.getByRole('listitem')).toHaveCount(memories.length);
+  await expect(secondSegmentMemories.getByRole('listitem')).toHaveCount(2);
   await expect(
-    journeyStops.getByRole('button', {
-      name: new RegExp(memories[1].title, 'i'),
+    secondSegmentMemories.getByRole('button', {
+      name: new RegExp(`^3 ${memories[2].title}`, 'i'),
     }),
   ).toHaveAttribute('aria-current', 'step');
+  await expect(
+    secondSegmentMemories.getByRole('button', {
+      name: new RegExp(`^3 ${memories[2].title}`, 'i'),
+    }),
+  ).toBeInViewport({ ratio: 0.95 });
 
   const mapStops = page.locator(
     'button.maplibregl-marker[aria-label^="Stop "]',
   );
   await expect(mapStops).toHaveCount(memories.length);
+  for (let index = 0; index < memories.length; index += 1) {
+    const memory = memories[index];
+    await expect(mapStops.nth(index)).toHaveAttribute(
+      'aria-label',
+      new RegExp(
+        `^Stop ${index + 1} of ${memories.length}: ${memory.title}`,
+        'i',
+      ),
+    );
+  }
   await expectJourneyDotContentCenteredInMarkers(page);
   await expect(
     page.getByRole('button', {
-      name: new RegExp(`^Stop 2 of 4: ${memories[1].title}`, 'i'),
+      name: new RegExp(`^Stop 3 of 4: ${memories[2].title}`, 'i'),
     }),
   ).toHaveAttribute('aria-current', 'step');
   await expectActiveJourneyDotClearOfOverlays(page);
@@ -219,27 +304,27 @@ test('Journey Lens connects the Atlas, playback, and Journey workshop', async ({
   await expect(
     page.getByRole('heading', { level: 2, name: primaryJourney.title }),
   ).toBeVisible();
-  await expect(page.getByText('Stop 2 of 4', { exact: true })).toBeVisible();
+  await expect(page.getByText('Stop 3 of 4', { exact: true })).toBeVisible();
   await expect(
-    page.getByRole('heading', { level: 3, name: memories[1].title }),
+    page.getByRole('heading', { level: 3, name: memories[2].title }),
   ).toBeVisible();
   await expectActiveJourneyDotClearOfOverlays(page);
   await expectJourneyPlaybackPreviewHasRoom(page);
 
   await page.getByRole('button', { name: 'Next stop' }).click();
-  await expect(page.getByText('Stop 3 of 4', { exact: true })).toBeVisible();
+  await expect(page.getByText('Stop 4 of 4', { exact: true })).toBeVisible();
   await expect(
-    page.getByRole('heading', { level: 3, name: memories[2].title }),
+    page.getByRole('heading', { level: 3, name: memories[3].title }),
   ).toBeVisible();
   await expect(page).toHaveURL((url) => {
     return (
       url.searchParams.get('journey') === primaryJourney.id &&
-      url.searchParams.get('stop') === memories[2].id
+      url.searchParams.get('stop') === memories[3].id
     );
   });
   await expect(
     page.getByRole('button', {
-      name: new RegExp(`^Stop 3 of 4: ${memories[2].title}`, 'i'),
+      name: new RegExp(`^Stop 4 of 4: ${memories[3].title}`, 'i'),
     }),
   ).toHaveAttribute('aria-current', 'step');
   await expectActiveJourneyDotClearOfOverlays(page);
@@ -263,6 +348,25 @@ test('Journey Lens connects the Atlas, playback, and Journey workshop', async ({
     page.getByRole('heading', { level: 2, name: 'Your journeys' }),
   ).toBeVisible();
   await auditJourneyState(page, testInfo, 'overview-return', monitor);
+
+  await page
+    .getByRole('button', { name: new RegExp(overlappingJourney.title, 'i') })
+    .click();
+  await expect(
+    page.getByRole('heading', { level: 2, name: overlappingJourney.title }),
+  ).toBeVisible();
+  const legacyJourneyStops = page.getByRole('list', {
+    name: `${overlappingJourney.title} stops`,
+  });
+  await expect(legacyJourneyStops.getByRole('listitem')).toHaveCount(3);
+  await expect(
+    page.getByLabel(`${overlappingJourney.title} segments`),
+  ).toHaveCount(0);
+  await auditJourneyState(page, testInfo, 'legacy-flat-detail', monitor);
+  await page.getByRole('button', { name: 'Back to journeys' }).click();
+  await expect(
+    page.getByRole('heading', { level: 2, name: 'Your journeys' }),
+  ).toBeVisible();
 
   const journeyTray = page.locator(
     'section[aria-labelledby="journey-tray-title"]',
@@ -316,6 +420,15 @@ test('Journey Lens connects the Atlas, playback, and Journey workshop', async ({
     await expect(
       page.getByRole('heading', { level: 2, name: primaryJourney.title }),
     ).toBeVisible();
+    await expect(
+      page
+        .getByRole('list', {
+          name: `Segment 02: ${journeySegments[1].title} memories`,
+        })
+        .getByRole('button', {
+          name: new RegExp(`^3 ${memories[2].title}`, 'i'),
+        }),
+    ).toBeInViewport({ ratio: 0.95 });
     await auditJourneyState(page, testInfo, 'detail-smallest-phone', monitor);
   }
 

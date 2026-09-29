@@ -214,9 +214,11 @@ const delayedJourney: AtlasJourneySummary = {
   endDate: '2026-09-11',
   memoryCount: 2,
   drawable: true,
+  segments: [],
   stops: [
     {
       entryId: '00000000-0000-4000-8000-000000000011',
+      segmentId: null,
       position: 0,
       title: 'First stop',
       placeLabel: 'Detroit, Michigan',
@@ -227,6 +229,7 @@ const delayedJourney: AtlasJourneySummary = {
     },
     {
       entryId: '00000000-0000-4000-8000-000000000012',
+      segmentId: null,
       position: 1,
       title: 'Selected stop',
       placeLabel: 'Ann Arbor, Michigan',

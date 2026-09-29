@@ -372,6 +372,9 @@ export function AtlasWorkspace({
     return journeyIndex.journeys.filter(
       (journey) =>
         journey.title.toLowerCase().includes(search) ||
+        journey.segments.some((segment) =>
+          segment.title.toLowerCase().includes(search),
+        ) ||
         journey.stops.some(
           (stop) =>
             stop.title.toLowerCase().includes(search) ||
@@ -675,6 +678,12 @@ export function AtlasWorkspace({
     },
     [experience, journeyDetails, journeyId],
   );
+
+  const clearJourneyStop = useCallback(() => {
+    if (!journeyId) return;
+    dispatchExperience({ type: 'select-journey-stop', stopId: null });
+    replaceJourneyDashboardLocation(journeyId);
+  }, [journeyId]);
 
   const startJourneyPlayback = useCallback(
     (id: string) => {
@@ -1597,6 +1606,7 @@ export function AtlasWorkspace({
           onRetry={() => void loadJourneys()}
           onSelectJourney={selectJourney}
           onSelectStop={selectJourneyStop}
+          onClearStop={clearJourneyStop}
           onShowOverview={showJourneyOverview}
           onStartPlayback={startJourneyPlayback}
         />
