@@ -7,6 +7,17 @@ import styles from './chapters.module.css';
 
 export type ChapterSaveNoticeKind = 'created' | 'updated' | 'continued';
 
+function clearSaveMarker(chapterId: string) {
+  const url = new URL(window.location.href);
+  url.pathname = `/dashboard/chapters/${chapterId}`;
+  url.searchParams.delete('saved');
+  window.history.replaceState(
+    window.history.state,
+    '',
+    `${url.pathname}${url.search}${url.hash}`,
+  );
+}
+
 export function ChapterSaveNotice({
   chapterId,
   kind,
@@ -16,22 +27,10 @@ export function ChapterSaveNotice({
 }) {
   const [visible, setVisible] = useState(true);
 
-  function removeSaveMarker() {
-    window.history.replaceState(
-      window.history.state,
-      '',
-      `/dashboard/chapters/${chapterId}`,
-    );
-  }
-
   useEffect(() => {
     const timer = window.setTimeout(() => {
       setVisible(false);
-      window.history.replaceState(
-        window.history.state,
-        '',
-        `/dashboard/chapters/${chapterId}`,
-      );
+      clearSaveMarker(chapterId);
     }, 6000);
     return () => window.clearTimeout(timer);
   }, [chapterId]);
@@ -40,7 +39,7 @@ export function ChapterSaveNotice({
 
   function dismiss() {
     setVisible(false);
-    removeSaveMarker();
+    clearSaveMarker(chapterId);
   }
 
   return (

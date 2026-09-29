@@ -4,10 +4,19 @@
 
 /* eslint-disable @next/next/no-img-element */
 
-import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import {
+  act,
+  fireEvent,
+  render,
+  screen,
+  waitFor,
+  within,
+} from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
 
 import type { SharedAtlasChapter } from '@/app/lib/chapters/definitions';
 import { ChapterReader } from '@/components/chapters/chapter-reader';
+import { ChapterSaveNotice } from '@/components/chapters/chapter-save-notice';
 
 jest.mock('next/image', () => ({
   __esModule: true,
@@ -103,6 +112,10 @@ const chapter: SharedAtlasChapter = {
 };
 
 describe('shared Chapter reader', () => {
+  afterEach(() => {
+    window.history.replaceState(null, '', '/');
+  });
+
   it('uses Journey labels without rewriting the author’s chapter wording', () => {
     const authoredTitle = 'Chapter one: the journey begins';
     const authoredIntroduction = 'A chapter I never want to forget.';
@@ -229,7 +242,13 @@ describe('shared Chapter reader', () => {
     ).toHaveAttribute('href', '/dashboard/card/memory-1');
   });
 
-  it('groups a multi-day Journey into scalable Segments and continues the latest one', () => {
+  it('collapses Journey days independently and reveals a day from the Segment index', async () => {
+    const user = userEvent.setup();
+    const scrollIntoView = jest.fn();
+    Object.defineProperty(HTMLElement.prototype, 'scrollIntoView', {
+      configurable: true,
+      value: scrollIntoView,
+    });
     const firstSegment = {
       id: 'e8ef6529-4961-4847-8272-e0da4aebf38b',
       title: 'Day 1 · Petra',
@@ -273,15 +292,187 @@ describe('shared Chapter reader', () => {
       `/dashboard/chapters/chapter-1/edit?step=continue&continueSegment=${secondSegment.id}`,
     );
     expect(
-      screen.getByRole('heading', { name: firstSegment.title }),
+      screen.getByRole('heading', { name: new RegExp(firstSegment.title) }),
     ).toBeVisible();
     expect(
-      screen.getByRole('heading', { name: secondSegment.title }),
+      screen.getByRole('heading', { name: new RegExp(secondSegment.title) }),
     ).toBeVisible();
     expect(screen.getAllByRole('link', { name: 'Add memory' })).toHaveLength(2);
+    const firstToggle = screen.getByRole('button', {
+      name: `Segment 01: ${firstSegment.title}`,
+    });
+    const secondToggle = screen.getByRole('button', {
+      name: `Segment 02: ${secondSegment.title}`,
+    });
+    const firstPanel = document.getElementById(
+      firstToggle.getAttribute('aria-controls')!,
+    );
+    const secondPanel = document.getElementById(
+      secondToggle.getAttribute('aria-controls')!,
+    );
+
+    expect(firstToggle).toHaveAttribute('aria-expanded', 'true');
+    expect(secondToggle).toHaveAttribute('aria-expanded', 'true');
+    expect(firstPanel).not.toHaveAttribute('hidden');
+    expect(secondPanel).not.toHaveAttribute('hidden');
+
+    await user.click(firstToggle);
+    expect(firstToggle).toHaveAttribute('aria-expanded', 'false');
+    expect(firstPanel).toHaveAttribute('hidden');
+    expect(secondToggle).toHaveAttribute('aria-expanded', 'true');
+
+    await user.click(secondToggle);
+    expect(secondToggle).toHaveAttribute('aria-expanded', 'false');
+    expect(secondPanel).toHaveAttribute('hidden');
+
+    const secondSegmentLink = within(segmentIndex).getByRole('link', {
+      name: new RegExp(secondSegment.title),
+    });
+    await user.click(secondSegmentLink);
+
+    await waitFor(() => {
+      expect(secondToggle).toHaveAttribute('aria-expanded', 'true');
+      expect(secondPanel).not.toHaveAttribute('hidden');
+      expect(secondToggle).toHaveFocus();
+    });
+    expect(firstToggle).toHaveAttribute('aria-expanded', 'false');
+    expect(window.location.hash).toBe(`#journey-segment-${secondSegment.id}`);
+    expect(secondSegmentLink).toHaveAttribute('aria-current', 'location');
+    expect(scrollIntoView).toHaveBeenCalledWith({
+      behavior: 'smooth',
+      block: 'start',
+    });
+    await waitFor(
+      () =>
+        expect(scrollIntoView).toHaveBeenCalledWith({
+          behavior: 'auto',
+          block: 'start',
+        }),
+      { timeout: 1_000 },
+    );
+    expect(
+      screen.queryByRole('region', { name: secondSegment.title }),
+    ).not.toBeInTheDocument();
+
+    await act(async () => {
+      window.history.pushState(null, '', '#chapter-memories');
+      window.dispatchEvent(new PopStateEvent('popstate'));
+    });
+    await waitFor(() =>
+      expect(secondSegmentLink).not.toHaveAttribute('aria-current'),
+    );
     expect(
       screen.queryByText('Eastward, desert stone gave way to lantern light.'),
     ).not.toBeInTheDocument();
+  });
+
+  it('keeps empty and non-contiguous persisted Segments uniquely addressable', () => {
+    const firstSegment = {
+      id: 'e8ef6529-4961-4847-8272-e0da4aebf38b',
+      title: 'Day 1 · Petra',
+      position: 0,
+      memoryCount: 2,
+      startDate: '2026-01-03',
+      endDate: '2026-01-05',
+    };
+    const secondSegment = {
+      id: 'c47412f0-b990-421d-9321-693f153bd2d1',
+      title: 'Day 2 · Kyoto',
+      position: 1,
+      memoryCount: 1,
+      startDate: '2026-02-12',
+      endDate: '2026-02-12',
+    };
+    const emptySegment = {
+      id: '466117e5-a4b9-4117-a96e-9075085f1755',
+      title: 'Day 3 · Homeward',
+      position: 2,
+      memoryCount: 0,
+      startDate: null,
+      endDate: null,
+    };
+
+    render(
+      <ChapterReader
+        chapter={{
+          ...chapter,
+          memoryCount: 3,
+          segments: [firstSegment, secondSegment, emptySegment],
+          entries: [
+            { ...chapter.entries[0], segmentId: firstSegment.id },
+            { ...chapter.entries[1], segmentId: secondSegment.id },
+            {
+              ...chapter.entries[0],
+              id: 'memory-3',
+              title: 'Petra at dusk',
+              segmentId: firstSegment.id,
+            },
+          ],
+        }}
+        mode="shared"
+      />,
+    );
+
+    expect(
+      document.querySelectorAll(`#journey-segment-${firstSegment.id}`),
+    ).toHaveLength(1);
+    expect(
+      screen.getAllByRole('button', {
+        name: `Segment 01: ${firstSegment.title}`,
+      }),
+    ).toHaveLength(1);
+    expect(
+      screen.getByRole('list', {
+        name: `Segment 01: ${firstSegment.title} memories`,
+      }),
+    ).toHaveTextContent('Petra at dawn');
+    expect(
+      screen.getByRole('list', {
+        name: `Segment 01: ${firstSegment.title} memories`,
+      }),
+    ).toHaveTextContent('Petra at dusk');
+    expect(
+      screen.getByRole('list', {
+        name: `Segment 03: ${emptySegment.title} memories`,
+      }),
+    ).toHaveTextContent('No memories saved here yet.');
+    expect(
+      screen.getByRole('link', { name: new RegExp(emptySegment.title) }),
+    ).toHaveAttribute('href', `#journey-segment-${emptySegment.id}`);
+    expect(
+      Array.from(
+        document.querySelectorAll('.keepsake-card-row-copy h3'),
+        (heading) => heading.textContent,
+      ),
+    ).toEqual(['Petra at dawn', 'Petra at dusk', 'Kyoto by lantern light']);
+    expect(
+      Array.from(
+        document.querySelectorAll('.keepsake-card-index'),
+        (index) => index.textContent,
+      ),
+    ).toEqual(['01', '02', '03']);
+    expect(
+      screen.queryByText('Eastward, desert stone gave way to lantern light.'),
+    ).not.toBeInTheDocument();
+  });
+
+  it('keeps the active Segment hash when the save confirmation is dismissed', async () => {
+    const user = userEvent.setup();
+    window.history.replaceState(
+      null,
+      '',
+      '/dashboard/chapters/chapter-1?saved=continued&from=atlas#journey-segment-segment-1',
+    );
+
+    render(<ChapterSaveNotice chapterId="chapter-1" kind="continued" />);
+    await user.click(
+      screen.getByRole('button', { name: 'Dismiss save confirmation' }),
+    );
+
+    expect(window.location.pathname).toBe('/dashboard/chapters/chapter-1');
+    expect(window.location.search).toBe('?from=atlas');
+    expect(window.location.hash).toBe('#journey-segment-segment-1');
+    expect(screen.queryByText('Memory added.')).not.toBeInTheDocument();
   });
 
   it('sends the opening action to the route when there is no field note', () => {

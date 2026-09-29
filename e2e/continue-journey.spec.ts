@@ -249,6 +249,7 @@ test('a Journey can be continued with a new Memory', async ({
   try {
     await page.setViewportSize({ width: 1440, height: 900 });
     await signIn(page);
+    await page.waitForLoadState('networkidle');
     monitor = monitorBrowserIssues(page);
     await page.goto('/dashboard/chapters');
     const journeyList = page.getByRole('region', { name: 'Your journeys' });
@@ -397,7 +398,11 @@ test('a Journey can be continued with a new Memory', async ({
     const timeline = page.getByRole('list', {
       name: 'Journey memories in route order',
     });
-    await expect(timeline.locator('h3').last()).toHaveText(title);
+    const newMemoryHeading = timeline.getByRole('heading', {
+      name: title,
+      exact: true,
+    });
+    await expect(newMemoryHeading).toBeVisible();
     const newMemoryPhoto = timeline.getByRole('listitem').last().locator('img');
     await expect(newMemoryPhoto).toHaveCount(1);
     await expect
@@ -431,13 +436,53 @@ test('a Journey can be continued with a new Memory', async ({
       await expect(
         page.getByRole('heading', { name: segmentTitle }),
       ).toBeVisible();
-      await timeline.locator('h3').last().scrollIntoViewIfNeeded();
-      await expect(timeline.locator('h3').last()).toBeVisible();
+      const segmentToggle = page.getByRole('button', {
+        name: new RegExp(segmentTitle),
+      });
+      await expect(segmentToggle).toHaveAttribute('aria-expanded', 'true');
+      await segmentToggle.click();
+      await expect(segmentToggle).toHaveAttribute('aria-expanded', 'false');
+      await expect(newMemoryHeading).toBeHidden();
+      await capture(
+        page,
+        testInfo,
+        `continue-journey-reader-collapsed-${viewport.label}`,
+        false,
+      );
+
+      const segmentLink = page
+        .getByRole('navigation', { name: 'Journey segments' })
+        .getByRole('link', { name: new RegExp(segmentTitle) });
+      const segmentHref = await segmentLink.getAttribute('href');
+      expect(segmentHref).toMatch(/^#journey-segment-/);
+      await segmentLink.click();
+      await expect(segmentToggle).toHaveAttribute('aria-expanded', 'true');
+      await expect(segmentToggle).toBeFocused();
+      await expect(newMemoryHeading).toBeVisible();
+      await expect.poll(() => new URL(page.url()).hash).toBe(segmentHref);
+      await expect
+        .poll(async () => {
+          const [box, navigationBox] = await Promise.all([
+            segmentToggle.boundingBox(),
+            page.locator('.dashboard-sidebar').boundingBox(),
+          ]);
+          const minimumVisibleY =
+            navigationBox && navigationBox.width > viewport.width * 0.7
+              ? navigationBox.y + navigationBox.height + 8
+              : 0;
+          return Boolean(
+            box && box.y >= minimumVisibleY && box.y < viewport.height,
+          );
+        })
+        .toBe(true);
+      await newMemoryHeading.scrollIntoViewIfNeeded();
+      await expect(newMemoryHeading).toBeVisible();
       await expectViewportFits(page, `continued Journey ${viewport.label}`);
       await capture(
         page,
         testInfo,
         `continue-journey-reader-${viewport.label}`,
+        false,
       );
     }
 
