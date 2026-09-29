@@ -430,6 +430,37 @@ test('a Journey can be continued with a new Memory', async ({
         width: viewport.width,
         height: viewport.height,
       });
+      const segmentIndex = page.getByRole('navigation', {
+        name: 'Journey segments',
+      });
+      const newSegmentLink = segmentIndex.getByRole('link', {
+        name: new RegExp(segmentTitle),
+      });
+      await segmentIndex.scrollIntoViewIfNeeded();
+      await expect(newSegmentLink).toBeVisible();
+      if (viewport.label !== 'desktop-1440x900') {
+        const bounds = await newSegmentLink.boundingBox();
+        expect
+          .soft(bounds, `${viewport.label}: segment jump link`)
+          .not.toBeNull();
+        expect
+          .soft(bounds?.height, `${viewport.label}: compact segment jump link`)
+          .toBeLessThanOrEqual(48);
+      }
+      await expectViewportFits(page, `Segment index ${viewport.label}`);
+      await capture(
+        page,
+        testInfo,
+        `continue-journey-segment-index-${viewport.label}`,
+        false,
+      );
+    }
+
+    for (const viewport of viewports) {
+      await page.setViewportSize({
+        width: viewport.width,
+        height: viewport.height,
+      });
       await page
         .getByRole('heading', { name: segmentTitle })
         .scrollIntoViewIfNeeded();

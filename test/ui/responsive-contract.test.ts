@@ -230,6 +230,26 @@ describe('responsive and route-level UI contracts', () => {
     );
   });
 
+  it('keeps Journey Segment controls compact across phone orientations', () => {
+    const css = readFileSync(
+      join(root, 'components/chapters/chapters.module.css'),
+      'utf8',
+    );
+    const compact = css.match(
+      /@media \(max-width: 680px\), \(max-height: 480px\) and \(orientation: landscape\) \{[\s\S]*?@media \(max-height: 480px\)/,
+    )?.[0];
+
+    expect(compact).toMatch(
+      /\.journeySegmentIndex a \{[\s\S]*?min-height: 2\.75rem;[\s\S]*?border-radius: 999px;/,
+    );
+    expect(compact).toMatch(
+      /\.journeySegmentHeading \{[\s\S]*?grid-template-columns: minmax\(0, 1fr\);/,
+    );
+    expect(compact).toMatch(
+      /\.journeySegmentHeading > a \{[\s\S]*?width: 2\.75rem;[\s\S]*?height: 2\.75rem;/,
+    );
+  });
+
   it('reserves mobile route-map padding for marker radius and offsets', () => {
     const source = readFileSync(
       join(root, 'components/chapters/chapter-map.tsx'),

@@ -2884,15 +2884,20 @@
 .journeySegmentHeading {
   position: relative;
   z-index: 2;
-  display: flex;
-  align-items: flex-end;
-  justify-content: space-between;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
   margin: 3.5rem 0 1.35rem;
-  padding: 1.35rem 1.25rem 1.35rem 4.4rem;
+  padding: 0.9rem 1rem;
   border: 1px solid rgba(183, 93, 52, 0.18);
   border-radius: 1.15rem;
-  background: color-mix(in srgb, var(--paper-light) 92%, var(--timber) 8%);
-  gap: 1.5rem;
+  background: linear-gradient(
+    110deg,
+    color-mix(in srgb, var(--paper-light) 88%, var(--timber) 12%),
+    color-mix(in srgb, var(--paper-light) 97%, var(--timber) 3%)
+  );
+  box-shadow: 0 0.75rem 2rem rgba(16, 35, 29, 0.045);
+  gap: 1.15rem;
   scroll-margin-top: clamp(1.5rem, 5vw, 4rem);
 }
 
@@ -2910,12 +2915,11 @@
   margin-top: 0.75rem;
 }
 
-.journeySegmentHeading > div {
-  flex: 1 1 auto;
+.journeySegmentSummary {
   min-width: 0;
 }
 
-.journeySegmentHeading > div > span {
+.journeySegmentEyebrow {
   color: var(--timber-ink);
   font-size: 0.54rem;
   font-weight: 800;
@@ -2924,9 +2928,9 @@
 }
 
 .journeySegmentHeading h3 {
-  margin-top: 0.28rem;
+  margin-top: 0.18rem;
   font-family: Georgia, 'Times New Roman', serif;
-  font-size: clamp(1.45rem, 3vw, 2.2rem);
+  font-size: clamp(1.25rem, 2.4vw, 1.75rem);
   font-weight: 400;
   letter-spacing: -0.035em;
   line-height: 1.05;
@@ -2936,7 +2940,7 @@
 .journeySegmentToggle {
   display: flex;
   width: 100%;
-  min-height: 2.75rem;
+  min-height: 2.4rem;
   align-items: center;
   justify-content: space-between;
   border: 0;
@@ -2976,7 +2980,7 @@
 }
 
 .journeySegmentHeading p {
-  margin-top: 0.38rem;
+  margin-top: 0.18rem;
   color: var(--forest-600);
   font-size: 0.62rem;
   line-height: 1.5;
@@ -3979,26 +3983,6 @@
     text-align: left;
   }
 
-  .journeySegmentIndex {
-    margin-bottom: 1.35rem;
-  }
-
-  .journeySegmentHeading {
-    display: grid;
-    align-items: start;
-    margin: 2.5rem 0 1rem;
-    padding: 1rem 1rem 1rem 2.9rem;
-    gap: 0.85rem;
-  }
-
-  .journeySegmentHeading > a {
-    width: max-content;
-  }
-
-  .journeySegmentEmpty {
-    margin-left: 2.9rem;
-  }
-
   .chapterMap {
     height: 27rem;
   }
@@ -4140,6 +4124,148 @@
   .chapterDetail[data-reader-mode='shared'] .chapterHeroBegin {
     min-height: 2.75rem;
     margin-top: 0.65rem;
+  }
+}
+
+@media (max-width: 680px), (max-height: 480px) and (orientation: landscape) {
+  .journeySegmentIndex {
+    margin: 0 -0.25rem 1rem;
+  }
+
+  .journeySegmentIndex ol {
+    padding: 0.15rem 0.25rem 0.65rem;
+    gap: 0.45rem;
+    scrollbar-width: none;
+  }
+
+  .journeySegmentIndex ol::-webkit-scrollbar {
+    display: none;
+  }
+
+  .journeySegmentIndex li {
+    flex-basis: auto;
+    max-width: min(17rem, 82vw);
+  }
+
+  .journeySegmentIndex a {
+    display: flex;
+    min-height: 2.75rem;
+    align-items: center;
+    border-radius: 999px;
+    padding: 0.48rem 0.78rem;
+    gap: 0.5rem;
+  }
+
+  .journeySegmentIndex a:hover,
+  .journeySegmentIndex a:focus-visible {
+    transform: none;
+  }
+
+  .journeySegmentIndex span {
+    grid-row: auto;
+    flex: 0 0 auto;
+    font-size: 0.62rem;
+    font-style: normal;
+    font-weight: 800;
+  }
+
+  .journeySegmentIndex strong {
+    min-width: 0;
+    font-size: 0.72rem;
+  }
+
+  .journeySegmentIndex small {
+    display: none;
+  }
+
+  .journeySegmentHeading {
+    grid-template-columns: minmax(0, 1fr);
+    align-items: center;
+    margin: 1.6rem 0 0.75rem;
+    padding: 0.7rem;
+    border-radius: 0.95rem;
+    gap: 0.6rem;
+    scroll-margin-top: 6.5rem;
+  }
+
+  .journeySegmentHeading:has(> a) {
+    grid-template-columns: minmax(0, 1fr) 2.75rem;
+  }
+
+  .journeySegmentGroup:first-child .journeySegmentHeading {
+    margin-top: 0.2rem;
+  }
+
+  .journeySegmentGroup[data-expanded='false']
+    + .journeySegmentGroup
+    .journeySegmentHeading {
+    margin-top: 0.55rem;
+  }
+
+  .journeySegmentEyebrow {
+    font-size: 0.48rem;
+    letter-spacing: 0.09em;
+  }
+
+  .journeySegmentHeading h3 {
+    margin-top: 0.08rem;
+    font-size: clamp(1.02rem, 4.8vw, 1.24rem);
+    line-height: 1.08;
+  }
+
+  .journeySegmentToggle {
+    min-height: 2rem;
+    padding: 0;
+    gap: 0.4rem;
+  }
+
+  .journeySegmentToggle svg {
+    width: 1rem;
+  }
+
+  .journeySegmentHeading p {
+    overflow: hidden;
+    margin-top: 0.14rem;
+    font-size: 0.56rem;
+    line-height: 1.35;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .journeySegmentHeading > a {
+    width: 2.75rem;
+    min-width: 2.75rem;
+    height: 2.75rem;
+    padding: 0;
+  }
+
+  .journeySegmentHeading > a span {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip: rect(0 0 0 0);
+    clip-path: inset(50%);
+    white-space: nowrap;
+  }
+
+  .journeySegmentEmpty {
+    margin-left: 2.75rem;
+  }
+}
+
+@media (max-height: 480px) and (orientation: landscape) {
+  .journeySegmentIndex li {
+    max-width: min(17rem, 58vw);
+  }
+
+  .journeySegmentHeading {
+    margin-top: 1.25rem;
+    scroll-margin-top: 1rem;
+  }
+
+  .journeySegmentHeading h3 {
+    font-size: 1.08rem;
   }
 }
 
