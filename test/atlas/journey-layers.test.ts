@@ -22,9 +22,11 @@ function journey(
     endDate: '2026-09-12',
     memoryCount: 3,
     drawable: true,
+    segments: [],
     stops: [
       {
         entryId: '00000000-0000-4000-8000-000000000011',
+        segmentId: null,
         position: 0,
         title: 'Detroit River',
         placeLabel: 'Detroit, Michigan',
@@ -35,6 +37,7 @@ function journey(
       },
       {
         entryId: '00000000-0000-4000-8000-000000000012',
+        segmentId: null,
         position: 1,
         title: 'Sleeping Bear',
         placeLabel: 'Empire, Michigan',
@@ -45,6 +48,7 @@ function journey(
       },
       {
         entryId: '00000000-0000-4000-8000-000000000013',
+        segmentId: null,
         position: 2,
         title: 'Mackinac morning',
         placeLabel: 'Mackinac Island, Michigan',

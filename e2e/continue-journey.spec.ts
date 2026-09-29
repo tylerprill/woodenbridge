@@ -224,7 +224,9 @@ async function removeTestMemory(page: Page, journeyId: string, title: string) {
   const tray = page.getByRole('region', { name: 'Your memories' });
   await tray.getByRole('button', { name: new RegExp(title) }).click();
   const savedEditor = page.getByRole('dialog', { name: 'Edit memory' });
-  await savedEditor.getByRole('button', { name: 'Remove' }).click();
+  await savedEditor
+    .getByRole('button', { name: 'Remove', exact: true })
+    .click();
   await savedEditor
     .getByRole('button', { name: 'Remove this memory?' })
     .click();

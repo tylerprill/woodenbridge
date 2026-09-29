@@ -16,6 +16,7 @@ export type AtlasJourneySuggestionReason =
 
 export type AtlasJourneyStop = {
   entryId: string;
+  segmentId: string | null;
   position: number;
   title: string;
   placeLabel: string;
@@ -23,6 +24,15 @@ export type AtlasJourneyStop = {
   visitedOn: string | null;
   latitude: number;
   longitude: number;
+};
+
+export type AtlasJourneySegment = {
+  id: string;
+  title: string;
+  position: number;
+  memoryCount: number;
+  startDate: string | null;
+  endDate: string | null;
 };
 
 export type AtlasJourneySummary = {
@@ -35,6 +45,7 @@ export type AtlasJourneySummary = {
   endDate: string | null;
   memoryCount: number;
   drawable: boolean;
+  segments: AtlasJourneySegment[];
   stops: AtlasJourneyStop[];
 };
 

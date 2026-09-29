@@ -959,6 +959,11 @@ describe('bulk photo import workspace', () => {
     await user.click(screen.getByRole('button', { name: 'Next memory' }));
     await titleCurrentStory(user, 'The road home');
     await user.click(screen.getByRole('button', { name: 'Shape the journey' }));
+    await act(async () => {
+      await new Promise<void>((resolve) =>
+        window.requestAnimationFrame(() => resolve()),
+      );
+    });
     await user.type(
       await screen.findByRole('textbox', { name: /^Journey title/ }),
       'Two roads north',
@@ -966,6 +971,10 @@ describe('bulk photo import workspace', () => {
     const createChapter = screen.getByRole('button', {
       name: 'Create 2 memories and 1 journey',
     });
+    expect(screen.getByRole('textbox', { name: /^Journey title/ })).toHaveValue(
+      'Two roads north',
+    );
+    expect(createChapter).toBeEnabled();
 
     await user.click(createChapter);
     expect(

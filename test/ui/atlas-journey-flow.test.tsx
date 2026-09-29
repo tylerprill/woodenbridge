@@ -61,6 +61,8 @@ jest.mock('@/components/atlas/atlas-map-loader', () => ({
 const FIRST_MEMORY_ID = '00000000-0000-4000-8000-000000000001';
 const SECOND_MEMORY_ID = '00000000-0000-4000-8000-000000000002';
 const JOURNEY_ID = '00000000-0000-4000-8000-000000000010';
+const FIRST_SEGMENT_ID = '00000000-0000-4000-8000-000000000020';
+const SECOND_SEGMENT_ID = '00000000-0000-4000-8000-000000000021';
 
 const initialData: AtlasData = {
   hasSavedView: true,
@@ -134,10 +136,29 @@ const journeyIndex: AtlasJourneyIndex = {
       endDate: '2026-06-02',
       memoryCount: 2,
       drawable: true,
+      segments: [
+        {
+          id: FIRST_SEGMENT_ID,
+          title: 'Dune sunrise',
+          position: 0,
+          memoryCount: 1,
+          startDate: '2026-06-01',
+          endDate: '2026-06-01',
+        },
+        {
+          id: SECOND_SEGMENT_ID,
+          title: 'Harbor evening',
+          position: 1,
+          memoryCount: 1,
+          startDate: '2026-06-02',
+          endDate: '2026-06-02',
+        },
+      ],
       stops: [
         {
           entryId: FIRST_MEMORY_ID,
           position: 0,
+          segmentId: FIRST_SEGMENT_ID,
           title: 'Sleeping Bear sunrise',
           placeLabel: 'Empire, Michigan',
           placeName: 'Sleeping Bear Dunes',
@@ -148,6 +169,7 @@ const journeyIndex: AtlasJourneyIndex = {
         {
           entryId: SECOND_MEMORY_ID,
           position: 1,
+          segmentId: SECOND_SEGMENT_ID,
           title: 'Leland harbor',
           placeLabel: 'Leland, Michigan',
           placeName: 'Fishtown',
@@ -352,6 +374,125 @@ describe('Atlas Journey Lens', () => {
     expect(screen.getByTestId('selected-map-stop')).toHaveTextContent(
       SECOND_MEMORY_ID,
     );
+  });
+
+  it('organizes a remembered path by Journey, Segment, and Memory', async () => {
+    const user = userEvent.setup();
+    render(
+      <AtlasWorkspace
+        displayName="Explorer"
+        initialData={initialData}
+        initialMode="journeys"
+      />,
+    );
+
+    await user.click(
+      await screen.findByRole('button', { name: /Leelanau weekend/i }),
+    );
+
+    const firstSegment = screen.getByRole('button', {
+      name: /Segment 01 Dune sunrise/i,
+    });
+    const secondSegment = screen.getByRole('button', {
+      name: /Segment 02 Harbor evening/i,
+    });
+    expect(firstSegment).toHaveAttribute('aria-expanded', 'true');
+    expect(secondSegment).toHaveAttribute('aria-expanded', 'false');
+    expect(
+      screen.getByRole('list', {
+        name: 'Segment 01: Dune sunrise memories',
+      }),
+    ).toBeVisible();
+    expect(
+      screen.queryByRole('list', {
+        name: 'Segment 02: Harbor evening memories',
+      }),
+    ).not.toBeInTheDocument();
+
+    await user.click(secondSegment);
+    expect(firstSegment).toHaveAttribute('aria-expanded', 'false');
+    expect(secondSegment).toHaveAttribute('aria-expanded', 'true');
+    const secondPanelId = secondSegment.getAttribute('aria-controls');
+    expect(secondPanelId).toBeTruthy();
+    expect(
+      document.getElementById(secondPanelId as string),
+    ).not.toHaveAttribute('hidden');
+    expect(
+      within(
+        screen.getByRole('list', {
+          name: 'Segment 02: Harbor evening memories',
+        }),
+      ).getByRole('button', { name: /^2 Leland harbor/i }),
+    ).toBeVisible();
+
+    await user.click(secondSegment);
+    expect(secondSegment).toHaveAttribute('aria-expanded', 'false');
+
+    await user.click(
+      screen.getByRole('button', { name: 'Select second map stop' }),
+    );
+
+    expect(firstSegment).toHaveAttribute('aria-expanded', 'false');
+    expect(secondSegment).toHaveAttribute('aria-expanded', 'true');
+    expect(
+      within(
+        screen.getByRole('list', {
+          name: 'Segment 02: Harbor evening memories',
+        }),
+      ).getByRole('button', { name: /Leland harbor/i }),
+    ).toHaveAttribute('aria-current', 'step');
+
+    await user.click(secondSegment);
+    expect(secondSegment).toHaveAttribute('aria-expanded', 'false');
+    expect(screen.getByTestId('selected-map-stop')).toHaveTextContent('none');
+
+    await user.click(
+      screen.getByRole('button', { name: 'Select second map stop' }),
+    );
+    expect(secondSegment).toHaveAttribute('aria-expanded', 'true');
+    expect(
+      within(
+        screen.getByRole('list', {
+          name: 'Segment 02: Harbor evening memories',
+        }),
+      ).getByRole('button', { name: /Leland harbor/i }),
+    ).toHaveAttribute('aria-current', 'step');
+  });
+
+  it('keeps legacy journeys without segments as a flat memory list', async () => {
+    const user = userEvent.setup();
+    const legacyJourney: AtlasJourneyIndex = {
+      ...journeyIndex,
+      journeys: [
+        {
+          ...journeyIndex.journeys[0],
+          segments: [],
+          stops: journeyIndex.journeys[0].stops.map((stop) => ({
+            ...stop,
+            segmentId: null,
+          })),
+        },
+      ],
+    };
+    global.fetch = jest.fn(() => response(legacyJourney));
+
+    render(
+      <AtlasWorkspace
+        displayName="Explorer"
+        initialData={initialData}
+        initialMode="journeys"
+      />,
+    );
+    await user.click(
+      await screen.findByRole('button', { name: /Leelanau weekend/i }),
+    );
+
+    expect(
+      screen.getByRole('list', { name: 'Leelanau weekend stops' }),
+    ).toBeVisible();
+    expect(
+      screen.queryByRole('button', { name: /Segment 01/i }),
+    ).not.toBeInTheDocument();
   });
 
   it('returns focus to the Journey toolbar control when the panel closes', async () => {
