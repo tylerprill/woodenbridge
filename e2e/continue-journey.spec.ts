@@ -285,6 +285,27 @@ test('a Journey can be continued with a new Memory', async ({
     draftOpen = true;
     await expect(cancelledEditor.getByText('Continuing journey')).toBeVisible();
     await expect(cancelledEditor.getByText(journeyTitle!)).toBeVisible();
+    const localToday = await page.evaluate(() => {
+      const now = new Date();
+      return [
+        now.getFullYear(),
+        String(now.getMonth() + 1).padStart(2, '0'),
+        String(now.getDate()).padStart(2, '0'),
+      ].join('-');
+    });
+    const dateVisited = cancelledEditor.getByLabel('Date visited');
+    await expect(dateVisited).toHaveValue(localToday);
+    await expect(dateVisited).toHaveAttribute('required', '');
+    await cancelledEditor
+      .getByRole('textbox', { name: 'Title' })
+      .fill('Required date smoke check');
+    await dateVisited.clear();
+    await cancelledEditor
+      .getByRole('button', { name: 'Add to journey' })
+      .click();
+    await expect(cancelledEditor.getByRole('alert')).toHaveText(
+      'Choose the date this memory happened.',
+    );
     await cancelledEditor
       .getByRole('button', { name: 'Cancel', exact: true })
       .click();
