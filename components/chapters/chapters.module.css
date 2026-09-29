@@ -4222,7 +4222,7 @@
   }
 
   .journeySegmentToggle {
-    min-height: 2rem;
+    min-height: 44px;
     padding: 0;
     gap: 0.4rem;
   }
