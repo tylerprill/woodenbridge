@@ -216,6 +216,20 @@ describe('responsive and route-level UI contracts', () => {
     );
   });
 
+  it('hides Atlas memory filters in portrait and short landscape mobile layouts', () => {
+    const css = readFileSync(
+      join(root, 'components/atlas/atlas.module.css'),
+      'utf8',
+    );
+
+    expect(css).toMatch(
+      /@media \(max-width: 760px\) \{[\s\S]*?\.filterDock \{\s*display: none;/,
+    );
+    expect(css).toMatch(
+      /@media \(max-height: 480px\) and \(orientation: landscape\) \{[\s\S]*?\.workspace\[data-atlas-mode='places'\] \.filterDock \{\s*display: none;/,
+    );
+  });
+
   it('reserves mobile route-map padding for marker radius and offsets', () => {
     const source = readFileSync(
       join(root, 'components/chapters/chapter-map.tsx'),

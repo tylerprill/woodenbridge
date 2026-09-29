@@ -2008,12 +2008,16 @@
 
   .toolDock {
     top: auto;
-    bottom: 4.55rem;
+    bottom: 0.75rem;
     left: 0.75rem;
     display: flex;
     width: auto;
     border-radius: 999px;
     transform: none;
+  }
+
+  .workspace[data-atlas-mode='places'] .toolDock {
+    bottom: 0.75rem;
   }
 
   .toolDock :is(button, a),
@@ -2037,31 +2041,13 @@
   }
 
   .filterDock {
-    right: 0.75rem;
-    bottom: 0.75rem;
-    left: 0.75rem;
-    justify-content: center;
-    overflow-x: auto;
-    scrollbar-width: none;
-    transform: none;
-  }
-
-  .filterDock::-webkit-scrollbar {
     display: none;
-  }
-
-  .filterDock button {
-    flex: 1 0 auto;
-    min-height: 2.75rem;
-    justify-content: center;
-    padding-inline: 0.5rem;
-    font-size: 0.68rem;
   }
 
   .emptyState {
     top: auto;
     right: 0.75rem;
-    bottom: 8.3rem;
+    bottom: 4.8rem;
     left: 0.75rem;
     width: auto;
     padding: 1.3rem;
@@ -2079,7 +2065,7 @@
   .placementPrompt {
     top: auto;
     right: 0.75rem;
-    bottom: 8.3rem;
+    bottom: 4.8rem;
     left: 0.75rem;
     width: auto;
     align-items: flex-start;
@@ -2125,7 +2111,7 @@
 
   .toast {
     right: 0.75rem;
-    bottom: 8.2rem;
+    bottom: 4.8rem;
     left: 0.75rem;
     justify-content: center;
   }
@@ -2148,7 +2134,7 @@
   }
 
   .workspace :global(.maplibregl-ctrl-bottom-right) {
-    bottom: 9.1rem;
+    bottom: 4.55rem;
   }
 
   .workspace :global(.maplibregl-ctrl-bottom-left) {
@@ -2174,11 +2160,6 @@
 
   .optionalTool {
     display: none;
-  }
-
-  .filterDock button {
-    padding-inline: 0.4rem;
-    font-size: 0.62rem;
   }
 
   .drawerFooter {
@@ -2209,12 +2190,6 @@
   .saveButton,
   .drawerKeepsakeLink {
     width: 100%;
-  }
-}
-
-@media (max-width: 360px) {
-  .filterDock button > span {
-    display: none;
   }
 }
 
@@ -3712,17 +3687,6 @@
   }
 
   .workspace[data-atlas-mode='places'] .filterDock {
-    right: 0.55rem;
-    bottom: 0.55rem;
-    left: auto;
-    width: max-content;
-    max-width: calc(100% - 11.55rem);
-    overflow-x: auto;
-    transform: none;
-    scrollbar-width: none;
-  }
-
-  .workspace[data-atlas-mode='places'] .filterDock::-webkit-scrollbar {
     display: none;
   }
 

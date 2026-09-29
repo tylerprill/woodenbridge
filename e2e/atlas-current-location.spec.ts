@@ -131,6 +131,8 @@ async function signIn(page: Page, email: string, password: string) {
   await expect(page).toHaveURL(/\/dashboard(?:$|[/?#])/, {
     timeout: 20_000,
   });
+  await page.waitForLoadState('load');
+  await page.waitForTimeout(250);
 }
 
 async function capture(page: Page, testInfo: TestInfo, label: string) {
@@ -161,6 +163,18 @@ async function auditAtlasViewports(
       height: viewport.height,
     });
     await expect(atlas).toBeVisible();
+    const filterBar = page.getByRole('group', { name: 'Filter memories' });
+    const mobileAtlas =
+      viewport.width <= 760 ||
+      (viewport.height <= 480 && viewport.width > viewport.height);
+    if (mobileAtlas) {
+      await expect(filterBar, `${viewport.label}: mobile filters`).toBeHidden();
+    } else {
+      await expect(
+        filterBar,
+        `${viewport.label}: desktop filters`,
+      ).toBeVisible();
+    }
     const horizontalOverflow = await page.evaluate(
       () =>
         document.documentElement.scrollWidth -
