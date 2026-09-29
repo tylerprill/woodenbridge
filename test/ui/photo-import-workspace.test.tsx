@@ -478,6 +478,11 @@ async function titleCurrentStory(
   user: ReturnType<typeof userEvent.setup>,
   title: string,
 ) {
+  await act(async () => {
+    await new Promise<void>((resolve) =>
+      window.requestAnimationFrame(() => resolve()),
+    );
+  });
   const input = screen.getByRole('textbox', { name: /^Title/ });
   await user.clear(input);
   await user.type(input, title);
