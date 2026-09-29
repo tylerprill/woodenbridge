@@ -79,16 +79,31 @@ describe('atlas media upload intent abuse controls', () => {
   });
 
   it('refuses to issue a Blob token after an import leaves uploading state', async () => {
-    __testMocks.clientQuery.mockImplementation(async (query: string) => {
-      const text = normalizeQuery(query);
-      if (text.includes('SELECT batch_id FROM atlas_import_items')) {
-        return { rows: [{ batch_id: '3fe3cf16-c676-42cf-b3e6-87158c836fd9' }] };
-      }
-      if (text.includes('SELECT status FROM atlas_import_batches')) {
-        return { rows: [{ status: 'cancel_pending' }], rowCount: 1 };
-      }
-      return { rows: [], rowCount: 0 };
-    });
+    __testMocks.clientQuery.mockImplementation(
+      async (query: string, values?: unknown[]) => {
+        const text = normalizeQuery(query);
+        if (
+          text.includes(
+            'SELECT batch_id, expected_media_id FROM atlas_import_items',
+          )
+        ) {
+          expect(text).toContain('SELECT batch_id, expected_media_id');
+          expect(values).toEqual([entryId, userId]);
+          return {
+            rows: [
+              {
+                batch_id: '3fe3cf16-c676-42cf-b3e6-87158c836fd9',
+                expected_media_id: mediaId,
+              },
+            ],
+          };
+        }
+        if (text.includes('SELECT status FROM atlas_import_batches')) {
+          return { rows: [{ status: 'cancel_pending' }], rowCount: 1 };
+        }
+        return { rows: [], rowCount: 0 };
+      },
+    );
 
     await expect(reserveAtlasMediaUploadVariant(intent)).rejects.toMatchObject<
       Partial<AtlasUploadIntentError>
@@ -115,11 +130,140 @@ describe('atlas media upload intent abuse controls', () => {
     ).toBe(false);
   });
 
+  it('allows a normal photo append after the entry import is complete', async () => {
+    __testMocks.clientQuery.mockImplementation(
+      async (query: string, values?: unknown[]) => {
+        const text = normalizeQuery(query);
+        if (
+          text.includes(
+            'SELECT batch_id, expected_media_id FROM atlas_import_items',
+          )
+        ) {
+          expect(text).toContain('SELECT batch_id, expected_media_id');
+          expect(values).toEqual([entryId, userId]);
+          return {
+            rows: [
+              {
+                batch_id: '3fe3cf16-c676-42cf-b3e6-87158c836fd9',
+                // The historical import item belongs to the original photo,
+                // not the fresh media UUID used by the editor append.
+                expected_media_id: '0bcdfb8e-a7c1-4dbd-9f3a-172de486b7d9',
+              },
+            ],
+            rowCount: 1,
+          };
+        }
+        if (text.includes('SELECT status FROM atlas_import_batches')) {
+          return { rows: [{ status: 'completed' }], rowCount: 1 };
+        }
+        if (text.includes('SELECT id FROM atlas_entries')) {
+          return { rows: [{ id: entryId }], rowCount: 1 };
+        }
+        if (
+          text.includes('FROM atlas_media_upload_intents') &&
+          text.includes('WHERE media_id = $1')
+        ) {
+          return { rows: [], rowCount: 0 };
+        }
+        if (text.includes('AS reserved_entry_count')) {
+          return {
+            rows: [
+              {
+                registered_entry_count: 1,
+                reserved_entry_count: 0,
+                registered_user_bytes: 1024,
+                reserved_user_bytes: 0,
+              },
+            ],
+            rowCount: 1,
+          };
+        }
+        return { rows: [], rowCount: 1 };
+      },
+    );
+
+    await expect(reserveAtlasMediaUploadVariant(intent)).resolves.toEqual({
+      validUntil: expect.any(Number),
+    });
+
+    const queries = __testMocks.clientQuery.mock.calls.map(([query]) =>
+      normalizeQuery(query),
+    );
+    expect(
+      queries.some((query) =>
+        query.includes('SELECT status FROM atlas_import_batches'),
+      ),
+    ).toBe(true);
+    expect(
+      queries.some(
+        (query) =>
+          query.includes('SELECT id FROM atlas_import_items') &&
+          query.includes('expected_media_id = $4'),
+      ),
+    ).toBe(false);
+    expect(
+      queries.some((query) =>
+        query.includes('INSERT INTO atlas_media_upload_intents'),
+      ),
+    ).toBe(true);
+    expect(queries.at(-1)).toBe('COMMIT');
+  });
+
+  it.each(['uploading', 'ready', 'cancel_pending'])(
+    'does not let a new editor upload bypass an import in %s state',
+    async (status) => {
+      __testMocks.clientQuery.mockImplementation(async (query: string) => {
+        const text = normalizeQuery(query);
+        if (
+          text.includes(
+            'SELECT batch_id, expected_media_id FROM atlas_import_items',
+          )
+        ) {
+          return {
+            rows: [
+              {
+                batch_id: '3fe3cf16-c676-42cf-b3e6-87158c836fd9',
+                expected_media_id: '0bcdfb8e-a7c1-4dbd-9f3a-172de486b7d9',
+              },
+            ],
+          };
+        }
+        if (text.includes('SELECT status FROM atlas_import_batches')) {
+          return { rows: [{ status }], rowCount: 1 };
+        }
+        return { rows: [], rowCount: 0 };
+      });
+
+      await expect(
+        reserveAtlasMediaUploadVariant(intent),
+      ).rejects.toMatchObject<Partial<AtlasUploadIntentError>>({
+        code: 'not-found',
+      });
+
+      expect(
+        __testMocks.clientQuery.mock.calls.some(([query]) =>
+          normalizeQuery(query).includes('SELECT id FROM atlas_entries'),
+        ),
+      ).toBe(false);
+    },
+  );
+
   it('locks an active import batch before its item and entry', async () => {
     __testMocks.clientQuery.mockImplementation(async (query: string) => {
       const text = normalizeQuery(query);
-      if (text.includes('SELECT batch_id FROM atlas_import_items')) {
-        return { rows: [{ batch_id: '3fe3cf16-c676-42cf-b3e6-87158c836fd9' }] };
+      if (
+        text.includes(
+          'SELECT batch_id, expected_media_id FROM atlas_import_items',
+        )
+      ) {
+        return {
+          rows: [
+            {
+              batch_id: '3fe3cf16-c676-42cf-b3e6-87158c836fd9',
+              expected_media_id: mediaId,
+            },
+          ],
+        };
       }
       if (text.includes('SELECT status FROM atlas_import_batches')) {
         return { rows: [{ status: 'uploading' }], rowCount: 1 };

@@ -60,7 +60,7 @@ type MemoryDetails = {
   visitedOn: string;
 };
 
-type UploadPhase = 'chapter' | 'cancel';
+type UploadPhase = 'append' | 'chapter' | 'cancel';
 
 type UploadAttempt = {
   pathname: string;
@@ -334,6 +334,24 @@ async function loadCancelledImportForCleanup() {
     expect(cancelled.rows).toHaveLength(1);
     return cancelled.rows[0]!;
   });
+}
+
+async function expectMemoryMediaCount(entryId: string, expected: number) {
+  await expect
+    .poll(() =>
+      withE2EDatabase(async (client) => {
+        const result = await client.query<{ count: number }>(
+          `
+            SELECT COUNT(*)::integer AS count
+            FROM atlas_media
+            WHERE entry_id = $1 AND user_id = $2
+          `,
+          [entryId, E2E_FIXTURE.userId],
+        );
+        return result.rows[0]?.count ?? 0;
+      }),
+    )
+    .toBe(expected);
 }
 
 async function releaseCancelledImportForCleanup(batchId: string) {
@@ -716,7 +734,11 @@ test('imports a private photo chapter, recovers a lost response, and cancels a s
     uploadAttempts.push({ pathname, phase: uploadPhase });
     const originalPhoto =
       pathname.endsWith('.jpg') && !pathname.endsWith('.thumbnail.jpg');
-    if (originalPhoto && !injectedFaults.has(uploadPhase)) {
+    if (
+      originalPhoto &&
+      uploadPhase !== 'append' &&
+      !injectedFaults.has(uploadPhase)
+    ) {
       injectedFaults.add(uploadPhase);
       const committed = await route.fetch();
       expect(committed.ok()).toBe(true);
@@ -887,6 +909,45 @@ test('imports a private photo chapter, recovers a lost response, and cancels a s
       accessibility: true,
     },
   );
+
+  uploadPhase = 'append';
+  const appendedEntryId = persistedChapter.entryIds[0];
+  await page.goto(`/dashboard?memory=${appendedEntryId}`);
+  const importedMemoryEditor = page.getByRole('dialog', {
+    name: 'Edit memory',
+  });
+  await expect(importedMemoryEditor).toBeVisible();
+  await expect(importedMemoryEditor.locator('figure img')).toHaveCount(1);
+  await importedMemoryEditor
+    .locator('input[type="file"]')
+    .setInputFiles(trailheadFixture);
+  await expect(
+    importedMemoryEditor.getByText(/1 photo was added and saved privately\./i),
+  ).toBeVisible({ timeout: 60_000 });
+  await expect(importedMemoryEditor.locator('figure img')).toHaveCount(2);
+  await expectMemoryMediaCount(appendedEntryId, 2);
+  await expect.poll(async () => (await storedObjectNames()).length).toBe(6);
+  await auditCurrentPage(
+    page,
+    testInfo,
+    'full-import-append-completed-memory',
+    monitor,
+    { accessibility: true },
+  );
+
+  await importedMemoryEditor
+    .getByRole('button', { name: 'Remove photo' })
+    .last()
+    .click();
+  await importedMemoryEditor
+    .getByRole('button', { name: 'Confirm remove photo' })
+    .click();
+  await expect(
+    importedMemoryEditor.getByText('Photo removed and saved.'),
+  ).toBeVisible({ timeout: 30_000 });
+  await expect(importedMemoryEditor.locator('figure img')).toHaveCount(1);
+  await expectMemoryMediaCount(appendedEntryId, 1);
+  await expect.poll(async () => (await storedObjectNames()).length).toBe(4);
 
   await page.goto('/dashboard/places');
   const savedPlaces = page.getByRole('region', { name: 'Memories' });

@@ -388,6 +388,7 @@ export async function registerAtlasMediaAction(
       LEFT JOIN atlas_import_items AS import_item
         ON import_item.entry_id = entry.id
         AND import_item.user_id = entry.user_id
+        AND import_item.expected_media_id = ${mediaInput.mediaId}
       LEFT JOIN atlas_import_batches AS import_batch
         ON import_batch.id = import_item.batch_id
         AND import_batch.user_id = import_item.user_id
@@ -399,6 +400,19 @@ export async function registerAtlasMediaAction(
           OR (
             import_item.expected_media_id = ${mediaInput.mediaId}
             AND import_batch.status IN ('uploading', 'ready', 'completed')
+          )
+        )
+        AND (
+          import_item.id IS NOT NULL
+          OR NOT EXISTS (
+            SELECT 1
+            FROM atlas_import_items AS unfinished_import_item
+            INNER JOIN atlas_import_batches AS unfinished_import_batch
+              ON unfinished_import_batch.id = unfinished_import_item.batch_id
+              AND unfinished_import_batch.user_id = unfinished_import_item.user_id
+            WHERE unfinished_import_item.entry_id = entry.id
+              AND unfinished_import_item.user_id = entry.user_id
+              AND unfinished_import_batch.status <> 'completed'
           )
         )
         AND (
@@ -474,16 +488,21 @@ export async function registerAtlasMediaAction(
     const client = await db.connect();
     try {
       await client.query('BEGIN');
-      const importAssociation = await client.query<{ batch_id: string }>(
+      const importAssociation = await client.query<{
+        batch_id: string;
+        expected_media_id: string;
+      }>(
         `
-          SELECT batch_id
+          SELECT batch_id, expected_media_id
           FROM atlas_import_items
-          WHERE entry_id = $1 AND user_id = $2
+          WHERE entry_id = $1
+            AND user_id = $2
           LIMIT 1
         `,
         [mediaInput.entryId, session.user.id],
       );
-      const importBatchId = importAssociation.rows[0]?.batch_id ?? null;
+      const importedItem = importAssociation.rows[0] ?? null;
+      const importBatchId = importedItem?.batch_id ?? null;
       let importBatchStatus: string | null = null;
       let importItem: {
         id: string;
@@ -505,57 +524,63 @@ export async function registerAtlasMediaAction(
           [importBatchId, session.user.id],
         );
         importBatchStatus = importBatch.rows[0]?.status ?? null;
+        const isExpectedImportMedia =
+          importedItem?.expected_media_id === mediaInput.mediaId;
         if (
           !importBatchStatus ||
-          !['uploading', 'ready', 'completed'].includes(importBatchStatus)
+          (isExpectedImportMedia
+            ? !['uploading', 'ready', 'completed'].includes(importBatchStatus)
+            : importBatchStatus !== 'completed')
         ) {
           await client.query('ROLLBACK');
           return { ok: false, error: 'invalid', message: 'Invalid photo.' };
         }
 
-        const importItemResult = await client.query<{
-          id: string;
-          batch_id: string;
-          status: 'pending' | 'uploaded';
-          expected_media_id: string;
-          source_hash: string;
-        }>(
-          `
-            SELECT
-              id,
-              batch_id,
-              status,
-              expected_media_id,
-              source_hash
-            FROM atlas_import_items
-            WHERE batch_id = $1
-              AND entry_id = $2
-              AND user_id = $3
-              AND expected_media_id = $4
-              AND source_width IS NOT NULL
-              AND source_height IS NOT NULL
-              AND media_width = $5
-              AND media_height = $6
-              AND prepared_byte_size = $7
-              AND thumbnail_byte_size = $8
-            LIMIT 1
-            FOR UPDATE
-          `,
-          [
-            importBatchId,
-            mediaInput.entryId,
-            session.user.id,
-            mediaInput.mediaId,
-            mediaInput.width,
-            mediaInput.height,
-            blob.size,
-            thumbnail.size,
-          ],
-        );
-        importItem = importItemResult.rows[0] ?? null;
-        if (!importItem) {
-          await client.query('ROLLBACK');
-          return { ok: false, error: 'invalid', message: 'Invalid photo.' };
+        if (isExpectedImportMedia) {
+          const importItemResult = await client.query<{
+            id: string;
+            batch_id: string;
+            status: 'pending' | 'uploaded';
+            expected_media_id: string;
+            source_hash: string;
+          }>(
+            `
+              SELECT
+                id,
+                batch_id,
+                status,
+                expected_media_id,
+                source_hash
+              FROM atlas_import_items
+              WHERE batch_id = $1
+                AND entry_id = $2
+                AND user_id = $3
+                AND expected_media_id = $4
+                AND source_width IS NOT NULL
+                AND source_height IS NOT NULL
+                AND media_width = $5
+                AND media_height = $6
+                AND prepared_byte_size = $7
+                AND thumbnail_byte_size = $8
+              LIMIT 1
+              FOR UPDATE
+            `,
+            [
+              importBatchId,
+              mediaInput.entryId,
+              session.user.id,
+              mediaInput.mediaId,
+              mediaInput.width,
+              mediaInput.height,
+              blob.size,
+              thumbnail.size,
+            ],
+          );
+          importItem = importItemResult.rows[0] ?? null;
+          if (!importItem) {
+            await client.query('ROLLBACK');
+            return { ok: false, error: 'invalid', message: 'Invalid photo.' };
+          }
         }
       }
 
