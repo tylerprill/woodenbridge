@@ -85,6 +85,34 @@ describe('atlas validation', () => {
     ).toBe(false);
   });
 
+  it('requires a date for visited memories while leaving planned dates optional', () => {
+    const memory = {
+      id: 'f7c0bf19-59fc-49df-9bd7-ae405a69e49c',
+      version: 1,
+      title: 'Coffee before the trail',
+      description: '',
+      placeLabel: 'Leadville, Colorado',
+      visitedOn: null,
+      occurredTime: null,
+      occurredUtcOffsetMinutes: null,
+      journeyState: 'visited' as const,
+    };
+
+    const visitedResult = atlasEntryUpdateSchema.safeParse(memory);
+    expect(visitedResult.success).toBe(false);
+    if (!visitedResult.success) {
+      expect(visitedResult.error.flatten().fieldErrors.visitedOn).toContain(
+        'Choose the date this memory happened.',
+      );
+    }
+    expect(
+      atlasEntryUpdateSchema.safeParse({
+        ...memory,
+        journeyState: 'want_to_visit',
+      }).success,
+    ).toBe(true);
+  });
+
   it('requires a calendar date for a local occurrence time', () => {
     const memory = {
       id: 'f7c0bf19-59fc-49df-9bd7-ae405a69e49c',

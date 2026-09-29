@@ -58,6 +58,14 @@ const entry: AtlasEntry = {
   media: [],
 };
 
+function localCalendarDate(now = new Date()) {
+  return [
+    now.getFullYear(),
+    String(now.getMonth() + 1).padStart(2, '0'),
+    String(now.getDate()).padStart(2, '0'),
+  ].join('-');
+}
+
 describe('memory capture UI', () => {
   beforeEach(() => {
     jest.clearAllMocks();
@@ -107,6 +115,39 @@ describe('memory capture UI', () => {
       }
     },
   );
+
+  it('defaults a new visited memory to today and requires its date', async () => {
+    const user = userEvent.setup();
+
+    render(
+      <MemoryDrawer
+        entry={entry}
+        onClose={jest.fn()}
+        onDirtyChange={jest.fn()}
+        onUpdate={jest.fn()}
+        onMediaChange={jest.fn()}
+        onArchive={jest.fn()}
+        mediaLoading={false}
+        placeResolving={false}
+      />,
+    );
+
+    const date = screen.getByLabelText('Date visited');
+    expect(date).toHaveValue(localCalendarDate());
+    expect(date).toBeRequired();
+
+    await user.type(
+      screen.getByRole('textbox', { name: 'Title' }),
+      'Coffee before the trail',
+    );
+    await user.clear(date);
+    await user.click(screen.getByRole('button', { name: 'Keep memory' }));
+
+    expect(screen.getByRole('alert')).toHaveTextContent(
+      'Choose the date this memory happened.',
+    );
+    expect(updateAtlasEntryAction).not.toHaveBeenCalled();
+  });
 
   it('uses a growing title field and explicitly saves the complete memory', async () => {
     const user = userEvent.setup();
@@ -603,6 +644,7 @@ describe('memory capture UI', () => {
       screen.getByRole('textbox', { name: 'Title' }),
       saved.title,
     );
+    await user.clear(screen.getByLabelText('Date visited'));
     await user.type(screen.getByLabelText('Date visited'), '2026-09-13');
     await user.click(
       screen.getByRole('button', {

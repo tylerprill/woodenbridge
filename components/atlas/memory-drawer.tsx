@@ -82,12 +82,24 @@ function segmentDateLabel(date: string) {
   return SEGMENT_DATE_FORMATTER.format(new Date(`${date}T12:00:00`));
 }
 
+function localCalendarDate(now = new Date()) {
+  return [
+    now.getFullYear(),
+    String(now.getMonth() + 1).padStart(2, '0'),
+    String(now.getDate()).padStart(2, '0'),
+  ].join('-');
+}
+
 function formFromEntry(entry: AtlasEntry): FormState {
   return {
     title: entry.title,
     description: entry.description,
     placeLabel: entry.placeLabel,
-    visitedOn: entry.visitedOn,
+    visitedOn:
+      entry.visitedOn ??
+      (entry.recordState === 'draft' && entry.journeyState === 'visited'
+        ? localCalendarDate()
+        : null),
     occurredTime: entry.occurredTime,
     occurredUtcOffsetMinutes: entry.occurredUtcOffsetMinutes,
     journeyState: entry.journeyState,
@@ -229,6 +241,22 @@ export function MemoryDrawer({
     setMessage('');
   };
 
+  const chooseJourneyState = (journeyState: JourneyState) => {
+    editRevisionRef.current += 1;
+    setForm((current) => ({
+      ...current,
+      journeyState,
+      visitedOn:
+        journeyState === 'visited'
+          ? (current.visitedOn ?? localCalendarDate())
+          : current.visitedOn,
+    }));
+    setDirty(true);
+    setDiscardArmed(false);
+    setSaveState('idle');
+    setMessage('');
+  };
+
   const detectedPlace = entry.placeName
     ? getAtlasPlaceContextLabel({ ...entry, placeLabel: '' })
     : '';
@@ -289,6 +317,11 @@ export function MemoryDrawer({
     if (!form.title.trim()) {
       setSaveState('error');
       setMessage('Give this memory a title before saving it.');
+      return;
+    }
+    if (form.journeyState === 'visited' && !form.visitedOn) {
+      setSaveState('error');
+      setMessage('Choose the date this memory happened.');
       return;
     }
     if (
@@ -755,7 +788,7 @@ export function MemoryDrawer({
                 key={value}
                 data-active={form.journeyState === value ? 'true' : 'false'}
                 aria-pressed={form.journeyState === value}
-                onClick={() => setField('journeyState', value)}
+                onClick={() => chooseJourneyState(value)}
               >
                 {label}
               </button>
@@ -811,6 +844,7 @@ export function MemoryDrawer({
               type="date"
               name="visitedOn"
               value={form.visitedOn ?? ''}
+              required={form.journeyState === 'visited'}
               onChange={(event) => {
                 occurrenceEditedRef.current = true;
                 captureOccurrenceKeyRef.current = null;

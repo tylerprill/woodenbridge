@@ -61,6 +61,13 @@ export const atlasEntryUpdateSchema = z
       .optional(),
   })
   .superRefine((memory, context) => {
+    if (memory.journeyState === 'visited' && !memory.visitedOn) {
+      context.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ['visitedOn'],
+        message: 'Choose the date this memory happened.',
+      });
+    }
     if (memory.occurredTime && !memory.visitedOn) {
       context.addIssue({
         code: z.ZodIssueCode.custom,
