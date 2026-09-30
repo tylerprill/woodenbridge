@@ -41,7 +41,7 @@ const publicRoutes: PublicRoute[] = [
     name: 'landing',
     path: '/',
     status: 200,
-    expectedHeading: /Your camera roll/,
+    expectedHeading: /Start with a place/,
   },
   {
     name: 'login',
@@ -212,7 +212,7 @@ for (const route of publicRoutes) {
   });
 }
 
-test('landing navigation preserves the photo-import intent', async ({
+test('landing navigation preserves the new-memory intent', async ({
   page,
 }, testInfo) => {
   const monitor = monitorBrowserIssues(page);
@@ -221,17 +221,17 @@ test('landing navigation preserves the photo-import intent', async ({
   }
   await page.goto('/');
   await page
-    .getByRole('link', { name: /upload/i })
+    .getByRole('link', { name: 'Place your first Memory' })
     .first()
     .click();
-  await expect(page).toHaveURL(/\/sign-up\?intent=photo-import$/);
+  await expect(page).toHaveURL(/\/sign-up\?intent=new-memory$/);
   await expect(
     page.getByRole('heading', { level: 1, name: 'Create your account' }),
   ).toBeVisible();
   await auditCurrentPage(
     page,
     testInfo,
-    `landing-upload-cta-${testInfo.project.name}`,
+    `landing-new-memory-cta-${testInfo.project.name}`,
     monitor,
     { accessibility: testInfo.project.name === 'chromium' },
   );
@@ -510,7 +510,7 @@ test('anonymous users are guarded from every private route', async ({
 
 const seamRoutes = [
   {
-    expectedHeading: /Your camera roll/,
+    expectedHeading: /Start with a place/,
     name: 'landing',
     path: '/',
     widths: [

@@ -9,16 +9,16 @@ import Link from 'next/link';
 
 const highlights = [
   {
-    title: 'Upload together',
-    copy: 'Bring in the whole trip',
+    title: 'Place the Memory',
+    copy: 'Pin where it happened',
   },
   {
-    title: 'Places recognized',
-    copy: 'Review only exceptions',
+    title: 'Add the whole moment',
+    copy: 'Photos, date, and details',
   },
   {
-    title: 'Private by default',
-    copy: 'Share when you choose',
+    title: 'Build the Journey',
+    copy: 'Connect Memories anytime',
   },
 ];
 
@@ -28,32 +28,33 @@ export function HeroSection({ isLoggedIn = false }: { isLoggedIn?: boolean }) {
       <div className="hero-copy">
         <p className="eyebrow">
           <SparklesIcon aria-hidden="true" />
-          Photo journeys, mapped for you
+          Memories and Journeys, mapped by you
         </p>
 
         <h1 id="hero-title">
-          Your camera roll.
-          <span>Your journey, mapped.</span>
+          Start with a place.
+          <span>Remember the whole story.</span>
         </h1>
 
         <p className="hero-intro">
-          Upload a whole trip at once. Field Atlas finds places and dates, flags
-          only what needs review, and turns your photos into private memories or
-          a journey.
+          Place a Memory where it happened, add the photos and details that make
+          it yours, then connect Memories into a Journey when the story grows.
         </p>
 
         <div className="hero-actions">
           <Link
             className="primary-action"
             href={
-              isLoggedIn ? '/dashboard/import' : '/sign-up?intent=photo-import'
+              isLoggedIn
+                ? '/dashboard?new=memory'
+                : '/sign-up?intent=new-memory'
             }
           >
-            {isLoggedIn ? 'Upload photos' : 'Start with your photos'}
+            {isLoggedIn ? 'Place a Memory' : 'Place your first Memory'}
             <ArrowRightIcon aria-hidden="true" />
           </Link>
-          <a className="secondary-action" href="#photo-upload">
-            See the 3-step flow
+          <a className="secondary-action" href="#memory-creation">
+            See how it works
           </a>
         </div>
 
@@ -73,7 +74,7 @@ export function HeroSection({ isLoggedIn = false }: { isLoggedIn?: boolean }) {
       <div
         className="hero-art"
         role="img"
-        aria-label="Five uploaded travel photos becoming four recognized places in a private atlas"
+        aria-label="A placed Memory with several photos becoming part of a private Journey"
       >
         <div aria-hidden="true">
           <div className="hero-sun" />
@@ -87,8 +88,8 @@ export function HeroSection({ isLoggedIn = false }: { isLoggedIn?: boolean }) {
           <div className="hero-upload-chip">
             <PhotoIcon />
             <span>
-              <strong>5 photos selected</strong>
-              <small>One trip · ready to map</small>
+              <strong>3 photos together</strong>
+              <small>One Memory · one place</small>
             </span>
           </div>
           <div className="hero-photo-stack">
@@ -97,11 +98,11 @@ export function HeroSection({ isLoggedIn = false }: { isLoggedIn?: boolean }) {
             <span data-tone="trail" />
           </div>
           <div className="hero-field-note">
-            <span className="field-note-index">Recognized for you</span>
-            <strong>4 places across the map</strong>
+            <span className="field-note-index">Memory placed</span>
+            <strong>Covered Bridge Trail</strong>
             <span className="field-note-location">
               <CheckCircleIcon />
-              Dates found · 1 place to review
+              Photos, date, and story saved
             </span>
             <span className="hero-private-note">
               <MapPinIcon /> Private until you share

@@ -15,7 +15,7 @@ jest.mock('@/components/home/header-logout-button', () => ({
 }));
 
 describe('landing page product story', () => {
-  it('makes photo upload the primary guest journey', () => {
+  it('makes Memory creation the primary guest journey', () => {
     render(
       <>
         <SiteHeader />
@@ -29,46 +29,53 @@ describe('landing page product story', () => {
     expect(
       screen.getByRole('heading', {
         level: 1,
-        name: /Your camera roll\. Your journey, mapped\./i,
+        name: /Start with a place\. Remember the whole story\./i,
       }),
     ).toBeInTheDocument();
+    const memoryLinks = screen.getAllByRole('link', {
+      name: 'Place your first Memory',
+    });
+    expect(memoryLinks).toHaveLength(2);
+    expect(memoryLinks[0]).toHaveAttribute(
+      'href',
+      '/sign-up?intent=new-memory',
+    );
     expect(
-      screen.getByRole('link', { name: 'Start with your photos' }),
-    ).toHaveAttribute('href', '/sign-up?intent=photo-import');
+      screen.getByRole('link', { name: /Create account/i }),
+    ).toHaveAttribute('href', '/sign-up?intent=new-memory');
     expect(
-      screen.getByRole('link', { name: 'See the 3-step flow' }),
-    ).toHaveAttribute('href', '#photo-upload');
+      screen.getByRole('link', { name: 'See how it works' }),
+    ).toHaveAttribute('href', '#memory-creation');
     expect(
       screen.getByRole('heading', {
-        name: 'From camera roll to mapped journey.',
+        name: 'From one place to a mapped Journey.',
       }),
     ).toBeInTheDocument();
-    expect(screen.getByText('10 places recognized')).toBeInTheDocument();
+    expect(screen.getByText('Saved to your atlas')).toBeInTheDocument();
     expect(screen.getByText('1 private journey')).toBeInTheDocument();
     expect(
       screen.getByRole('heading', {
-        name: 'Keep memories or shape a journey.',
+        name: 'Connect Memories into a Journey.',
       }),
     ).toBeInTheDocument();
     expect(
       screen.getByRole('heading', {
-        name: 'Your next journey is already in your camera roll.',
+        name: 'Your next Memory starts with a place.',
       }),
     ).toBeInTheDocument();
     expect(document.body).not.toHaveTextContent(/\bchapters?\b/i);
-    expect(
-      screen.getByText('2 brought forward for review'),
-    ).toBeInTheDocument();
-    expect(
-      screen.getByRole('link', { name: /Upload your first journey/i }),
-    ).toHaveAttribute('href', '/sign-up?intent=photo-import');
+    expect(screen.getByText('Reorder and edit anytime')).toBeInTheDocument();
+    expect(memoryLinks[1]).toHaveAttribute(
+      'href',
+      '/sign-up?intent=new-memory',
+    );
     expect(screen.getAllByRole('list').length).toBeGreaterThanOrEqual(2);
-    expect(document.querySelector('#photo-upload')).not.toBeNull();
+    expect(document.querySelector('#memory-creation')).not.toBeNull();
     expect(document.querySelector('#how-it-works')).not.toBeNull();
     expect(document.querySelector('#privacy')).not.toBeNull();
   });
 
-  it('sends returning members directly to photo import', () => {
+  it('sends returning members directly to Memory creation', () => {
     render(
       <>
         <HeroSection isLoggedIn />
@@ -76,12 +83,11 @@ describe('landing page product story', () => {
       </>,
     );
 
-    expect(screen.getByRole('link', { name: 'Upload photos' })).toHaveAttribute(
-      'href',
-      '/dashboard/import',
-    );
     expect(
-      screen.getByRole('link', { name: /Upload another journey/i }),
-    ).toHaveAttribute('href', '/dashboard/import');
+      screen.getByRole('link', { name: 'Place a Memory' }),
+    ).toHaveAttribute('href', '/dashboard?new=memory');
+    expect(
+      screen.getByRole('link', { name: /Place another Memory/i }),
+    ).toHaveAttribute('href', '/dashboard?new=memory');
   });
 });

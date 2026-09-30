@@ -28,7 +28,7 @@ import {
   analyzeAtlasImportPhoto,
   prepareAtlasImportPhoto,
 } from '@/app/lib/atlas/photo-import-client';
-import { getImportFileProblem } from './photo-import-helpers';
+import { getAtlasPhotoFileProblem } from '@/app/lib/atlas/photo-upload-validation';
 import styles from './atlas.module.css';
 
 type MemoryPhotosProps = {
@@ -46,7 +46,7 @@ type MemoryPhotosProps = {
 };
 
 function fileError(file: File) {
-  return getImportFileProblem(file);
+  return getAtlasPhotoFileProblem(file);
 }
 
 function offsetMinutes(offset: string | null) {

@@ -12,7 +12,7 @@ export function HomeFooter({ isLoggedIn = false }: { isLoggedIn?: boolean }) {
         <Link href={isLoggedIn ? '/dashboard' : '/login'}>
           {isLoggedIn ? 'Your atlas' : 'Sign in'}
         </Link>
-        <a href="#photo-upload">Photo upload</a>
+        <a href="#memory-creation">Create a Memory</a>
         <a href="#how-it-works">Why it’s faster</a>
         <a href="#privacy">Private by default</a>
       </nav>
