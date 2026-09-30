@@ -231,7 +231,7 @@ test('authenticated routes and primary interactions pass the UI audit', async ({
       path: `/dashboard/chapters/${encodeURIComponent(e2eChapterId)}`,
       expectedSelector: '[aria-label="Journey actions"]',
       readyButton: 'Show route map',
-      readySelector: 'button[aria-label^="Stop 1:"]',
+      readySelector: 'button[data-chapter-marker="true"]',
     },
     {
       name: 'chapter-edit',

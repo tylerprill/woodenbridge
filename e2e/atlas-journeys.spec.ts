@@ -106,7 +106,7 @@ async function auditJourneyState(
 
 async function expectJourneyDotContentCenteredInMarkers(page: Page) {
   const centerErrors = await page
-    .locator('button.maplibregl-marker[aria-label^="Stop "]')
+    .locator('button.maplibregl-marker[data-journey-marker="true"]')
     .evaluateAll((markers) =>
       markers.map((marker) => {
         const dot = marker.querySelector('span');
@@ -138,6 +138,108 @@ async function expectJourneyDotContentCenteredInMarkers(page: Page) {
       .soft(error.y, 'Journey dot vertical content drift')
       .toBeLessThan(0.6);
   }
+}
+
+async function expectJourneyMarkerCoverage(
+  page: Page,
+  activeStopIndexes: readonly number[] | null,
+) {
+  const markers = page.locator(
+    'button.maplibregl-marker[data-journey-marker="true"]',
+  );
+  await expect
+    .poll(
+      () =>
+        markers.evaluateAll(
+          (markerElements, expectedActiveStopIndexes) => {
+            const activeIndexes = expectedActiveStopIndexes
+              ? new Set(expectedActiveStopIndexes)
+              : null;
+            const groups = markerElements.map((marker) => {
+              const element = marker as HTMLElement;
+              return {
+                indexes: (element.dataset.stopIndexes ?? '')
+                  .split(',')
+                  .filter(Boolean)
+                  .map(Number),
+                memoryCount: Number(element.dataset.memoryCount ?? 0),
+                segment: element.dataset.segment ?? '',
+              };
+            });
+
+            return {
+              coveredStopIndexes: groups
+                .flatMap((group) => group.indexes)
+                .sort((first, second) => first - second),
+              countsMatch: groups.every(
+                (group) => group.memoryCount === group.indexes.length,
+              ),
+              segmentStatesMatch: groups.every((group) => {
+                const expectedSegment = activeIndexes
+                  ? group.indexes.some((index) => activeIndexes.has(index))
+                    ? 'active'
+                    : 'inactive'
+                  : 'journey';
+                return group.segment === expectedSegment;
+              }),
+            };
+          },
+          activeStopIndexes ? [...activeStopIndexes] : null,
+        ),
+      { message: 'Journey markers represent every stop with current state' },
+    )
+    .toEqual({
+      coveredStopIndexes: memories.map((_, index) => index),
+      countsMatch: true,
+      segmentStatesMatch: true,
+    });
+}
+
+function journeyMarkerContainingStop(page: Page, stopIndex: number) {
+  const base = 'button.maplibregl-marker[data-journey-marker="true"]';
+  return page.locator(
+    [
+      `${base}[data-stop-indexes="${stopIndex}"]`,
+      `${base}[data-stop-indexes^="${stopIndex},"]`,
+      `${base}[data-stop-indexes*=",${stopIndex},"]`,
+      `${base}[data-stop-indexes$=",${stopIndex}"]`,
+    ].join(','),
+  );
+}
+
+async function expectJourneyMarkersDoNotOverlap(page: Page) {
+  const markers = page.locator(
+    'button.maplibregl-marker[data-journey-marker="true"]',
+  );
+  await expect
+    .poll(() =>
+      markers.evaluateAll((markerElements) => {
+        const visible = markerElements.flatMap((marker) => {
+          const style = getComputedStyle(marker);
+          const bounds = marker.getBoundingClientRect();
+          return style.display !== 'none' &&
+            style.visibility === 'visible' &&
+            Number(style.opacity) > 0 &&
+            bounds.width > 0 &&
+            bounds.height > 0
+            ? [{ bounds, label: marker.getAttribute('aria-label') }]
+            : [];
+        });
+        return visible.flatMap((first, firstIndex) =>
+          visible
+            .slice(firstIndex + 1)
+            .flatMap((second) =>
+              first.bounds.left < second.bounds.right &&
+              first.bounds.right > second.bounds.left &&
+              first.bounds.top < second.bounds.bottom &&
+              first.bounds.bottom > second.bounds.top
+                ? [`${first.label} overlaps ${second.label}`]
+                : [],
+            ),
+        );
+      }),
+    )
+    .toEqual([]);
 }
 
 test('Journey Lens connects the Atlas, playback, and Journey workshop', async ({
@@ -215,15 +317,27 @@ test('Journey Lens connects the Atlas, playback, and Journey workshop', async ({
     }),
   ).toHaveCount(0);
   const overviewMapStops = page.locator(
-    'button.maplibregl-marker[aria-label^="Stop "]',
+    'button.maplibregl-marker[data-journey-marker="true"]',
   );
-  await expect(overviewMapStops).toHaveCount(memories.length);
-  for (let index = 0; index < memories.length; index += 1) {
-    await expect(overviewMapStops.nth(index)).toHaveAttribute(
-      'data-segment',
-      'journey',
-    );
-  }
+  await expect(overviewMapStops).not.toHaveCount(0);
+  await expectJourneyMarkerCoverage(page, null);
+  const overviewDetroitGroup = journeyMarkerContainingStop(page, 0);
+  await expect(overviewDetroitGroup).toHaveCount(1);
+  await expect(overviewDetroitGroup).toHaveAttribute('data-cluster', 'true');
+  await expect(overviewDetroitGroup).toHaveAttribute(
+    'data-stop-indexes',
+    /^0,1(?:,|$)/,
+  );
+  await expect(overviewDetroitGroup).toHaveAttribute(
+    'data-memory-count',
+    /^(?:[2-9]|[1-9]\d+)$/,
+  );
+  await expect(overviewDetroitGroup).toHaveAccessibleName(
+    new RegExp(
+      `nearby memories, stops 1–\\d+\\. Select to view stop 1, ${memories[0].title}`,
+      'i',
+    ),
+  );
 
   await firstSegment.click();
   await expect(firstSegment).toHaveAttribute('aria-expanded', 'true');
@@ -241,18 +355,7 @@ test('Journey Lens connects the Atlas, playback, and Journey workshop', async ({
       name: new RegExp(`^2 ${memories[1].title}`, 'i'),
     }),
   ).toBeVisible();
-  await expect(overviewMapStops.nth(0)).toHaveAttribute(
-    'data-segment',
-    'active',
-  );
-  await expect(overviewMapStops.nth(1)).toHaveAttribute(
-    'data-segment',
-    'active',
-  );
-  await expect(overviewMapStops.nth(2)).toHaveAttribute(
-    'data-segment',
-    'inactive',
-  );
+  await expectJourneyMarkerCoverage(page, [0, 1]);
 
   await secondSegment.click();
   await expect(firstSegment).toHaveAttribute('aria-expanded', 'false');
@@ -269,28 +372,12 @@ test('Journey Lens connects the Atlas, playback, and Journey workshop', async ({
       name: new RegExp(`^3 ${memories[2].title}`, 'i'),
     }),
   ).toBeVisible();
-  await expect(overviewMapStops.nth(0)).toHaveAttribute(
-    'data-segment',
-    'inactive',
-  );
-  await expect(overviewMapStops.nth(2)).toHaveAttribute(
-    'data-segment',
-    'active',
-  );
-  await expect(overviewMapStops.nth(3)).toHaveAttribute(
-    'data-segment',
-    'active',
-  );
+  await expectJourneyMarkerCoverage(page, [2, 3]);
   await auditJourneyState(page, testInfo, 'segment-focused', monitor);
 
   await secondSegment.click();
   await expect(secondSegment).toHaveAttribute('aria-expanded', 'false');
-  for (let index = 0; index < memories.length; index += 1) {
-    await expect(overviewMapStops.nth(index)).toHaveAttribute(
-      'data-segment',
-      'journey',
-    );
-  }
+  await expectJourneyMarkerCoverage(page, null);
   await auditJourneyState(page, testInfo, 'fitted-detail', monitor);
 
   const detailUrl = new URL('/dashboard', 'http://field-atlas.test');
@@ -325,29 +412,48 @@ test('Journey Lens connects the Atlas, playback, and Journey workshop', async ({
   ).toBeInViewport({ ratio: 0.95 });
 
   const mapStops = page.locator(
-    'button.maplibregl-marker[aria-label^="Stop "]',
+    'button.maplibregl-marker[data-journey-marker="true"]',
   );
-  await expect(mapStops).toHaveCount(memories.length);
-  for (let index = 0; index < memories.length; index += 1) {
-    const memory = memories[index];
-    await expect(mapStops.nth(index)).toHaveAttribute(
-      'aria-label',
-      new RegExp(
-        `^Stop ${index + 1} of ${memories.length}: ${memory.title}`,
-        'i',
-      ),
-    );
-  }
+  await expect(mapStops).not.toHaveCount(0);
+  await expectJourneyMarkerCoverage(page, [2, 3]);
+  const stopOneMarker = journeyMarkerContainingStop(page, 0);
+  await expect(stopOneMarker).toHaveCount(1);
+  const stopThreeMarker = journeyMarkerContainingStop(page, 2);
+  await expect(stopThreeMarker).toHaveAttribute('aria-current', 'step');
+  await expect(stopThreeMarker).toHaveAttribute('data-segment', 'active');
+  await expect(journeyMarkerContainingStop(page, 3)).toHaveAttribute(
+    'data-segment',
+    'active',
+  );
   await expectJourneyDotContentCenteredInMarkers(page);
+  await expectJourneyMarkersDoNotOverlap(page);
+
+  await firstSegment.click();
+  const firstMemoryButton = firstSegmentMemories.getByRole('button', {
+    name: new RegExp(memories[0].title, 'i'),
+  });
+  await expect(firstMemoryButton).toBeVisible();
+  await firstMemoryButton.click();
+  await expect(firstMemoryButton).toHaveAttribute('aria-current', 'step');
+  await expect(page).toHaveURL(
+    (url) => url.searchParams.get('stop') === memories[0].id,
+  );
+  await secondSegment.click();
+  await expect(secondSegment).toHaveAttribute('aria-expanded', 'true');
   await expect(
-    page.getByRole('button', {
-      name: new RegExp(`^Stop 3 of 4: ${memories[2].title}`, 'i'),
+    secondSegmentMemories.getByRole('button', {
+      name: new RegExp(`^3 ${memories[2].title}`, 'i'),
     }),
-  ).toHaveAttribute('aria-current', 'step');
-  await expect(mapStops.nth(0)).toHaveAttribute('data-segment', 'inactive');
-  await expect(mapStops.nth(1)).toHaveAttribute('data-segment', 'inactive');
-  await expect(mapStops.nth(2)).toHaveAttribute('data-segment', 'active');
-  await expect(mapStops.nth(3)).toHaveAttribute('data-segment', 'active');
+  ).toBeVisible();
+  await secondSegmentMemories
+    .getByRole('button', {
+      name: new RegExp(`^3 ${memories[2].title}`, 'i'),
+    })
+    .click();
+  await expect(page).toHaveURL(
+    (url) => url.searchParams.get('stop') === memories[2].id,
+  );
+  await expect(stopThreeMarker).toHaveAttribute('aria-current', 'step');
   await expectActiveJourneyDotClearOfOverlays(page);
   await expect(page.getByRole('button', { name: 'Relive' })).toBeInViewport();
   await auditJourneyState(page, testInfo, 'detail', monitor);
@@ -374,11 +480,10 @@ test('Journey Lens connects the Atlas, playback, and Journey workshop', async ({
       url.searchParams.get('stop') === memories[3].id
     );
   });
-  await expect(
-    page.getByRole('button', {
-      name: new RegExp(`^Stop 4 of 4: ${memories[3].title}`, 'i'),
-    }),
-  ).toHaveAttribute('aria-current', 'step');
+  await expect(journeyMarkerContainingStop(page, 3)).toHaveAttribute(
+    'aria-current',
+    'step',
+  );
   await expectActiveJourneyDotClearOfOverlays(page);
   await expectJourneyPlaybackPreviewHasRoom(page);
 

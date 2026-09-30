@@ -288,7 +288,7 @@ async function auditState(
       expectedMapTeardown: options.mapTeardown,
       readyButton: options.readerMap ? 'Show route map' : undefined,
       readySelector: options.readerMap
-        ? 'button[aria-label^="Stop 1:"]'
+        ? 'button[data-chapter-marker="true"]'
         : options.map
           ? '[data-map-state="ready"]'
           : undefined,

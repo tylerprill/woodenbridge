@@ -2730,6 +2730,18 @@
     transform 160ms ease;
 }
 
+.chapterMapMarker[data-cluster='true'] span {
+  width: auto;
+  min-width: 2.15rem;
+  height: 2.15rem;
+  border-radius: 999px;
+  padding-inline: 0.3rem;
+  box-shadow:
+    0 0 0 1px var(--forest-950),
+    0 0 0 3px rgba(251, 250, 245, 0.9),
+    0 0.5rem 1.1rem rgba(16, 35, 29, 0.24);
+}
+
 .chapterMapMarker:hover span,
 .chapterMapMarker:focus-visible span {
   background: var(--timber);
@@ -2749,8 +2761,16 @@
   font-size: 0.55rem;
 }
 
-.chapterMapFrame :global(.chapter-map-popup .maplibregl-popup-content) {
-  min-width: 11.5rem;
+.chapterMapDetails {
+  position: absolute;
+  top: 0.7rem;
+  left: 0.7rem;
+  z-index: 4;
+  display: flex;
+  width: min(18rem, calc(100% - 1.4rem));
+  max-height: min(calc(100% - 3.6rem), calc(100dvh - 1.4rem));
+  flex-direction: column;
+  overflow: hidden;
   border: 1px solid rgba(16, 35, 29, 0.14);
   border-radius: 0.9rem;
   background: var(--paper-light);
@@ -2759,7 +2779,14 @@
   box-shadow: 0 0.8rem 2rem rgba(16, 35, 29, 0.14);
 }
 
-.chapterMapFrame :global(.chapter-map-popup span) {
+.chapterMapDetailsHeader {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: start;
+  gap: 0.75rem;
+}
+
+.chapterMapDetailsHeader > div > span {
   display: block;
   color: var(--timber-ink);
   font-size: 0.52rem;
@@ -2768,7 +2795,7 @@
   text-transform: uppercase;
 }
 
-.chapterMapFrame :global(.chapter-map-popup strong) {
+.chapterMapDetailsHeader strong {
   display: block;
   margin-top: 0.22rem;
   font-family: Georgia, 'Times New Roman', serif;
@@ -2776,14 +2803,65 @@
   font-weight: 400;
 }
 
-.chapterMapFrame :global(.chapter-map-popup p) {
+.chapterMapDetailsClose {
+  display: grid;
+  width: 2.75rem;
+  height: 2.75rem;
+  flex: 0 0 auto;
+  place-items: center;
+  border: 1px solid rgba(16, 35, 29, 0.14);
+  border-radius: 50%;
+  background: rgba(16, 35, 29, 0.04);
+  color: var(--forest-950);
+  padding: 0;
+  cursor: pointer;
+}
+
+.chapterMapDetailsClose span {
+  font-family: Arial, sans-serif;
+  font-size: 1.25rem;
+  line-height: 1;
+}
+
+.chapterMapDetailsClose:hover,
+.chapterMapDetailsClose:focus-visible {
+  border-color: var(--forest-950);
+  background: var(--forest-950);
+  color: var(--paper-light);
+}
+
+.chapterMapDetailsClose:focus-visible,
+.chapterMapDetailsList:focus-visible {
+  outline: 2px solid var(--timber);
+  outline-offset: 2px;
+}
+
+.chapterMapDetailsPlace {
   margin-top: 0.18rem;
   color: var(--forest-600);
   font-size: 0.62rem;
 }
 
-.chapterMapFrame :global(.chapter-map-popup .maplibregl-popup-tip) {
-  border-top-color: var(--paper-light);
+.chapterMapDetailsList {
+  min-height: 0;
+  overflow-y: auto;
+  margin: 0.55rem 0 0;
+  padding: 0 0.2rem 0 1.15rem;
+  color: var(--forest-600);
+  overscroll-behavior: contain;
+  scrollbar-color: rgba(76, 106, 91, 0.34) transparent;
+}
+
+.chapterMapDetailsList li {
+  padding: 0.18rem 0;
+  font-size: 0.62rem;
+  line-height: 1.35;
+}
+
+.chapterMapDetailsList li > span {
+  margin-right: 0.22rem;
+  color: var(--timber-ink);
+  font-weight: 800;
 }
 
 .journeySegmentIndex {

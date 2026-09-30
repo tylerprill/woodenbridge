@@ -164,6 +164,20 @@
     transform 160ms ease;
 }
 
+.journeyMapMarker[data-cluster='true'] span {
+  width: auto;
+  min-width: 2rem;
+  height: 2rem;
+  border-radius: 999px;
+  background: var(--forest-950);
+  color: var(--paper-light);
+  padding-inline: 0.28rem;
+  box-shadow:
+    0 0 0 2px rgba(251, 250, 245, 0.94),
+    0 0 0 4px rgba(16, 35, 29, 0.2),
+    0 0.46rem 1rem rgba(16, 35, 29, 0.24);
+}
+
 .journeyMapMarker[data-segment='inactive'] span {
   opacity: 0.42;
   box-shadow: 0 0 0 1px rgba(16, 35, 29, 0.2);
@@ -183,6 +197,10 @@
   transform: scale(1.06);
 }
 
+.journeyMapMarker[data-cluster='true'][data-segment='active'] span {
+  color: var(--forest-950);
+}
+
 .journeyMapMarker[data-complete='true'] span {
   background: var(--moss-300);
   box-shadow:
@@ -190,10 +208,14 @@
     0 0.38rem 0.9rem rgba(16, 35, 29, 0.2);
 }
 
+.journeyMapMarker[data-cluster='true'][data-complete='true'] span {
+  color: var(--forest-950);
+}
+
 .journeyMapMarker[data-current='true'] span,
 .journeyMapMarker:hover span,
 .journeyMapMarker:focus-visible span {
-  background: var(--timber);
+  background: var(--timber-ink);
   color: var(--paper-light);
   opacity: 1;
   box-shadow:

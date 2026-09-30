@@ -57,8 +57,8 @@ const journey = {
       placeLabel: 'Belle Isle, Detroit, Michigan',
       placeName: 'Belle Isle',
       visitedOn: '2026-09-15',
-      latitude: 42.3403,
-      longitude: -82.9857,
+      latitude: 42.3346,
+      longitude: -83.0176,
     },
     {
       entryId: 'ba64601b-3ea7-4050-a727-c3f1163db6e4',
@@ -120,23 +120,126 @@ async function signIn(page: Page) {
   });
 }
 
-async function markerDistance(page: Page, first: number, second: number) {
-  const markers = page.locator('button.maplibregl-marker[aria-label^="Stop "]');
-  const firstBounds = await markers.nth(first).boundingBox();
-  const secondBounds = await markers.nth(second).boundingBox();
-  if (!firstBounds || !secondBounds) return 0;
-  return Math.hypot(
-    firstBounds.x +
-      firstBounds.width / 2 -
-      (secondBounds.x + secondBounds.width / 2),
-    firstBounds.y +
-      firstBounds.height / 2 -
-      (secondBounds.y + secondBounds.height / 2),
+async function expectJourneyMarkerCoverage(
+  page: Page,
+  activeStopIndexes: readonly number[] | null,
+) {
+  const markers = page.locator(
+    'button.maplibregl-marker[data-journey-marker="true"]',
+  );
+  await expect
+    .poll(
+      () =>
+        markers.evaluateAll(
+          (markerElements, expectedActiveStopIndexes) => {
+            const activeIndexes = expectedActiveStopIndexes
+              ? new Set(expectedActiveStopIndexes)
+              : null;
+            const groups = markerElements.map((marker) => {
+              const element = marker as HTMLElement;
+              return {
+                indexes: (element.dataset.stopIndexes ?? '')
+                  .split(',')
+                  .filter(Boolean)
+                  .map(Number),
+                memoryCount: Number(element.dataset.memoryCount ?? 0),
+                segment: element.dataset.segment ?? '',
+              };
+            });
+
+            return {
+              coveredStopIndexes: groups
+                .flatMap((group) => group.indexes)
+                .sort((first, second) => first - second),
+              countsMatch: groups.every(
+                (group) => group.memoryCount === group.indexes.length,
+              ),
+              segmentStatesMatch: groups.every((group) => {
+                const expectedSegment = activeIndexes
+                  ? group.indexes.some((index) => activeIndexes.has(index))
+                    ? 'active'
+                    : 'inactive'
+                  : 'journey';
+                return group.segment === expectedSegment;
+              }),
+            };
+          },
+          activeStopIndexes ? [...activeStopIndexes] : null,
+        ),
+      { message: 'Journey markers represent every stop with current state' },
+    )
+    .toEqual({
+      coveredStopIndexes: journey.stops.map((_, index) => index),
+      countsMatch: true,
+      segmentStatesMatch: true,
+    });
+}
+
+function journeyMarkerForStopIndexes(page: Page, stopIndexes: string) {
+  return page.locator(
+    `button.maplibregl-marker[data-journey-marker="true"][data-stop-indexes="${stopIndexes}"]`,
   );
 }
 
+function journeyMarkerContainingStop(page: Page, stopIndex: number) {
+  const base = 'button.maplibregl-marker[data-journey-marker="true"]';
+  return page.locator(
+    [
+      `${base}[data-stop-indexes="${stopIndex}"]`,
+      `${base}[data-stop-indexes^="${stopIndex},"]`,
+      `${base}[data-stop-indexes*=",${stopIndex},"]`,
+      `${base}[data-stop-indexes$=",${stopIndex}"]`,
+    ].join(','),
+  );
+}
+
+async function expectJourneyMarkersDoNotOverlap(page: Page) {
+  const markers = page.locator(
+    'button.maplibregl-marker[data-journey-marker="true"]',
+  );
+  await expect
+    .poll(() =>
+      markers.evaluateAll((markerElements) => {
+        const visible = markerElements.flatMap((marker) => {
+          const style = getComputedStyle(marker);
+          const bounds = marker.getBoundingClientRect();
+          return style.display !== 'none' &&
+            style.visibility === 'visible' &&
+            Number(style.opacity) > 0 &&
+            bounds.width > 0 &&
+            bounds.height > 0
+            ? [{ bounds, label: marker.getAttribute('aria-label') }]
+            : [];
+        });
+        return visible.flatMap((first, firstIndex) =>
+          visible
+            .slice(firstIndex + 1)
+            .flatMap((second) =>
+              first.bounds.left < second.bounds.right &&
+              first.bounds.right > second.bounds.left &&
+              first.bounds.top < second.bounds.bottom &&
+              first.bounds.bottom > second.bounds.top
+                ? [`${first.label} overlaps ${second.label}`]
+                : [],
+            ),
+        );
+      }),
+    )
+    .toEqual([]);
+}
+
 async function expectActiveSegmentMarkersClear(markers: Locator) {
-  await expect(markers).toHaveCount(2);
+  await expect
+    .poll(() =>
+      markers.evaluateAll((activeMarkers) =>
+        activeMarkers.reduce(
+          (total, marker) =>
+            total + Number((marker as HTMLElement).dataset.memoryCount ?? 0),
+          0,
+        ),
+      ),
+    )
+    .toBe(2);
   await expect
     .poll(
       () =>
@@ -220,40 +323,80 @@ test('Journey, Segment, and Memory focus form a responsive Atlas hierarchy', asy
   const secondSegment = page.getByRole('button', {
     name: /Segment 02 West to the dunes/i,
   });
-  const markers = page.locator('button.maplibregl-marker[aria-label^="Stop "]');
   const activeSegmentMarkers = page.locator(
-    'button.maplibregl-marker[aria-label^="Stop "][data-segment="active"]',
+    'button.maplibregl-marker[data-journey-marker="true"][data-segment="active"]',
   );
   const readJourney = page.getByRole('link', { name: 'Read journey' });
-  await expect(markers).toHaveCount(4);
   await expect(firstSegment).toHaveAttribute('aria-expanded', 'false');
   await expect(secondSegment).toHaveAttribute('aria-expanded', 'false');
   await expect(readJourney).toHaveAttribute(
     'href',
     `/dashboard/chapters/${journey.id}`,
   );
-  for (let index = 0; index < 4; index += 1) {
-    await expect(markers.nth(index)).toHaveAttribute('data-segment', 'journey');
-  }
+  await expectJourneyMarkerCoverage(page, null);
+  const nearbyDetroitMemories = journeyMarkerContainingStop(page, 0);
+  await expect(nearbyDetroitMemories).toHaveCount(1);
+  await expect(nearbyDetroitMemories).toHaveAttribute('data-cluster', 'true');
+  await expect(nearbyDetroitMemories).toHaveAttribute(
+    'data-stop-indexes',
+    /^0,1(?:,|$)/,
+  );
+  await expect(nearbyDetroitMemories).toHaveAttribute(
+    'data-memory-count',
+    /^(?:[2-9]|[1-9]\d+)$/,
+  );
+  await expect(nearbyDetroitMemories).toHaveAccessibleName(
+    new RegExp(
+      `nearby memories, stops 1–\\d+\\. Select to view stop 1, ${journey.stops[0].title}`,
+      'i',
+    ),
+  );
   await expectVisibleJourneyDotsClearOfOverlays(page);
-  const journeyDistance = await markerDistance(page, 0, 1);
+  await expectJourneyMarkersDoNotOverlap(page);
+
+  await nearbyDetroitMemories.click();
+  await expect(page).toHaveURL(
+    (url) => url.searchParams.get('stop') === journey.stops[0].entryId,
+  );
+  await expect(firstSegment).toHaveAttribute('aria-expanded', 'true');
+  await expect(readJourney).toHaveAttribute(
+    'href',
+    `/dashboard/chapters/${journey.id}#journey-segment-${journey.segments[0].id}`,
+  );
+  await expect(
+    page
+      .getByRole('list', {
+        name: 'Segment 01: Detroit river morning memories',
+      })
+      .getByRole('button', {
+        name: new RegExp(`^1 ${journey.stops[0].title}`, 'i'),
+      }),
+  ).toHaveAttribute('aria-current', 'step');
+  await expect(journeyMarkerContainingStop(page, 0)).toHaveAttribute(
+    'aria-current',
+    'step',
+  );
+
+  await firstSegment.click();
+  await expect(firstSegment).toHaveAttribute('aria-expanded', 'false');
+  await expect(readJourney).toHaveAttribute(
+    'href',
+    `/dashboard/chapters/${journey.id}`,
+  );
+  await expect(page).toHaveURL((url) => !url.searchParams.has('stop'));
+  await expectJourneyMarkerCoverage(page, null);
   await audit(page, testInfo, 'journey-overview', monitor);
 
   await firstSegment.click();
   await expect(firstSegment).toHaveAttribute('aria-expanded', 'true');
   await expect(secondSegment).toHaveAttribute('aria-expanded', 'false');
-  await expect(markers.nth(0)).toHaveAttribute('data-segment', 'active');
-  await expect(markers.nth(1)).toHaveAttribute('data-segment', 'active');
-  await expect(markers.nth(2)).toHaveAttribute('data-segment', 'inactive');
   await expect(readJourney).toHaveAttribute(
     'href',
     `/dashboard/chapters/${journey.id}#journey-segment-${journey.segments[0].id}`,
   );
-  await expect
-    .poll(() => markerDistance(page, 0, 1), {
-      message: 'Opening a Segment fits its memories more tightly',
-    })
-    .toBeGreaterThan(journeyDistance * 1.2);
+  await expectJourneyMarkerCoverage(page, [0, 1]);
+  await expect(journeyMarkerForStopIndexes(page, '0')).toHaveCount(1);
+  await expect(journeyMarkerForStopIndexes(page, '1')).toHaveCount(1);
   await expectActiveSegmentMarkersClear(activeSegmentMarkers);
   await audit(page, testInfo, 'segment-active', monitor);
 
@@ -262,8 +405,14 @@ test('Journey, Segment, and Memory focus form a responsive Atlas hierarchy', asy
   });
   await secondMemory.click();
   await expect(secondMemory).toHaveAttribute('aria-current', 'step');
-  await expect(markers.nth(1)).toHaveAttribute('aria-current', 'step');
-  await expect(markers.nth(1)).toHaveAttribute('data-segment', 'active');
+  await expect(journeyMarkerForStopIndexes(page, '1')).toHaveAttribute(
+    'aria-current',
+    'step',
+  );
+  await expect(journeyMarkerForStopIndexes(page, '1')).toHaveAttribute(
+    'data-segment',
+    'active',
+  );
   await audit(page, testInfo, 'memory-focused', monitor);
 
   await firstSegment.click();
@@ -272,9 +421,7 @@ test('Journey, Segment, and Memory focus form a responsive Atlas hierarchy', asy
     'href',
     `/dashboard/chapters/${journey.id}`,
   );
-  for (let index = 0; index < 4; index += 1) {
-    await expect(markers.nth(index)).toHaveAttribute('data-segment', 'journey');
-  }
+  await expectJourneyMarkerCoverage(page, null);
   await expectVisibleJourneyDotsClearOfOverlays(page);
 
   if (testInfo.project.name === 'chromium') {
@@ -293,6 +440,7 @@ test('Journey, Segment, and Memory focus form a responsive Atlas hierarchy', asy
       'href',
       `/dashboard/chapters/${journey.id}#journey-segment-${journey.segments[0].id}`,
     );
+    await expectJourneyMarkerCoverage(page, [0, 1]);
     await expectActiveSegmentMarkersClear(activeSegmentMarkers);
     await audit(page, testInfo, 'smallest-portrait-segment', monitor);
   }

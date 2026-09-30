@@ -144,7 +144,11 @@ function createMapMock({
   const setProjection = jest.fn((nextProjection: { type: string }) => {
     projection = nextProjection;
   });
+  const isLocationOccluded = jest.fn(
+    (_coordinate: { lng: number; lat: number }) => false,
+  );
   return {
+    _camera: { transform: { isLocationOccluded } },
     doubleClickZoom: { disable: jest.fn(), enable: jest.fn() },
     keyboard: { disableRotation: jest.fn() },
     touchZoomRotate: {
@@ -203,6 +207,20 @@ function createMapMock({
     setTransformConstrain: jest.fn(),
     stop: jest.fn(),
   };
+}
+
+function spreadProjectedCoordinates(
+  map: ReturnType<typeof createMapMock>,
+  scale = 100,
+) {
+  map.project.mockImplementation(
+    (coordinate: [number, number] | { lng: number; lat: number }) => {
+      const [longitude, latitude] = Array.isArray(coordinate)
+        ? coordinate
+        : [coordinate.lng, coordinate.lat];
+      return { x: longitude * scale, y: latitude * scale };
+    },
+  );
 }
 
 const delayedJourney: AtlasJourneySummary = {
@@ -892,6 +910,9 @@ describe('Atlas map failure recovery', () => {
   });
 
   it('synchronizes a deep-linked stop when a delayed map finishes loading', async () => {
+    const map = createMapMock();
+    mockMapConstructor.mockReturnValue(map);
+    const onJourneyStopSelect = jest.fn();
     render(
       <AtlasMap
         entries={[]}
@@ -908,6 +929,8 @@ describe('Atlas map failure recovery', () => {
         journeys={[delayedJourney]}
         selectedJourneyId={delayedJourney.id}
         selectedJourneyStopId={delayedJourney.stops[1].entryId}
+        selectedJourneySegmentStopIds={[delayedJourney.stops[0].entryId]}
+        onJourneyStopSelect={onJourneyStopSelect}
       />,
     );
     expect(mockMarkerElements).toHaveLength(0);
@@ -915,11 +938,20 @@ describe('Atlas map failure recovery', () => {
       mockEventHandlers.get('load')?.();
     });
 
-    await waitFor(() => expect(mockMarkerElements).toHaveLength(2));
-    expect(mockMarkerElements[0]).toHaveAttribute('data-current', 'false');
-    expect(mockMarkerElements[0]).not.toHaveAttribute('aria-current');
-    expect(mockMarkerElements[1]).toHaveAttribute('data-current', 'true');
-    expect(mockMarkerElements[1]).toHaveAttribute('aria-current', 'step');
+    await waitFor(() => expect(mockMarkerElements).toHaveLength(1));
+    expect(mockMarkerElements[0]).toHaveAttribute('data-cluster', 'true');
+    expect(mockMarkerElements[0]).toHaveAttribute('data-memory-count', '2');
+    expect(mockMarkerElements[0]).toHaveAttribute('data-current', 'true');
+    expect(mockMarkerElements[0]).toHaveAttribute('data-segment', 'active');
+    expect(mockMarkerElements[0]).toHaveAttribute('aria-current', 'step');
+    expect(mockMarkerElements[0]).toHaveAccessibleName(
+      '2 nearby memories, stops 1–2. Current: stop 2, Selected stop. Select to view stop 1, First stop.',
+    );
+    expect(mockMarkerElements[0]).toHaveTextContent('×2');
+    fireEvent.click(mockMarkerElements[0]);
+    expect(onJourneyStopSelect).toHaveBeenCalledWith(
+      delayedJourney.stops[0].entryId,
+    );
     expect(
       mockMarkerOptions.map(
         ({ anchor, offset, subpixelPositioning, opacityWhenCovered }) => ({
@@ -936,19 +968,116 @@ describe('Atlas map failure recovery', () => {
         subpixelPositioning: true,
         opacityWhenCovered: 0,
       },
-      {
-        anchor: 'center',
-        offset: [0, 0],
-        subpixelPositioning: true,
-        opacityWhenCovered: 0,
-      },
     ]);
     expect(
       mockMarkers.map((marker) => marker.setLngLat.mock.calls[0]?.[0]),
     ).toEqual([
-      [delayedJourney.stops[0].longitude, delayedJourney.stops[0].latitude],
       [delayedJourney.stops[1].longitude, delayedJourney.stops[1].latitude],
     ]);
+
+    spreadProjectedCoordinates(map);
+    act(() => mockEventHandlers.get('moveend')?.());
+    await waitFor(() => expect(mockMarkers).toHaveLength(3));
+    expect(mockMarkers[0].remove).toHaveBeenCalledTimes(1);
+    expect(mockMarkers[2].getElement()).toHaveAttribute('aria-current', 'step');
+  });
+
+  it('regroups coincident globe markers when one crosses the horizon', async () => {
+    const map = createMapMock();
+    map.setProjection({ type: 'globe' });
+    map.project.mockReturnValue({ x: 120, y: 120 });
+    let hideFarStop = false;
+    map._camera.transform.isLocationOccluded.mockImplementation(
+      ({ lng }: { lng: number }) => hideFarStop && lng === 180,
+    );
+    mockMapConstructor.mockReturnValue(map);
+    const horizonJourney: AtlasJourneySummary = {
+      ...delayedJourney,
+      stops: [
+        { ...delayedJourney.stops[0], longitude: 180, latitude: 0 },
+        { ...delayedJourney.stops[1], longitude: 0, latitude: 0 },
+      ],
+    };
+
+    renderJourneyMap(horizonJourney);
+    act(() => mockEventHandlers.get('load')?.());
+
+    await waitFor(() => expect(mockMarkers).toHaveLength(1));
+    expect(mockMarkerElements[0].dataset.stopIndexes).toBe('0,1');
+
+    hideFarStop = true;
+    act(() => mockEventHandlers.get('moveend')?.());
+    await waitFor(() => expect(mockMarkers).toHaveLength(3));
+    expect(
+      mockMarkerElements.slice(1).map((element) => element.dataset.stopIndexes),
+    ).toEqual(['0', '1']);
+    expect(
+      mockMarkerElements.slice(1).map((element) => element.dataset.memoryCount),
+    ).toEqual(['1', '1']);
+
+    hideFarStop = false;
+    act(() => mockEventHandlers.get('moveend')?.());
+    await waitFor(() => expect(mockMarkers).toHaveLength(4));
+    expect(mockMarkerElements.at(-1)?.dataset.stopIndexes).toBe('0,1');
+  });
+
+  it('groups Mercator loop endpoints in the camera world copy', async () => {
+    const map = createMapMock();
+    map.getCenter.mockReturnValue({ lng: 0, lat: 0 });
+    mockMapConstructor.mockReturnValue(map);
+    const loopJourney: AtlasJourneySummary = {
+      ...delayedJourney,
+      memoryCount: 4,
+      stops: [0, 170, -170, 0].map((longitude, index) => ({
+        ...delayedJourney.stops[index % delayedJourney.stops.length],
+        entryId: `loop-stop-${index}`,
+        position: index,
+        longitude,
+        latitude: 0,
+      })),
+    };
+
+    renderJourneyMap(loopJourney);
+    act(() => mockEventHandlers.get('load')?.());
+
+    await waitFor(() => expect(mockMarkers).toHaveLength(3));
+    expect(
+      mockMarkerElements.map((element) => element.dataset.stopIndexes),
+    ).toEqual(['0,3', '1', '2']);
+    expect(
+      mockMarkers.map((marker) => marker.setLngLat.mock.calls[0]?.[0]),
+    ).toEqual([
+      [0, 0],
+      [170, 0],
+      [-170, 0],
+    ]);
+  });
+
+  it('anchors an edge cluster to its on-canvas memory', async () => {
+    const map = createMapMock();
+    map.project.mockImplementation(
+      (coordinate: [number, number] | { lng: number; lat: number }) => {
+        const [longitude] = Array.isArray(coordinate)
+          ? coordinate
+          : [coordinate.lng];
+        return { x: longitude, y: 200 };
+      },
+    );
+    mockMapConstructor.mockReturnValue(map);
+    const edgeJourney: AtlasJourneySummary = {
+      ...delayedJourney,
+      stops: [
+        { ...delayedJourney.stops[0], longitude: -30, latitude: 0 },
+        { ...delayedJourney.stops[1], longitude: 10, latitude: 0 },
+      ],
+    };
+
+    renderJourneyMap(edgeJourney);
+    act(() => mockEventHandlers.get('load')?.());
+
+    await waitFor(() => expect(mockMarkers).toHaveLength(1));
+    expect(mockMarkerElements[0].dataset.stopIndexes).toBe('0,1');
+    expect(mockMarkers[0].setLngLat).toHaveBeenCalledWith([10, 0]);
   });
 
   it('uses a world-scale zoom floor only while the Journey lens is active', async () => {
@@ -1447,7 +1576,7 @@ describe('Atlas map failure recovery', () => {
     act(() => {
       mockEventHandlers.get('load')?.();
     });
-    await waitFor(() => expect(mockMarkers).toHaveLength(2));
+    await waitFor(() => expect(mockMarkers).toHaveLength(1));
 
     const routeSourceCall = (
       map.addSource.mock.calls as unknown as Array<
@@ -1456,9 +1585,7 @@ describe('Atlas map failure recovery', () => {
     ).find(([sourceId]) => sourceId === ATLAS_JOURNEY_ROUTE_SOURCE);
     const routeCoordinates = routeSourceCall?.[1]?.data?.features[0]?.geometry
       .coordinates as Array<[number, number]>;
-    const markerCoordinates = mockMarkers.map(
-      (marker) => marker.setLngLat.mock.calls[0]?.[0],
-    );
+    const markerCoordinate = mockMarkers[0].setLngLat.mock.calls[0]?.[0];
     const fittedCoordinates = mockBoundsExtends
       .at(-1)
       ?.mock.calls.map(([coordinate]) => coordinate as [number, number]);
@@ -1469,8 +1596,12 @@ describe('Atlas map failure recovery', () => {
     expect(
       Math.max(...routeCoordinates.map(([, latitude]) => latitude)),
     ).toBeLessThanOrEqual(85.0511287798066);
-    expect(routeCoordinates[0]).toEqual(markerCoordinates[0]);
-    expect(routeCoordinates.at(-1)).toEqual(markerCoordinates[1]);
+    expect(routeCoordinates[0]).toEqual(markerCoordinate);
+    expect(routeCoordinates.at(-1)).toEqual(markerCoordinate);
+    expect(mockMarkers[0].getElement()).toHaveAttribute(
+      'data-memory-count',
+      '2',
+    );
     expect(
       Math.max(...(fittedCoordinates ?? []).map(([, latitude]) => latitude)),
     ).toBeLessThanOrEqual(85.0511287798066);
@@ -1727,6 +1858,7 @@ describe('Atlas map failure recovery', () => {
       })),
     };
     const map = createMapMock({ width: 742, height: 925 });
+    spreadProjectedCoordinates(map);
     map.cameraForBounds.mockReturnValue({
       center: [150, 0],
       zoom: 0.3,
@@ -1767,6 +1899,7 @@ describe('Atlas map failure recovery', () => {
 
   it('shifts fresh markers with an equivalent settled camera world copy', async () => {
     const map = createMapMock();
+    spreadProjectedCoordinates(map);
     map.cameraForBounds.mockReturnValue({
       center: [190, 0],
       zoom: 4,
@@ -1792,6 +1925,7 @@ describe('Atlas map failure recovery', () => {
 
   it('refreshes an explicit whole-path fit even when a stop remains selected', async () => {
     const map = createMapMock();
+    spreadProjectedCoordinates(map);
     mockMapConstructor.mockReturnValue(map);
     const { props, rerender } = renderJourneyMap(delayedJourney, {
       selectedJourneyStopId: delayedJourney.stops[1].entryId,
@@ -1806,6 +1940,7 @@ describe('Atlas map failure recovery', () => {
 
   it('discards interrupted whole fits and fits superseded by stop focus', async () => {
     const map = createMapMock();
+    spreadProjectedCoordinates(map);
     mockMapConstructor.mockReturnValue(map);
     const { props, rerender } = renderJourneyMap();
     act(() => mockEventHandlers.get('load')?.());
@@ -1830,6 +1965,7 @@ describe('Atlas map failure recovery', () => {
 
   it('handles synchronous reduced-motion fits without stale completion listeners', async () => {
     const map = createMapMock();
+    spreadProjectedCoordinates(map);
     mockMapConstructor.mockReturnValue(map);
     jest.spyOn(window, 'matchMedia').mockImplementation((query) => ({
       matches: query === '(prefers-reduced-motion: reduce)',
@@ -1857,6 +1993,7 @@ describe('Atlas map failure recovery', () => {
 
   it('does not restore stale marker focus after Places or steal focus from another control', async () => {
     const map = createMapMock();
+    spreadProjectedCoordinates(map);
     mockMapConstructor.mockReturnValue(map);
     const { props, rerender, container } = renderJourneyMap();
     container.append(map.getContainer());

@@ -25,6 +25,7 @@ import {
   type ChapterRouteProjection,
 } from '@/app/lib/chapters/route-geometry';
 import { sanitizeOpenFreeMapStyle } from '@/app/lib/maps/openfreemap-style';
+import { groupNearbyMapMarkers } from '@/app/lib/maps/marker-groups';
 import {
   ATLAS_JOURNEY_INTERACTIVE_LAYERS,
   ATLAS_JOURNEY_ROUTE_HIT_LAYER,
@@ -126,6 +127,7 @@ const MERCATOR_MAX_LATITUDE = 85.0511287798066;
 const EMPTY_MAP_PADDING = { top: 0, right: 0, bottom: 0, left: 0 } as const;
 const EMPTY_JOURNEY_SEGMENT_STOP_IDS: string[] = [];
 const BUILDER_PIN_HIT_RADIUS = 22;
+const JOURNEY_MARKER_GROUP_DISTANCE = 48;
 
 type PreparedJourneyMarkerFit = {
   journeyId: string;
@@ -207,6 +209,192 @@ function journeyMapDataKey(journeys: AtlasJourneySummary[]) {
   );
 }
 
+function journeyMarkerStopIndexes(element: HTMLElement) {
+  const stopIndexes = element.dataset.stopIndexes;
+  if (!stopIndexes) return [];
+  return stopIndexes.split(',').map(Number).filter(Number.isInteger);
+}
+
+function journeyMarkerGroups(
+  map: MapLibreMap,
+  coordinates: [number, number][],
+  preferredIndex: number | null = null,
+) {
+  const fallbackGroups = () =>
+    coordinates.map((_, index) => ({
+      representativeIndex: index,
+      stopIndexes: [index],
+    }));
+
+  try {
+    const points = coordinates.map((coordinate) => map.project(coordinate));
+    if (
+      points.some(
+        (point) => !Number.isFinite(point.x) || !Number.isFinite(point.y),
+      )
+    ) {
+      return fallbackGroups();
+    }
+    // Globe projection can place a far-side stop over a visible stop in
+    // screen space. MapLibre hides the former marker, so keep the two depth
+    // planes separate or an occluded representative could hide both stops.
+    const occlusionPartitions = coordinates.map((coordinate) =>
+      map._camera?.transform?.isLocationOccluded
+        ? map._camera.transform.isLocationOccluded(
+            maplibregl.LngLat.convert(coordinate),
+          )
+        : false,
+    );
+    const container = map.getContainer();
+    const padding = map.getPadding();
+    const paddingTop = padding.top ?? 0;
+    const paddingRight = padding.right ?? 0;
+    const paddingBottom = padding.bottom ?? 0;
+    const paddingLeft = padding.left ?? 0;
+    const priority = (index: number) => {
+      if (index === preferredIndex) return 0;
+      const point = points[index];
+      const onCanvas =
+        point.x >= 0 &&
+        point.x <= container.clientWidth &&
+        point.y >= 0 &&
+        point.y <= container.clientHeight;
+      const inExposedMap =
+        onCanvas &&
+        point.x >= paddingLeft &&
+        point.x <= container.clientWidth - paddingRight &&
+        point.y >= paddingTop &&
+        point.y <= container.clientHeight - paddingBottom;
+      return inExposedMap ? 1 : onCanvas ? 2 : 3;
+    };
+    const prioritizedIndexes = points
+      .map((_, index) => index)
+      .sort(
+        (first, second) => priority(first) - priority(second) || first - second,
+      );
+    const prioritizedGroups = groupNearbyMapMarkers(
+      prioritizedIndexes.map((index) => points[index]),
+      JOURNEY_MARKER_GROUP_DISTANCE,
+      prioritizedIndexes.map((index) =>
+        occlusionPartitions[index] ? 'occluded' : 'visible',
+      ),
+    );
+
+    return prioritizedGroups
+      .map((group) => ({
+        representativeIndex: prioritizedIndexes[group[0]],
+        stopIndexes: group
+          .map((index) => prioritizedIndexes[index])
+          .sort((first, second) => first - second),
+      }))
+      .sort((first, second) => first.stopIndexes[0] - second.stopIndexes[0]);
+  } catch {
+    // Projection can be briefly unavailable while MapLibre changes styles or
+    // projections. Individual markers are a safe fallback for that frame.
+    return fallbackGroups();
+  }
+}
+
+function alignJourneyMarkerCoordinatesToCameraWorld(
+  map: MapLibreMap,
+  coordinates: [number, number][],
+) {
+  if (map.getProjection()?.type !== 'mercator') return coordinates;
+  const centerLongitude = map.getCenter().lng;
+  if (!Number.isFinite(centerLongitude)) return coordinates;
+
+  // A newly-created MapLibre marker smart-wraps toward the current camera.
+  // Project and place each fallback marker in that same world copy so two
+  // equivalent longitudes cannot overlap after grouping has already run.
+  return coordinates.map(
+    ([longitude, latitude]) =>
+      [
+        Number.isFinite(longitude)
+          ? longitude + 360 * Math.round((centerLongitude - longitude) / 360)
+          : longitude,
+        latitude,
+      ] as [number, number],
+  );
+}
+
+function journeyMarkerGroupKey(
+  groups: Array<{ representativeIndex: number; stopIndexes: number[] }>,
+) {
+  return groups
+    .map(
+      ({ representativeIndex, stopIndexes }) =>
+        `${representativeIndex}:${stopIndexes.join(',')}`,
+    )
+    .join('|');
+}
+
+function currentJourneyStopIndex(
+  journey: AtlasJourneySummary,
+  selectedStopId: string | null,
+  playbackIndex: number | null,
+) {
+  const selectedStopIndex = selectedStopId
+    ? journey.stops.findIndex((stop) => stop.entryId === selectedStopId)
+    : -1;
+  return selectedStopIndex >= 0 ? selectedStopIndex : playbackIndex;
+}
+
+function journeyStopNumberRanges(stopIndexes: number[]) {
+  const ranges: string[] = [];
+  let rangeStart = stopIndexes[0] + 1;
+  let rangeEnd = rangeStart;
+
+  stopIndexes.slice(1).forEach((index) => {
+    const stopNumber = index + 1;
+    if (stopNumber === rangeEnd + 1) {
+      rangeEnd = stopNumber;
+      return;
+    }
+    ranges.push(
+      rangeStart === rangeEnd
+        ? String(rangeStart)
+        : `${rangeStart}–${rangeEnd}`,
+    );
+    rangeStart = stopNumber;
+    rangeEnd = stopNumber;
+  });
+  ranges.push(
+    rangeStart === rangeEnd ? String(rangeStart) : `${rangeStart}–${rangeEnd}`,
+  );
+  return ranges.join(', ');
+}
+
+function journeyMarkerLabel(
+  journey: AtlasJourneySummary,
+  stopIndexes: number[],
+  currentIndex: number | null,
+) {
+  if (stopIndexes.length === 1) {
+    const index = stopIndexes[0];
+    const stop = journey.stops[index];
+    return `Stop ${index + 1} of ${journey.stops.length}: ${
+      stop.title || 'Untitled memory'
+    }, ${stop.placeLabel || stop.placeName || 'Pinned place'}`;
+  }
+
+  const currentGroupIndex =
+    currentIndex == null ? -1 : stopIndexes.indexOf(currentIndex);
+  const nextIndex =
+    currentGroupIndex >= 0
+      ? stopIndexes[(currentGroupIndex + 1) % stopIndexes.length]
+      : stopIndexes[0];
+  const currentStopIndex =
+    currentGroupIndex >= 0 ? stopIndexes[currentGroupIndex] : null;
+  const currentStop =
+    currentStopIndex == null ? null : journey.stops[currentStopIndex];
+  const nextStop = journey.stops[nextIndex];
+  const currentDescription =
+    currentStop && currentStopIndex != null
+      ? ` Current: stop ${currentStopIndex + 1}, ${currentStop.title || 'Untitled memory'}.`
+      : '';
+  return `${stopIndexes.length} nearby memories, stops ${journeyStopNumberRanges(stopIndexes)}.${currentDescription} Select to view stop ${nextIndex + 1}, ${nextStop.title || 'Untitled memory'}.`;
+}
+
 function syncJourneyMarkerState(
   markers: Marker[],
   journey: AtlasJourneySummary,
@@ -214,25 +402,37 @@ function syncJourneyMarkerState(
   selectedSegmentStopIds: readonly string[],
   playbackIndex: number | null,
 ) {
-  const selectedStopIndex = selectedStopId
-    ? journey.stops.findIndex((stop) => stop.entryId === selectedStopId)
-    : -1;
-  const currentIndex =
-    selectedStopIndex >= 0 ? selectedStopIndex : playbackIndex;
+  const currentIndex = currentJourneyStopIndex(
+    journey,
+    selectedStopId,
+    playbackIndex,
+  );
   const segmentStopIds = new Set(selectedSegmentStopIds);
 
-  markers.forEach((marker, index) => {
+  markers.forEach((marker) => {
     const element = marker.getElement();
-    const stopId = journey.stops[index]?.entryId;
-    element.dataset.current = currentIndex === index ? 'true' : 'false';
+    const stopIndexes = journeyMarkerStopIndexes(element);
+    const isCurrent =
+      currentIndex != null && stopIndexes.includes(currentIndex);
+    element.dataset.current = isCurrent ? 'true' : 'false';
     element.dataset.complete =
-      playbackIndex != null && index < playbackIndex ? 'true' : 'false';
+      playbackIndex != null &&
+      stopIndexes.length > 0 &&
+      stopIndexes.every((index) => index < playbackIndex)
+        ? 'true'
+        : 'false';
+    element.setAttribute(
+      'aria-label',
+      journeyMarkerLabel(journey, stopIndexes, currentIndex),
+    );
     element.dataset.segment = segmentStopIds.size
-      ? stopId && segmentStopIds.has(stopId)
+      ? stopIndexes.some((index) =>
+          segmentStopIds.has(journey.stops[index]?.entryId),
+        )
         ? 'active'
         : 'inactive'
       : 'journey';
-    if (currentIndex === index) {
+    if (isCurrent) {
       element.setAttribute('aria-current', 'step');
     } else {
       element.removeAttribute('aria-current');
@@ -769,6 +969,7 @@ export default function AtlasMap({
   const journeyPlaybackIndexRef = useRef<number | null>(journeyPlaybackIndex);
   const builderSelectedRef = useRef(new Set<string>());
   const journeyMarkersRef = useRef<Marker[]>([]);
+  const journeyMarkerGroupKeyRef = useRef<string | null>(null);
   const focusedJourneyMarkerRef = useRef<{
     journeyId: string;
     entryId: string;
@@ -1242,6 +1443,7 @@ export default function AtlasMap({
       const center = map.getCenter();
       const prepared = pendingJourneyMarkerFitRef.current;
       pendingJourneyMarkerFitRef.current = null;
+      let shouldRefreshJourneyMarkers = false;
       if (
         prepared &&
         prepared.map === map &&
@@ -1272,9 +1474,49 @@ export default function AtlasMap({
               latitude,
             ]),
           };
-          setJourneyMarkerFitVersion((version) => version + 1);
+          shouldRefreshJourneyMarkers = true;
         }
       }
+      if (
+        !shouldRefreshJourneyMarkers &&
+        mapRef.current === map &&
+        modeRef.current === 'journeys' &&
+        selectedJourneyRef.current
+      ) {
+        const journey = journeysRef.current.find(
+          (candidate) => candidate.id === selectedJourneyRef.current,
+        );
+        if (journey?.stops.length) {
+          const geometryKey = journeyMapDataKey(journeysRef.current);
+          const settledFit = settledJourneyMarkerFitRef.current;
+          const coordinates =
+            settledFit?.journeyId === journey.id &&
+            settledFit.geometryKey === geometryKey
+              ? settledFit.coordinates
+              : alignJourneyMarkerCoordinatesToCameraWorld(
+                  map,
+                  createGeodesicChapterStopCoordinates(journey.stops, {
+                    projection: journeyRouteProjectionRef.current,
+                  }),
+                );
+          shouldRefreshJourneyMarkers =
+            journeyMarkerGroupKey(
+              journeyMarkerGroups(
+                map,
+                coordinates,
+                currentJourneyStopIndex(
+                  journey,
+                  selectedJourneyStopRef.current,
+                  journeyPlaybackIndexRef.current,
+                ),
+              ),
+            ) !== journeyMarkerGroupKeyRef.current;
+        }
+      }
+      if (shouldRefreshJourneyMarkers) {
+        setJourneyMarkerFitVersion((version) => version + 1);
+      }
+
       const pendingInitialLocation = pendingInitialLocationRef.current;
       if (pendingInitialLocation?.map === map) {
         const locationWorldShift =
@@ -1565,6 +1807,7 @@ export default function AtlasMap({
       }
       settledJourneyMarkerFitRef.current = null;
       focusedJourneyMarkerRef.current = null;
+      journeyMarkerGroupKeyRef.current = null;
       window.clearTimeout(loadTimer);
       resizeObserver?.disconnect();
       window.removeEventListener('resize', scheduleResize);
@@ -1890,6 +2133,7 @@ export default function AtlasMap({
   useEffect(() => {
     const map = mapRef.current;
     if (!map || !mapLoaded || mode !== 'journeys' || !selectedJourneyId) {
+      journeyMarkerGroupKeyRef.current = null;
       return;
     }
 
@@ -1932,52 +2176,83 @@ export default function AtlasMap({
       settledFit?.journeyId === journey.id &&
       settledFit.geometryKey === journeyMapDataKeyValue
         ? settledFit.coordinates
-        : createGeodesicChapterStopCoordinates(journey.stops, {
-            projection: journeyRouteProjectionRef.current,
-          });
+        : alignJourneyMarkerCoordinatesToCameraWorld(
+            map,
+            createGeodesicChapterStopCoordinates(journey.stops, {
+              projection: journeyRouteProjectionRef.current,
+            }),
+          );
 
-    journeyMarkersRef.current = journey.stops.map((stop, index) => {
-      const element = document.createElement('button');
-      const markerLabel = document.createElement('span');
-      element.type = 'button';
-      element.className = styles.journeyMapMarker;
-      element.dataset.current = 'false';
-      element.dataset.complete = 'false';
-      markerLabel.textContent = String(index + 1);
-      element.append(markerLabel);
-      element.setAttribute(
-        'aria-label',
-        `Stop ${index + 1} of ${journey.stops.length}: ${
-          stop.title || 'Untitled memory'
-        }, ${stop.placeLabel || stop.placeName || 'Pinned place'}`,
-      );
-      element.addEventListener('click', (event) => {
-        event.preventDefault();
-        event.stopPropagation();
-        if (onJourneyStopSelectRef.current) {
-          onJourneyStopSelectRef.current(stop.entryId);
-        } else {
-          onSelectRef.current(stop.entryId);
+    const markerGroups = journeyMarkerGroups(
+      map,
+      coordinates,
+      currentJourneyStopIndex(
+        journey,
+        selectedJourneyStopRef.current,
+        journeyPlaybackIndexRef.current,
+      ),
+    );
+    journeyMarkerGroupKeyRef.current = journeyMarkerGroupKey(markerGroups);
+    journeyMarkersRef.current = markerGroups.map(
+      ({ representativeIndex, stopIndexes }) => {
+        const element = document.createElement('button');
+        const markerLabel = document.createElement('span');
+        element.type = 'button';
+        element.className = styles.journeyMapMarker;
+        element.dataset.journeyMarker = 'true';
+        element.dataset.cluster = stopIndexes.length > 1 ? 'true' : 'false';
+        element.dataset.memoryCount = String(stopIndexes.length);
+        element.dataset.stopIndexes = stopIndexes.join(',');
+        element.dataset.current = 'false';
+        element.dataset.complete = 'false';
+        markerLabel.textContent =
+          stopIndexes.length > 1
+            ? `×${stopIndexes.length}`
+            : String(stopIndexes[0] + 1);
+        element.append(markerLabel);
+        if (stopIndexes.length > 1) {
+          element.title = `${stopIndexes.length} nearby memories`;
         }
-      });
+        element.addEventListener('click', (event) => {
+          event.preventDefault();
+          event.stopPropagation();
+          const currentIndex = currentJourneyStopIndex(
+            journey,
+            selectedJourneyStopRef.current,
+            journeyPlaybackIndexRef.current,
+          );
+          const currentGroupIndex =
+            currentIndex == null ? -1 : stopIndexes.indexOf(currentIndex);
+          const targetIndex =
+            currentGroupIndex >= 0 && stopIndexes.length > 1
+              ? stopIndexes[(currentGroupIndex + 1) % stopIndexes.length]
+              : stopIndexes[0];
+          const stop = journey.stops[targetIndex];
+          if (onJourneyStopSelectRef.current) {
+            onJourneyStopSelectRef.current(stop.entryId);
+          } else {
+            onSelectRef.current(stop.entryId);
+          }
+        });
 
-      return new maplibregl.Marker({
-        element,
-        anchor: 'center',
-        // The numbered dot and route vertex must resolve to the exact same
-        // screen coordinate. Pixel offsets detach markers as the map zooms;
-        // subpixel positioning also avoids MapLibre's final integer rounding.
-        // Nearby stops may overlap at whole-route zoom, but the stop list
-        // remains the complete accessible selector and the active dot rises.
-        offset: [0, 0],
-        subpixelPositioning: true,
-        // Lines are occluded on the far side of the globe. Hide their dots
-        // there too instead of leaving a disconnected translucent marker.
-        opacityWhenCovered: 0,
-      })
-        .setLngLat(coordinates[index])
-        .addTo(map);
-    });
+        return new maplibregl.Marker({
+          element,
+          anchor: 'center',
+          // The numbered dot and route vertex must resolve to the exact same
+          // screen coordinate. Pixel offsets detach markers as the map zooms;
+          // subpixel positioning also avoids MapLibre's final integer rounding.
+          // The stop list remains the complete selector. Markers that would
+          // overlap are represented by one screen-space aggregate instead.
+          offset: [0, 0],
+          subpixelPositioning: true,
+          // Lines are occluded on the far side of the globe. Hide their dots
+          // there too instead of leaving a disconnected translucent marker.
+          opacityWhenCovered: 0,
+        })
+          .setLngLat(coordinates[representativeIndex])
+          .addTo(map);
+      },
+    );
     syncJourneyMarkerState(
       journeyMarkersRef.current,
       journey,
@@ -1993,16 +2268,29 @@ export default function AtlasMap({
       const index = journey.stops.findIndex(
         (stop) => stop.entryId === focusedMarker.entryId,
       );
-      journeyMarkersRef.current[index]
+      journeyMarkersRef.current
+        .find((marker) =>
+          journeyMarkerStopIndexes(marker.getElement()).includes(index),
+        )
         ?.getElement()
         .focus({ preventScroll: true });
     }
 
     return () => {
       focusedJourneyMarkerRef.current = null;
-      journeyMarkersRef.current.forEach((marker, index) => {
+      journeyMarkersRef.current.forEach((marker) => {
         if (document.activeElement === marker.getElement()) {
-          const entryId = journey.stops[index]?.entryId;
+          const stopIndexes = journeyMarkerStopIndexes(marker.getElement());
+          const currentIndex = currentJourneyStopIndex(
+            journey,
+            selectedJourneyStopRef.current,
+            journeyPlaybackIndexRef.current,
+          );
+          const focusedStopIndex =
+            currentIndex != null && stopIndexes.includes(currentIndex)
+              ? currentIndex
+              : stopIndexes[0];
+          const entryId = journey.stops[focusedStopIndex]?.entryId;
           if (entryId) {
             focusedJourneyMarkerRef.current = {
               journeyId: journey.id,
