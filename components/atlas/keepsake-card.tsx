@@ -25,6 +25,7 @@ type KeepsakeCardProps = {
   eager?: boolean;
   showDescription?: boolean;
   actions?: ReactNode;
+  expandableMedia?: boolean;
 };
 
 function getKeepsakeTone(entry: AtlasEntryPresentation): KeepsakeTone {
@@ -54,6 +55,7 @@ function CardContents({
   eager,
   showDescription,
   hasActions,
+  expandableMedia,
 }: Omit<KeepsakeCardProps, 'tone'> & {
   tone: KeepsakeTone;
   variant: KeepsakeVariant;
@@ -103,6 +105,7 @@ function CardContents({
           tone={tone}
           eager={eager ?? index === '01'}
           preview
+          expandable={expandableMedia}
           sizes="(max-width: 768px) 25vw, 4.8rem"
         />
         {href ? (
@@ -154,6 +157,7 @@ function CardContents({
         tone={tone}
         eager={eager ?? (variant === 'feature' || index === '01')}
         preview={variant !== 'feature'}
+        expandable={expandableMedia}
         sizes={
           variant === 'feature'
             ? '(max-width: 768px) 100vw, 48rem'
@@ -184,6 +188,7 @@ export function KeepsakeCard({
   eager,
   showDescription,
   actions,
+  expandableMedia,
 }: KeepsakeCardProps) {
   const className = `keepsake-card keepsake-card-${variant}`;
   const resolvedTone = tone ?? getKeepsakeTone(entry);
@@ -197,6 +202,7 @@ export function KeepsakeCard({
       eager={eager}
       showDescription={showDescription}
       hasActions={Boolean(actions)}
+      expandableMedia={expandableMedia}
     />
   );
 
