@@ -14,6 +14,26 @@ const photoFiles = [
   path.join(fixtureRoot, 'kyoto-test.png'),
 ];
 
+type MonitoredBrowserIssue = ReturnType<
+  ReturnType<typeof monitorBrowserIssues>['flush']
+>[number];
+
+function isUnrelatedMissingThumbnail(issue: MonitoredBrowserIssue) {
+  if (!('url' in issue) || !issue.url) return false;
+
+  const issueUrl = new URL(issue.url);
+  const isThumbnail =
+    issueUrl.pathname.startsWith('/api/atlas/media/') &&
+    issueUrl.searchParams.get('variant') === 'thumbnail';
+  if (!isThumbnail) return false;
+
+  return issue.kind === 'http-response'
+    ? issue.status === 404
+    : issue.kind === 'console' &&
+        issue.level === 'error' &&
+        issue.message.includes('404');
+}
+
 async function signIn(page: Page) {
   const email = process.env.E2E_TEST_EMAIL?.trim();
   const password = process.env.E2E_TEST_PASSWORD;
@@ -94,6 +114,12 @@ async function auditMemoriesList(
   await page.evaluate(async () => {
     await document.fonts.ready;
   });
+  await expect(
+    page.getByRole('navigation', { name: 'Filter memories' }),
+  ).toHaveCount(0);
+  await expect(
+    page.getByRole('navigation', { name: 'Sort memories' }),
+  ).toBeVisible();
   const card = page
     .getByRole('region', { name: 'Memories' })
     .getByRole('link', { name: new RegExp(`Open ${title}`) });
@@ -145,7 +171,8 @@ async function auditMemoriesList(
       `${label}: accessibility violations`,
     )
     .toEqual([]);
-  await capture(page, testInfo, label);
+  await page.locator('.dashboard-page-heading').scrollIntoViewIfNeeded();
+  await capture(page, testInfo, label, false);
 }
 
 test('one Memory keeps multiple photos and a sortable local occurrence time', async ({
@@ -222,9 +249,9 @@ test('one Memory keeps multiple photos and a sortable local occurrence time', as
 
     expect(monitor.flush()).toEqual([]);
     monitor.stop();
-    monitor = null;
+    monitor = monitorBrowserIssues(page);
 
-    await page.goto('/dashboard/places');
+    await page.goto('/dashboard/places?view=ahead');
     const card = page
       .getByRole('region', { name: 'Memories' })
       .getByRole('link', { name: new RegExp(`Open ${title}`) });
@@ -232,6 +259,7 @@ test('one Memory keeps multiple photos and a sortable local occurrence time', as
     await expect(card.getByText('Sep 28, 2026 · 9:14 AM')).toBeVisible();
     await page.getByRole('link', { name: 'Oldest' }).click();
     await expect(page).toHaveURL(/(?:\?|&)sort=oldest(?:&|$)/);
+    await expect(page).not.toHaveURL(/(?:\?|&)view=/);
     await expect(page.getByRole('link', { name: 'Oldest' })).toHaveAttribute(
       'aria-current',
       'page',
@@ -254,6 +282,12 @@ test('one Memory keeps multiple photos and a sortable local occurrence time', as
         title,
       );
     }
+
+    expect(
+      monitor.flush().filter((issue) => !isUnrelatedMissingThumbnail(issue)),
+    ).toEqual([]);
+    monitor.stop();
+    monitor = null;
   } finally {
     monitor?.stop();
     await page.setViewportSize({ width: 1440, height: 900 });

@@ -3474,19 +3474,17 @@ body {
 .collection-controls {
   display: flex;
   align-items: center;
-  justify-content: space-between;
+  justify-content: flex-end;
   margin-bottom: 1.4rem;
   gap: 1rem;
 }
 
-.collection-filter,
 .collection-sort {
   display: flex;
   align-items: center;
   gap: 0.6rem;
 }
 
-.collection-filter a,
 .collection-sort a {
   display: inline-flex;
   min-height: 2.75rem;
@@ -3505,8 +3503,6 @@ body {
     transform 160ms ease;
 }
 
-.collection-filter a:hover,
-.collection-filter a:focus-visible,
 .collection-sort a:hover,
 .collection-sort a:focus-visible {
   border-color: rgba(76, 106, 91, 0.32);
@@ -3515,15 +3511,12 @@ body {
   transform: translateY(-1px);
 }
 
-.collection-filter a[data-active='true'],
 .collection-sort a[data-active='true'] {
   border-color: var(--forest-950);
   background: var(--forest-950);
   color: var(--paper-light);
 }
 
-.collection-filter a[data-active='true']:hover,
-.collection-filter a[data-active='true']:focus-visible,
 .collection-sort a[data-active='true']:hover,
 .collection-sort a[data-active='true']:focus-visible {
   background: var(--forest-800);
@@ -4055,10 +4048,6 @@ body {
     ),
     rgba(251, 250, 245, 0.55);
   text-align: center;
-}
-
-.collection-filter-empty {
-  min-height: 24rem;
 }
 
 .collection-pagination {
@@ -6044,18 +6033,11 @@ input[type='number']::-webkit-outer-spin-button {
     display: none;
   }
 
-  .collection-controls {
-    align-items: stretch;
-    flex-direction: column;
-  }
-
-  .collection-filter,
   .collection-sort {
     overflow-x: auto;
     padding-bottom: 0.2rem;
   }
 
-  .collection-filter a,
   .collection-sort a {
     flex: 0 0 auto;
   }
