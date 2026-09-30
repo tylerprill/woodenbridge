@@ -90,6 +90,13 @@ const journeyIndex = {
   suggestions: [],
 } satisfies AtlasJourneyIndex;
 
+const viewportMatrix = [
+  { label: 'desktop-1440x900', width: 1440, height: 900 },
+  { label: 'mobile-portrait-412x915', width: 412, height: 915 },
+  { label: 'smallest-portrait-320x568', width: 320, height: 568 },
+  { label: 'mobile-landscape-915x412', width: 915, height: 412 },
+] as const;
+
 function evidenceLabel(testInfo: TestInfo, state: string) {
   return `atlas-segment-focus-${state}-${testInfo.project.name}`;
 }
@@ -271,6 +278,78 @@ test('Journey, Segment, and Memory focus form a responsive Atlas hierarchy', asy
     await expect(firstSegment).toHaveAttribute('aria-expanded', 'true');
     await expectActiveSegmentMarkersClear(activeSegmentMarkers);
     await audit(page, testInfo, 'smallest-portrait-segment', monitor);
+  }
+
+  monitor.stop();
+});
+
+test('Atlas occupies exactly one viewport at every required breakpoint', async ({
+  page,
+}, testInfo) => {
+  test.skip(
+    testInfo.project.name !== 'chromium',
+    'The required pre-push viewport matrix runs once in Chromium.',
+  );
+  test.setTimeout(180_000);
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await signIn(page);
+  const monitor = monitorBrowserIssues(page);
+
+  for (const viewport of viewportMatrix) {
+    await test.step(viewport.label, async () => {
+      await page.setViewportSize({
+        width: viewport.width,
+        height: viewport.height,
+      });
+      await expect(page.locator('[data-map-state="ready"]')).toBeVisible();
+
+      const metrics = await page.evaluate(() => {
+        const shellBounds = document
+          .querySelector<HTMLElement>('.dashboard-shell')
+          ?.getBoundingClientRect();
+        const mainBounds = document
+          .querySelector<HTMLElement>('.dashboard-main')
+          ?.getBoundingClientRect();
+        return {
+          documentOverflow:
+            Math.max(
+              document.documentElement.scrollHeight,
+              document.body.scrollHeight,
+            ) - window.innerHeight,
+          mainBottom: mainBounds?.bottom ?? 0,
+          shellBottom: shellBounds?.bottom ?? 0,
+          shellTop: shellBounds?.top ?? 0,
+          viewportHeight: window.innerHeight,
+        };
+      });
+
+      expect(metrics.documentOverflow, `${viewport.label}: page height`).toBe(
+        0,
+      );
+      expect(metrics.shellTop, `${viewport.label}: shell top`).toBeCloseTo(
+        0,
+        1,
+      );
+      expect(
+        metrics.shellBottom,
+        `${viewport.label}: shell bottom matches viewport`,
+      ).toBeCloseTo(metrics.viewportHeight, 1);
+      expect(
+        metrics.mainBottom,
+        `${viewport.label}: Atlas main bottom matches viewport`,
+      ).toBeCloseTo(metrics.viewportHeight, 1);
+
+      await auditCurrentPage(
+        page,
+        testInfo,
+        `atlas-exact-height-${viewport.label}`,
+        monitor,
+        {
+          accessibility: viewport.label === 'desktop-1440x900',
+          readySelector: '[data-map-state="ready"]',
+        },
+      );
+    });
   }
 
   monitor.stop();

@@ -5708,6 +5708,27 @@ input[type='number']::-webkit-outer-spin-button {
   }
 }
 
+/* Let the compact Atlas consume the viewport row that remains below the
+   navigation instead of subtracting an assumed navigation height. */
+@media (max-width: 1240px) {
+  .dashboard-shell:has(> .dashboard-main > .atlas-workspace-root),
+  .dashboard-shell:has(> .dashboard-main > .atlas-route-loading) {
+    display: grid;
+    height: 100vh;
+    height: 100dvh;
+    min-height: 0;
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-rows: auto minmax(0, 1fr);
+    overflow: hidden;
+  }
+
+  .dashboard-main:has(> .atlas-workspace-root),
+  .dashboard-main:has(> .atlas-route-loading) {
+    height: auto;
+    min-height: 0;
+  }
+}
+
 @media (max-width: 720px) {
   .hero-highlights {
     display: none;

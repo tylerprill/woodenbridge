@@ -1971,8 +1971,7 @@
 
 @media (max-width: 760px) {
   .workspace {
-    height: calc(100vh - 5.5rem);
-    height: calc(100svh - 5.5rem);
+    height: 100%;
     min-height: 0;
     border-radius: 1.45rem;
   }
