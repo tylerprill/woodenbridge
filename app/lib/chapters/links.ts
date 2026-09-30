@@ -1,5 +1,23 @@
 import type { JourneyContinuationDestination } from './definitions';
 
+function journeyReaderTarget(destination: JourneyContinuationDestination) {
+  return destination.kind === 'segment'
+    ? `journey-segment-${destination.segmentId}`
+    : destination.kind === 'unsegmented'
+      ? 'journey-segment-unsegmented'
+      : 'chapter-memories';
+}
+
+export function journeyReaderHref(
+  chapterId: string,
+  destination?: JourneyContinuationDestination,
+) {
+  const pathname = `/dashboard/chapters/${encodeURIComponent(chapterId)}`;
+  return destination
+    ? `${pathname}#${journeyReaderTarget(destination)}`
+    : pathname;
+}
+
 export function continueJourneyEditorHref(
   chapterId: string,
   options: {
@@ -21,12 +39,5 @@ export function continuedJourneyReaderHref(
   chapterId: string,
   destination: JourneyContinuationDestination,
 ) {
-  const target =
-    destination.kind === 'segment'
-      ? `journey-segment-${destination.segmentId}`
-      : destination.kind === 'unsegmented'
-        ? 'journey-segment-unsegmented'
-        : 'chapter-memories';
-
-  return `/dashboard/chapters/${encodeURIComponent(chapterId)}?saved=continued#${target}`;
+  return `/dashboard/chapters/${encodeURIComponent(chapterId)}?saved=continued#${journeyReaderTarget(destination)}`;
 }

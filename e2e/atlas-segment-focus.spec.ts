@@ -224,9 +224,14 @@ test('Journey, Segment, and Memory focus form a responsive Atlas hierarchy', asy
   const activeSegmentMarkers = page.locator(
     'button.maplibregl-marker[aria-label^="Stop "][data-segment="active"]',
   );
+  const readJourney = page.getByRole('link', { name: 'Read journey' });
   await expect(markers).toHaveCount(4);
   await expect(firstSegment).toHaveAttribute('aria-expanded', 'false');
   await expect(secondSegment).toHaveAttribute('aria-expanded', 'false');
+  await expect(readJourney).toHaveAttribute(
+    'href',
+    `/dashboard/chapters/${journey.id}`,
+  );
   for (let index = 0; index < 4; index += 1) {
     await expect(markers.nth(index)).toHaveAttribute('data-segment', 'journey');
   }
@@ -240,6 +245,10 @@ test('Journey, Segment, and Memory focus form a responsive Atlas hierarchy', asy
   await expect(markers.nth(0)).toHaveAttribute('data-segment', 'active');
   await expect(markers.nth(1)).toHaveAttribute('data-segment', 'active');
   await expect(markers.nth(2)).toHaveAttribute('data-segment', 'inactive');
+  await expect(readJourney).toHaveAttribute(
+    'href',
+    `/dashboard/chapters/${journey.id}#journey-segment-${journey.segments[0].id}`,
+  );
   await expect
     .poll(() => markerDistance(page, 0, 1), {
       message: 'Opening a Segment fits its memories more tightly',
@@ -259,6 +268,10 @@ test('Journey, Segment, and Memory focus form a responsive Atlas hierarchy', asy
 
   await firstSegment.click();
   await expect(firstSegment).toHaveAttribute('aria-expanded', 'false');
+  await expect(readJourney).toHaveAttribute(
+    'href',
+    `/dashboard/chapters/${journey.id}`,
+  );
   for (let index = 0; index < 4; index += 1) {
     await expect(markers.nth(index)).toHaveAttribute('data-segment', 'journey');
   }
@@ -276,6 +289,10 @@ test('Journey, Segment, and Memory focus form a responsive Atlas hierarchy', asy
     await expect(firstSegment).toHaveAttribute('aria-expanded', 'false');
     await firstSegment.click();
     await expect(firstSegment).toHaveAttribute('aria-expanded', 'true');
+    await expect(readJourney).toHaveAttribute(
+      'href',
+      `/dashboard/chapters/${journey.id}#journey-segment-${journey.segments[0].id}`,
+    );
     await expectActiveSegmentMarkersClear(activeSegmentMarkers);
     await audit(page, testInfo, 'smallest-portrait-segment', monitor);
   }
