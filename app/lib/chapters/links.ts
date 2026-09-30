@@ -1,3 +1,5 @@
+import type { JourneyContinuationDestination } from './definitions';
+
 export function continueJourneyEditorHref(
   chapterId: string,
   options: {
@@ -13,4 +15,18 @@ export function continueJourneyEditorHref(
   }
 
   return `/dashboard/chapters/${encodeURIComponent(chapterId)}/edit?${query.toString()}`;
+}
+
+export function continuedJourneyReaderHref(
+  chapterId: string,
+  destination: JourneyContinuationDestination,
+) {
+  const target =
+    destination.kind === 'segment'
+      ? `journey-segment-${destination.segmentId}`
+      : destination.kind === 'unsegmented'
+        ? 'journey-segment-unsegmented'
+        : 'chapter-memories';
+
+  return `/dashboard/chapters/${encodeURIComponent(chapterId)}?saved=continued#${target}`;
 }

@@ -38,6 +38,7 @@ import type {
   AtlasJourneyIndex,
 } from '@/app/lib/atlas/journeys/definitions';
 import type { AtlasJourneyContinuation } from '@/app/lib/chapters/definitions';
+import { continuedJourneyReaderHref } from '@/app/lib/chapters/links';
 import {
   getAtlasPlaceContextLabel,
   withAtlasPlaceContext,
@@ -1688,9 +1689,12 @@ export function AtlasWorkspace({
           continuationJourney={continuationJourney}
           onContinuationSaved={
             continuationJourney
-              ? () => {
+              ? (_updatedEntry, destination) => {
                   router.push(
-                    `${journeyReaderHref(continuationJourney.id)}?saved=continued#chapter-memories`,
+                    continuedJourneyReaderHref(
+                      continuationJourney.id,
+                      destination,
+                    ),
                   );
                 }
               : undefined

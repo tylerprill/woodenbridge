@@ -35,7 +35,10 @@ import {
   ATLAS_PLACE_MAX_LENGTH,
   ATLAS_TITLE_MAX_LENGTH,
 } from '@/app/lib/atlas/validation';
-import type { AtlasJourneyContinuation } from '@/app/lib/chapters/definitions';
+import type {
+  AtlasJourneyContinuation,
+  JourneyContinuationDestination,
+} from '@/app/lib/chapters/definitions';
 import { CHAPTER_SEGMENT_TITLE_MAX_LENGTH } from '@/app/lib/chapters/validation';
 import {
   getAtlasPlaceContextLabel,
@@ -56,7 +59,10 @@ type MemoryDrawerProps = {
   initialPhotoFiles?: File[];
   onInitialPhotoFilesConsumed?: () => void;
   continuationJourney?: AtlasJourneyContinuation | null;
-  onContinuationSaved?: (entry: AtlasEntry) => void;
+  onContinuationSaved?: (
+    entry: AtlasEntry,
+    destination: JourneyContinuationDestination,
+  ) => void;
   surface?: 'atlas' | 'journey-editor';
 };
 
@@ -88,6 +94,14 @@ function localCalendarDate(now = new Date()) {
     String(now.getMonth() + 1).padStart(2, '0'),
     String(now.getDate()).padStart(2, '0'),
   ].join('-');
+}
+
+function continuationDestination(
+  target: ContinuationTarget,
+): JourneyContinuationDestination {
+  if (target === 'journey') return { kind: 'unsegmented' };
+  if (target === 'new') return { kind: 'new-segment' };
+  return { kind: 'segment', segmentId: target };
 }
 
 function formFromEntry(entry: AtlasEntry): FormState {
@@ -369,7 +383,10 @@ export function MemoryDrawer({
         onUpdate(updatedEntry);
         if (continuationJourney) {
           markLeaving();
-          onContinuationSaved?.(updatedEntry);
+          onContinuationSaved?.(
+            updatedEntry,
+            continuationDestination(continuationTarget),
+          );
         }
         return;
       }

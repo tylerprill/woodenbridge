@@ -242,7 +242,7 @@ describe('shared Chapter reader', () => {
     ).toHaveAttribute('href', '/dashboard/card/memory-1');
   });
 
-  it('collapses Journey days independently and reveals a day from the Segment index', async () => {
+  it('opens only the latest Journey day by default and reveals a day from the Segment index', async () => {
     const user = userEvent.setup();
     const scrollIntoView = jest.fn();
     Object.defineProperty(HTMLElement.prototype, 'scrollIntoView', {
@@ -311,15 +311,19 @@ describe('shared Chapter reader', () => {
       secondToggle.getAttribute('aria-controls')!,
     );
 
-    expect(firstToggle).toHaveAttribute('aria-expanded', 'true');
+    expect(firstToggle).toHaveAttribute('aria-expanded', 'false');
     expect(secondToggle).toHaveAttribute('aria-expanded', 'true');
-    expect(firstPanel).not.toHaveAttribute('hidden');
+    expect(firstPanel).toHaveAttribute('hidden');
     expect(secondPanel).not.toHaveAttribute('hidden');
+
+    await user.click(firstToggle);
+    expect(firstToggle).toHaveAttribute('aria-expanded', 'true');
+    expect(firstPanel).not.toHaveAttribute('hidden');
+    expect(secondToggle).toHaveAttribute('aria-expanded', 'true');
 
     await user.click(firstToggle);
     expect(firstToggle).toHaveAttribute('aria-expanded', 'false');
     expect(firstPanel).toHaveAttribute('hidden');
-    expect(secondToggle).toHaveAttribute('aria-expanded', 'true');
 
     await user.click(secondToggle);
     expect(secondToggle).toHaveAttribute('aria-expanded', 'false');
@@ -366,7 +370,8 @@ describe('shared Chapter reader', () => {
     ).not.toBeInTheDocument();
   });
 
-  it('keeps empty and non-contiguous persisted Segments uniquely addressable', () => {
+  it('keeps empty and non-contiguous persisted Segments uniquely addressable', async () => {
+    const user = userEvent.setup();
     const firstSegment = {
       id: 'e8ef6529-4961-4847-8272-e0da4aebf38b',
       title: 'Day 1 · Petra',
@@ -421,6 +426,19 @@ describe('shared Chapter reader', () => {
         name: `Segment 01: ${firstSegment.title}`,
       }),
     ).toHaveLength(1);
+    const firstToggle = screen.getByRole('button', {
+      name: `Segment 01: ${firstSegment.title}`,
+    });
+    const latestToggle = screen.getByRole('button', {
+      name: `Segment 03: ${emptySegment.title}`,
+    });
+    expect(firstToggle).toHaveAttribute('aria-expanded', 'false');
+    expect(latestToggle).toHaveAttribute('aria-expanded', 'true');
+
+    await user.click(firstToggle);
+    expect(firstToggle).toHaveAttribute('aria-expanded', 'true');
+    expect(latestToggle).toHaveAttribute('aria-expanded', 'true');
+
     expect(
       screen.getByRole('list', {
         name: `Segment 01: ${firstSegment.title} memories`,
@@ -454,6 +472,48 @@ describe('shared Chapter reader', () => {
     expect(
       screen.queryByText('Eastward, desert stone gave way to lantern light.'),
     ).not.toBeInTheDocument();
+  });
+
+  it('reveals memories outside a Segment when continuation returns to their hash', async () => {
+    const latestSegment = {
+      id: 'c47412f0-b990-421d-9321-693f153bd2d1',
+      title: 'Day 2 · Kyoto',
+      position: 1,
+      memoryCount: 1,
+      startDate: '2026-02-12',
+      endDate: '2026-02-12',
+    };
+    window.history.replaceState(
+      null,
+      '',
+      '/dashboard/chapters/chapter-1?saved=continued#journey-segment-unsegmented',
+    );
+
+    render(
+      <ChapterReader
+        chapter={{
+          ...chapter,
+          segments: [latestSegment],
+          entries: [
+            { ...chapter.entries[0], segmentId: null },
+            { ...chapter.entries[1], segmentId: latestSegment.id },
+          ],
+        }}
+        mode="owner"
+      />,
+    );
+
+    const unsegmentedToggle = screen.getByRole('button', {
+      name: 'Journey start: Before the first segment',
+    });
+    const latestToggle = screen.getByRole('button', {
+      name: `Segment 02: ${latestSegment.title}`,
+    });
+    await waitFor(() =>
+      expect(unsegmentedToggle).toHaveAttribute('aria-expanded', 'true'),
+    );
+    expect(latestToggle).toHaveAttribute('aria-expanded', 'true');
+    expect(screen.getByText('Petra at dawn')).toBeVisible();
   });
 
   it('keeps the active Segment hash when the save confirmation is dismissed', async () => {

@@ -30,6 +30,7 @@ import { withAtlasPlaceContext } from '@/app/lib/atlas/place';
 import { analyzeAtlasImportPhoto } from '@/app/lib/atlas/photo-import-client';
 import { getAtlasPhotoFileProblem } from '@/app/lib/atlas/photo-upload-validation';
 import type { AtlasJourneyContinuation } from '@/app/lib/chapters/definitions';
+import { continuedJourneyReaderHref } from '@/app/lib/chapters/links';
 import AtlasMap from '@/components/atlas/atlas-map-loader';
 import { MemoryDrawer } from '@/components/atlas/memory-drawer';
 import styles from './chapters.module.css';
@@ -286,9 +287,9 @@ export function JourneyMemoryComposer({
                 initialPhotoFiles={initialPhotoFiles}
                 onInitialPhotoFilesConsumed={() => setInitialPhotoFiles([])}
                 continuationJourney={journey}
-                onContinuationSaved={() => {
+                onContinuationSaved={(_updatedEntry, destination) => {
                   router.push(
-                    `/dashboard/chapters/${journey.id}?saved=continued#chapter-memories`,
+                    continuedJourneyReaderHref(journey.id, destination),
                   );
                 }}
                 surface="journey-editor"

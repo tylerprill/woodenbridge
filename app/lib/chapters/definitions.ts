@@ -67,6 +67,11 @@ export type AtlasJourneyContinuation = Pick<
   } | null;
 };
 
+export type JourneyContinuationDestination =
+  | { kind: 'segment'; segmentId: string }
+  | { kind: 'unsegmented' }
+  | { kind: 'new-segment' };
+
 type SharedAtlasChapterEntryWithoutCoordinates = Omit<
   AtlasChapterEntry,
   'latitude' | 'longitude'

@@ -196,7 +196,12 @@ async function openContinuation(
   return editor;
 }
 
-async function removeTestMemory(page: Page, journeyId: string, title: string) {
+async function removeTestMemory(
+  page: Page,
+  journeyId: string,
+  title: string,
+  segmentTitle?: string,
+) {
   await page.goto(`/dashboard/chapters/${journeyId}/edit`);
   const arrange = page.getByRole('button', { name: /Arrange & share/i });
   await expect(async () => {
@@ -207,6 +212,14 @@ async function removeTestMemory(page: Page, journeyId: string, title: string) {
   }).toPass({ timeout: 20_000 });
   const route = page.locator('aside').filter({ hasText: 'The route.' });
   const remove = route.getByRole('button', { name: `Remove ${title}` });
+  if (segmentTitle) {
+    const removeSegment = page.getByRole('button', {
+      name: `Remove ${segmentTitle} segment`,
+    });
+    await expect(removeSegment).toBeVisible();
+    await removeSegment.click();
+    await expect(removeSegment).toBeHidden();
+  }
   await expect(remove).toBeVisible();
   await remove.click();
   await expect(remove).toBeHidden();
@@ -277,7 +290,12 @@ test('a Journey can be continued with a new Memory', async ({
       candidate.startsWith('Continued road-trip memory '),
     );
     for (const staleTitle of staleTitles) {
-      await removeTestMemory(page, journeyId, staleTitle);
+      await removeTestMemory(
+        page,
+        journeyId,
+        staleTitle,
+        staleTitle.replace('Continued road-trip memory ', 'Road-trip day '),
+      );
       await page.goto(`/dashboard/chapters/${journeyId}`);
     }
 
@@ -400,6 +418,19 @@ test('a Journey can be continued with a new Memory', async ({
     const timeline = page.getByRole('list', {
       name: 'Journey memories in route order',
     });
+    const segmentToggles = timeline.locator('[data-journey-segment-toggle]');
+    const segmentToggleCount = await segmentToggles.count();
+    expect(segmentToggleCount).toBeGreaterThan(0);
+    for (let index = 0; index < segmentToggleCount - 1; index += 1) {
+      await expect(segmentToggles.nth(index)).toHaveAttribute(
+        'aria-expanded',
+        'false',
+      );
+    }
+    await expect(segmentToggles.last()).toHaveAttribute(
+      'aria-expanded',
+      'true',
+    );
     const newMemoryHeading = timeline.getByRole('heading', {
       name: title,
       exact: true,
@@ -555,7 +586,7 @@ test('a Journey can be continued with a new Memory', async ({
       }
     }
     if (saved && journeyId) {
-      await removeTestMemory(page, journeyId, title);
+      await removeTestMemory(page, journeyId, title, segmentTitle);
     }
   }
 });
