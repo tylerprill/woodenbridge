@@ -7,13 +7,32 @@ import { getAtlasThumbnailContentType } from '@/app/lib/atlas/media-policy';
 import { atlasChapterIdSchema } from '@/app/lib/chapters/validation';
 
 export const runtime = 'nodejs';
-const PRIVATE_MEDIA_CACHE = 'private, max-age=300, stale-while-revalidate=3600';
+// Every request must repeat the live ownership/share check. `private` alone
+// does not partition the browser cache by session and stale responses could
+// otherwise outlive logout, deletion, or Journey unsharing.
+const PRIVATE_MEDIA_CACHE = 'private, max-age=0, must-revalidate';
+const PRIVATE_MEDIA_FALLBACK_CACHE = 'private, max-age=0, must-revalidate';
 
 type MediaPathRow = {
   storage_path: string;
   thumbnail_path: string | null;
   mime_type: string;
 };
+
+function unavailableMediaResponse() {
+  // A bodyless success avoids a noisy 404 while still firing the image error
+  // event. ResilientMediaImage can then replace the element with the matching
+  // visual treatment and an honest accessible name instead of leaving the
+  // original photograph description on a generic server placeholder.
+  return new Response(null, {
+    status: 204,
+    headers: {
+      'Cache-Control': PRIVATE_MEDIA_FALLBACK_CACHE,
+      'X-Atlas-Media-Fallback': 'unavailable',
+      'X-Content-Type-Options': 'nosniff',
+    },
+  });
+}
 
 export async function GET(
   request: Request,
@@ -32,7 +51,7 @@ export async function GET(
   const isSharedAccess = parsedShareId.success;
 
   // Unlisted chapter viewers receive only the canvas-transcoded derivative.
-  // derivative. Original uploads can retain EXIF/location metadata and remain
+  // Original uploads can retain EXIF/location metadata and remain
   // available exclusively through an authenticated owner path.
   if (isSharedAccess && variant !== 'thumbnail') {
     return new Response(null, { status: 404 });
@@ -70,24 +89,22 @@ export async function GET(
         userId: session.user.id,
       });
       if (!grantedMedia) return new Response(null, { status: 404 });
-      row = {
-        storage_path: grantedMedia.storagePath,
-        thumbnail_path: grantedMedia.thumbnailPath,
-        mime_type: grantedMedia.mimeType,
-      };
-    } else {
-      const media = await sql<MediaPathRow>`
-        SELECT media.storage_path, media.thumbnail_path, media.mime_type
-        FROM atlas_media AS media
-        INNER JOIN atlas_entries AS entry ON entry.id = media.entry_id
-        WHERE media.id = ${mediaId}
-          AND media.user_id = ${session.user.id}
-          AND entry.user_id = ${session.user.id}
-          AND entry.deleted_at IS NULL
-        LIMIT 1
-      `;
-      row = media.rows[0];
     }
+
+    // Grants avoid exposing storage metadata to the browser, but the live
+    // association remains authoritative so logical deletion revokes access
+    // before asynchronous Blob cleanup completes.
+    const media = await sql<MediaPathRow>`
+      SELECT media.storage_path, media.thumbnail_path, media.mime_type
+      FROM atlas_media AS media
+      INNER JOIN atlas_entries AS entry ON entry.id = media.entry_id
+      WHERE media.id = ${mediaId}
+        AND media.user_id = ${session.user.id}
+        AND entry.user_id = ${session.user.id}
+        AND entry.deleted_at IS NULL
+      LIMIT 1
+    `;
+    row = media.rows[0];
   }
 
   if (!row) return new Response(null, { status: 404 });
@@ -96,37 +113,55 @@ export async function GET(
   }
 
   const thumbnailPath = variant === 'thumbnail' ? row.thumbnail_path : null;
-  const storagePath = thumbnailPath ?? row.storage_path;
-  const contentType = thumbnailPath
+  let storagePath = thumbnailPath ?? row.storage_path;
+  let contentType = thumbnailPath
     ? getAtlasThumbnailContentType(thumbnailPath)
     : row.mime_type;
+  let usedOriginalFallback =
+    variant === 'thumbnail' && !isSharedAccess && !thumbnailPath;
   if (!contentType) return new Response(null, { status: 404 });
 
   try {
-    const blob = await readAtlasMediaObject(storagePath, {
+    const readOptions = {
       ifNoneMatch: request.headers.get('if-none-match') ?? undefined,
-    });
+    };
+    let blob = await readAtlasMediaObject(storagePath, readOptions);
 
-    if (!blob) return new Response(null, { status: 404 });
+    if (!blob && !isSharedAccess && thumbnailPath) {
+      storagePath = row.storage_path;
+      contentType = row.mime_type;
+      usedOriginalFallback = true;
+      blob = await readAtlasMediaObject(storagePath, readOptions);
+    }
+
+    // The database association is valid but its private object has gone
+    // missing. Every image surface replaces this quiet 204 with its polished,
+    // accessible local fallback while the operator audit reports the finding.
+    if (!blob) return unavailableMediaResponse();
+    const cacheControl = usedOriginalFallback
+      ? PRIVATE_MEDIA_FALLBACK_CACHE
+      : PRIVATE_MEDIA_CACHE;
+    const responseHeaders = new Headers({
+      'Cache-Control': cacheControl,
+      ETag: blob.blob.etag,
+    });
+    if (usedOriginalFallback) {
+      responseHeaders.set('X-Atlas-Media-Fallback', 'original');
+    }
     if (blob.statusCode === 304) {
       return new Response(null, {
         status: 304,
-        headers: {
-          ETag: blob.blob.etag,
-          'Cache-Control': PRIVATE_MEDIA_CACHE,
-        },
+        headers: responseHeaders,
       });
     }
 
+    responseHeaders.set('Content-Type', contentType);
+    responseHeaders.set('Content-Length', String(blob.blob.size));
+    responseHeaders.set('Content-Disposition', 'inline');
+    responseHeaders.set('X-Content-Type-Options', 'nosniff');
+
     return new Response(blob.stream, {
-      headers: {
-        'Content-Type': contentType,
-        'Content-Length': String(blob.blob.size),
-        'Content-Disposition': 'inline',
-        'Cache-Control': PRIVATE_MEDIA_CACHE,
-        ETag: blob.blob.etag,
-        'X-Content-Type-Options': 'nosniff',
-      },
+      headers: responseHeaders,
     });
   } catch (error) {
     console.error('Atlas media delivery failed:', error);

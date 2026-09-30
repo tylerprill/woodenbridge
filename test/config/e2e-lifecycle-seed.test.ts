@@ -46,6 +46,7 @@ const emptyAccountState = {
   import_item_count: 0,
   journey_feedback_count: 0,
   media_count: 0,
+  media_deletion_queue_count: 0,
   preference_count: 1,
   session_count: 0,
   upload_intent_count: 0,
@@ -403,6 +404,12 @@ describe('dedicated lifecycle E2E fixture guard', () => {
         session_count: 1,
       }),
     ).toThrow('session_count is 1');
+    expect(() =>
+      assertE2ELifecycleEmptyAccountState({
+        ...emptyAccountState,
+        media_deletion_queue_count: 1,
+      }),
+    ).toThrow('media_deletion_queue_count is 1');
     expect(() =>
       assertE2ELifecycleEmptyAccountState({
         ...emptyAccountState,

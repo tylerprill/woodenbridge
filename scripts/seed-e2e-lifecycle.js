@@ -34,6 +34,7 @@ const EMPTY_ACCOUNT_COUNT_FIELDS = Object.freeze([
   'import_item_count',
   'journey_feedback_count',
   'media_count',
+  'media_deletion_queue_count',
   'session_count',
   'upload_intent_count',
 ]);
@@ -406,6 +407,21 @@ async function seedE2ELifecycleDatabase(environment = process.env) {
       [fixtureUserId],
     );
 
+    await client.query('COMMIT');
+
+    await resetE2ELifecycleMediaStorage(mediaStorageConfiguration);
+
+    // The user cascade queues old media first. Remove only this deterministic
+    // fixture's jobs after its isolated filesystem has been reset successfully,
+    // then prove the recreated account—including its deletion queue—is empty.
+    await client.query('BEGIN');
+    await client.query(
+      "SELECT pg_advisory_xact_lock(hashtextextended('field-atlas-e2e-lifecycle-seed', 0))",
+    );
+    await client.query(
+      'DELETE FROM atlas_media_deletion_outbox WHERE user_id = $1',
+      [fixtureUserId],
+    );
     const emptyState = await client.query(
       `
         SELECT
@@ -421,6 +437,7 @@ async function seedE2ELifecycleDatabase(environment = process.env) {
           (SELECT COUNT(*)::integer FROM atlas_preferences WHERE user_id = $1) AS preference_count,
           (SELECT COUNT(*)::integer FROM atlas_entries WHERE user_id = $1) AS entry_count,
           (SELECT COUNT(*)::integer FROM atlas_media WHERE user_id = $1) AS media_count,
+          (SELECT COUNT(*)::integer FROM atlas_media_deletion_outbox WHERE user_id = $1) AS media_deletion_queue_count,
           (SELECT COUNT(*)::integer FROM atlas_media_upload_intents WHERE user_id = $1) AS upload_intent_count,
           (SELECT COUNT(*)::integer FROM atlas_chapters WHERE user_id = $1) AS chapter_count,
           (SELECT COUNT(*)::integer FROM atlas_chapter_entries WHERE user_id = $1) AS chapter_entry_count,
@@ -441,7 +458,6 @@ async function seedE2ELifecycleDatabase(environment = process.env) {
     await client.end();
   }
 
-  await resetE2ELifecycleMediaStorage(mediaStorageConfiguration);
   console.log('Seeded the empty Field Atlas lifecycle E2E fixture.');
 }
 

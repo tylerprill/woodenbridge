@@ -169,25 +169,7 @@ test('an existing Journey can be divided into editable Segments', async ({
       /10\s*memories selected/,
     );
 
-    const unexpectedBrowserIssues = monitor.flush().filter((issue) => {
-      const isMissingLegacyFixtureImage =
-        issue.kind === 'http-response' &&
-        issue.status === 404 &&
-        issue.resourceType === 'image' &&
-        new URL(issue.url).pathname.startsWith('/api/atlas/media/');
-      const isMissingLegacyFixtureImageConsoleError =
-        issue.kind === 'console' &&
-        issue.level === 'error' &&
-        issue.message.includes('404') &&
-        Boolean(
-          issue.url &&
-          new URL(issue.url).pathname.startsWith('/api/atlas/media/'),
-        );
-      return (
-        !isMissingLegacyFixtureImage && !isMissingLegacyFixtureImageConsoleError
-      );
-    });
-    expect(unexpectedBrowserIssues).toEqual([]);
+    expect(monitor.flush()).toEqual([]);
   } finally {
     monitor.stop();
   }

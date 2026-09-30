@@ -24,10 +24,10 @@ import {
   isAllowedAtlasMediaType,
 } from '@/app/lib/atlas/media-policy';
 import {
-  deleteAtlasMediaObjects,
   headAtlasMediaObject,
   readAtlasMediaObject,
 } from '@/app/lib/atlas/media-storage';
+import { scheduleAtlasMediaDeletion } from '@/app/lib/atlas/media-deletion-scheduler';
 import { type AtlasMediaRow, toAtlasMedia } from '@/app/lib/atlas/rows';
 import {
   consumeAtlasMediaUploadIntent,
@@ -468,29 +468,33 @@ export async function registerAtlasMediaAction(
         };
       }
 
-      const existing = await client.query<AtlasMediaRow>(
+      // Lock the UUID independent of ownership/path filters. If a concurrent
+      // deletion owns it, this waits for that transaction and the tombstone
+      // check below observes its committed cleanup job.
+      const existing = await client.query<AtlasMediaRow & { user_id: string }>(
         `
           SELECT
-            id, entry_id, storage_path, thumbnail_path, mime_type, width,
+            id, entry_id, user_id, storage_path, thumbnail_path, mime_type, width,
             height, byte_size, alt_text, sort_order, created_at
           FROM atlas_media
           WHERE id = $1
-            AND storage_path = $2
-            AND thumbnail_path = $3
-            AND entry_id = $4
-            AND user_id = $5
           LIMIT 1
+          FOR UPDATE
         `,
-        [
-          mediaInput.mediaId,
-          mediaInput.pathname,
-          mediaInput.thumbnailPathname,
-          mediaInput.entryId,
-          session.user.id,
-        ],
+        [mediaInput.mediaId],
       );
 
-      if (existing.rows[0]) {
+      const existingRow = existing.rows[0];
+      if (existingRow) {
+        if (
+          existingRow.user_id !== session.user.id ||
+          existingRow.entry_id !== mediaInput.entryId ||
+          existingRow.storage_path !== mediaInput.pathname ||
+          existingRow.thumbnail_path !== mediaInput.thumbnailPathname
+        ) {
+          await client.query('ROLLBACK');
+          return { ok: false, error: 'invalid', message: 'Invalid photo.' };
+        }
         if (importItem && importItem.status !== 'uploaded') {
           await client.query('ROLLBACK');
           return {
@@ -502,8 +506,24 @@ export async function registerAtlasMediaAction(
         await client.query('COMMIT');
         return {
           ok: true,
-          data: toAtlasMedia(existing.rows[0], session.user.id),
+          data: toAtlasMedia(existingRow, session.user.id),
         };
+      }
+
+      const deletionTombstone = await client.query<{ id: string }>(
+        `
+          SELECT id
+          FROM atlas_media_deletion_outbox
+          WHERE media_id = $1
+            OR original_path IN ($2, $3)
+            OR thumbnail_path IN ($2, $3)
+          LIMIT 1
+        `,
+        [mediaInput.mediaId, mediaInput.pathname, mediaInput.thumbnailPathname],
+      );
+      if (deletionTombstone.rows[0]) {
+        await client.query('ROLLBACK');
+        return { ok: false, error: 'invalid', message: 'Invalid photo.' };
       }
       if (importItem && importBatchStatus !== 'uploading') {
         await client.query('ROLLBACK');
@@ -732,29 +752,21 @@ export async function deleteAtlasMediaAction(
     return { ok: false, error: 'invalid', message: 'Invalid photo.' };
   }
 
+  const client = await db.connect();
   try {
-    const media = await sql<{
-      id: string;
-      entry_id: string;
-      storage_path: string;
-      thumbnail_path: string | null;
-    }>`
-      SELECT
-        media.id,
-        media.entry_id,
-        media.storage_path,
-        media.thumbnail_path
-      FROM atlas_media AS media
-      INNER JOIN atlas_entries AS entry ON entry.id = media.entry_id
-      WHERE media.id = ${parsed.data}
-        AND media.user_id = ${session.user.id}
-        AND entry.user_id = ${session.user.id}
-        AND entry.deleted_at IS NULL
-      LIMIT 1
-    `;
-
-    const row = media.rows[0];
-    if (!row) {
+    await client.query('BEGIN');
+    const mediaIdentity = await client.query<{ entry_id: string }>(
+      `
+        SELECT entry_id
+        FROM atlas_media
+        WHERE id = $1 AND user_id = $2
+        LIMIT 1
+      `,
+      [parsed.data, session.user.id],
+    );
+    const entryId = mediaIdentity.rows[0]?.entry_id;
+    if (!entryId) {
+      await client.query('ROLLBACK');
       return {
         ok: false,
         error: 'not-found',
@@ -762,26 +774,59 @@ export async function deleteAtlasMediaAction(
       };
     }
 
-    await deleteAtlasMediaObjects(
-      [row.storage_path, row.thumbnail_path].filter(
-        (pathname): pathname is string => Boolean(pathname),
-      ),
+    const entry = await client.query<{ id: string }>(
+      `
+        SELECT id
+        FROM atlas_entries
+        WHERE id = $1
+          AND user_id = $2
+          AND deleted_at IS NULL
+        FOR UPDATE
+      `,
+      [entryId, session.user.id],
     );
-    const removed = await sql<{ id: string }>`
-      DELETE FROM atlas_media
-      WHERE id = ${row.id}
-        AND user_id = ${session.user.id}
-      RETURNING id
-    `;
+    if (!entry.rows[0]) {
+      await client.query('ROLLBACK');
+      return {
+        ok: false,
+        error: 'not-found',
+        message: 'That photo no longer exists.',
+      };
+    }
 
-    if (!removed.rows[0]) return failed();
+    // The atlas_media DELETE trigger writes the immutable Blob pair to the
+    // durable outbox on this same transaction.
+    const removed = await client.query<{ id: string; entry_id: string }>(
+      `
+        DELETE FROM atlas_media
+        WHERE id = $1
+          AND entry_id = $2
+          AND user_id = $3
+        RETURNING id, entry_id
+      `,
+      [parsed.data, entryId, session.user.id],
+    );
+    const row = removed.rows[0];
+    if (!row) {
+      await client.query('ROLLBACK');
+      return {
+        ok: false,
+        error: 'not-found',
+        message: 'That photo no longer exists.',
+      };
+    }
 
+    await client.query('COMMIT');
+    scheduleAtlasMediaDeletion();
     revalidatePath('/dashboard');
     revalidatePath('/dashboard/places');
     revalidatePath(`/dashboard/card/${row.entry_id}`);
     return { ok: true, data: { id: row.id, entryId: row.entry_id } };
   } catch (error) {
+    await client.query('ROLLBACK').catch(() => undefined);
     console.error('Atlas media deletion failed:', error);
     return failed('The photo could not be removed. Please try again.');
+  } finally {
+    client.release();
   }
 }

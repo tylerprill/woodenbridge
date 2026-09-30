@@ -5,7 +5,6 @@ import {
   PhotoIcon,
   TrashIcon,
 } from '@heroicons/react/24/outline';
-import Image from 'next/image';
 import { useEffect, useRef, useState } from 'react';
 
 import {
@@ -29,6 +28,7 @@ import {
   prepareAtlasImportPhoto,
 } from '@/app/lib/atlas/photo-import-client';
 import { getAtlasPhotoFileProblem } from '@/app/lib/atlas/photo-upload-validation';
+import { ResilientMediaImage } from './resilient-media-image';
 import styles from './atlas.module.css';
 
 type MemoryPhotosProps = {
@@ -388,7 +388,7 @@ export function MemoryPhotos({
         <div className={styles.photoGrid}>
           {media.map((photo) => (
             <figure className={styles.photoTile} key={photo.id}>
-              <Image
+              <ResilientMediaImage
                 src={photo.thumbnailUrl}
                 alt={
                   photo.altText.trim() ||
@@ -400,6 +400,12 @@ export function MemoryPhotos({
                 fill
                 sizes="(max-width: 768px) 40vw, 160px"
                 unoptimized
+                fallback={
+                  <span className={styles.photoUnavailable}>
+                    <PhotoIcon aria-hidden="true" />
+                    <span>Photo unavailable</span>
+                  </span>
+                }
               />
               <button
                 type="button"

@@ -8,7 +8,6 @@ import {
   PencilIcon,
   PlusIcon,
 } from '@heroicons/react/24/outline';
-import Image from 'next/image';
 import Link from 'next/link';
 
 import type {
@@ -22,6 +21,7 @@ import {
 import { deriveJourneyDisplayRoute } from '@/app/lib/chapters/journey-display';
 import { continueJourneyEditorHref } from '@/app/lib/chapters/links';
 import { KeepsakeCard } from '@/components/atlas/keepsake-card';
+import { ResilientMediaImage } from '@/components/atlas/resilient-media-image';
 import { ChapterJumpLink } from './chapter-jump-link';
 import { ChapterMapLoader } from './chapter-map-loader';
 import {
@@ -287,7 +287,7 @@ export function ChapterReader({
       >
         <div className={styles.chapterHeroArtwork}>
           {chapter.coverMedia ? (
-            <Image
+            <ResilientMediaImage
               src={chapter.coverMedia.thumbnailUrl}
               alt={chapter.coverMedia.altText || ''}
               fill
@@ -300,6 +300,14 @@ export function ChapterReader({
               loading="eager"
               fetchPriority="high"
               unoptimized
+              fallback={
+                <div className={styles.chapterHeroFallback} aria-hidden="true">
+                  <span />
+                  <span />
+                  <span />
+                  <span />
+                </div>
+              }
             />
           ) : (
             <div className={styles.chapterHeroFallback} aria-hidden="true">

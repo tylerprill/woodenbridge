@@ -550,22 +550,7 @@ test('a Journey can be continued with a new Memory', async ({
       );
     }
 
-    const unexpectedBrowserIssues = monitor.flush().filter((issue) => {
-      const isMissingLegacyFixtureImage =
-        issue.kind === 'http-response'
-          ? issue.status === 404 &&
-            issue.resourceType === 'image' &&
-            new URL(issue.url).pathname.startsWith('/api/atlas/media/')
-          : issue.kind === 'console' &&
-            issue.level === 'error' &&
-            issue.message.includes('404') &&
-            Boolean(
-              issue.url &&
-              new URL(issue.url).pathname.startsWith('/api/atlas/media/'),
-            );
-      return !isMissingLegacyFixtureImage;
-    });
-    expect(unexpectedBrowserIssues).toEqual([]);
+    expect(monitor.flush()).toEqual([]);
     monitor.stop();
     monitor = null;
   } finally {

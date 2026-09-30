@@ -11,8 +11,10 @@ import {
   del,
   get,
   head,
+  put,
   type GetBlobResult,
   type HeadBlobResult,
+  type PutBlobResult,
 } from '@vercel/blob';
 
 import {
@@ -44,6 +46,11 @@ export type PutE2EAtlasMediaObjectInput = {
   contentType: string;
   bytes: Uint8Array;
 };
+
+export type AtlasMediaObjectInspection =
+  { status: 'missing' } | { status: 'present'; object: HeadBlobResult };
+
+export type PutAtlasMediaObjectInput = PutE2EAtlasMediaObjectInput;
 
 export class AtlasMediaStorageConflictError extends Error {
   constructor() {
@@ -368,16 +375,29 @@ export function getAtlasBlobAuthOptions(
 }
 
 export async function headAtlasMediaObject(pathname: string) {
+  atlasPathDetails(pathname);
   if (!isE2EAtlasMediaStorageEnabled()) {
     return head(pathname, getAtlasBlobAuthOptions());
   }
   return localObjectMetadata(pathname);
 }
 
+export async function inspectAtlasMediaObject(
+  pathname: string,
+): Promise<AtlasMediaObjectInspection> {
+  try {
+    return { status: 'present', object: await headAtlasMediaObject(pathname) };
+  } catch (error) {
+    if (error instanceof BlobNotFoundError) return { status: 'missing' };
+    throw error;
+  }
+}
+
 export async function readAtlasMediaObject(
   pathname: string,
   options: { ifNoneMatch?: string } = {},
 ): Promise<GetBlobResult | null> {
+  atlasPathDetails(pathname);
   if (!isE2EAtlasMediaStorageEnabled()) {
     return get(pathname, {
       access: 'private',
@@ -476,16 +496,64 @@ export async function putE2EAtlasMediaObject({
   return localObjectMetadata(pathname);
 }
 
+/**
+ * Stores one immutable Atlas object at its exact policy-derived pathname.
+ * Existing objects are never overwritten: callers must resolve a concurrent
+ * writer by inspecting the pathname again instead of replacing its bytes.
+ */
+export async function putAtlasMediaObjectIfAbsent({
+  pathname,
+  contentType,
+  bytes,
+}: PutAtlasMediaObjectInput): Promise<HeadBlobResult | PutBlobResult> {
+  const details = atlasPathDetails(pathname);
+  if (
+    details.contentType !== contentType ||
+    bytes.byteLength < 1 ||
+    bytes.byteLength > details.maximumBytes
+  ) {
+    throw new Error('Invalid Atlas media object.');
+  }
+
+  if (isE2EAtlasMediaStorageEnabled()) {
+    return putE2EAtlasMediaObject({ pathname, contentType, bytes });
+  }
+
+  return put(pathname, Buffer.from(bytes), {
+    access: 'private',
+    ...getAtlasBlobAuthOptions(),
+    contentType,
+    addRandomSuffix: false,
+    allowOverwrite: false,
+    maximumSizeInBytes: details.maximumBytes,
+    cacheControlMaxAge: 30 * 24 * 60 * 60,
+  });
+}
+
 export async function deleteAtlasMediaObjects(pathnames: string[]) {
-  if (!pathnames.length) return;
+  const validatedPathnames = Array.from(new Set(pathnames));
+  for (const pathname of validatedPathnames) atlasPathDetails(pathname);
+  if (!validatedPathnames.length) return;
   if (!isE2EAtlasMediaStorageEnabled()) {
-    await del(pathnames, getAtlasBlobAuthOptions());
+    const auth = getAtlasBlobAuthOptions();
+    await Promise.all(
+      validatedPathnames.map(async (pathname) => {
+        try {
+          await del(pathname, auth);
+        } catch (error) {
+          // Deletion is deliberately idempotent. This also lets a durable
+          // cleanup job finish when an earlier attempt removed the object but
+          // failed before acknowledging the database job.
+          if (!(error instanceof BlobNotFoundError)) throw error;
+        }
+      }),
+    );
     return;
   }
 
   const configuration = await prepareLocalStorage();
   await Promise.all(
-    pathnames.map(async (pathname) => {
+    validatedPathnames.map(async (pathname) => {
       const filePath = join(configuration.root, objectName(pathname));
       try {
         const file = await lstat(filePath);

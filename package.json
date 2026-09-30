@@ -12,7 +12,7 @@
     "predev": "node ./scripts/copy-maplibre-worker.mjs",
     "dev": "next dev",
     "lint": "eslint .",
-    "media:backfill-thumbnails": "node -r dotenv/config ./scripts/backfill-atlas-thumbnails.js",
+    "media:integrity": "node ./scripts/atlas-media-integrity.js",
     "migrate": "node -r dotenv/config ./scripts/migrate-auth.js",
     "migrate:auth": "node -r dotenv/config ./scripts/migrate-auth.js",
     "prettier": "prettier --write --ignore-unknown .",

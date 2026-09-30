@@ -3,7 +3,7 @@ import { chmod, lstat, mkdtemp, readdir, rm, symlink } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
-import { BlobNotFoundError, del, get, head } from '@vercel/blob';
+import { BlobNotFoundError, del, get, head, put } from '@vercel/blob';
 
 import {
   AtlasMediaStorageConflictError,
@@ -12,6 +12,8 @@ import {
   getAtlasBlobWebhookPublicKey,
   getE2EAtlasMediaStorageConfiguration,
   headAtlasMediaObject,
+  inspectAtlasMediaObject,
+  putAtlasMediaObjectIfAbsent,
   putE2EAtlasMediaObject,
   readAtlasMediaObject,
 } from '@/app/lib/atlas/media-storage';
@@ -21,6 +23,7 @@ jest.mock('@vercel/blob', () => ({
   del: jest.fn(),
   get: jest.fn(),
   head: jest.fn(),
+  put: jest.fn(),
 }));
 
 const entryId = 'f7c0bf19-59fc-49df-9bd7-ae405a69e49c';
@@ -83,6 +86,7 @@ describe('isolated Atlas filesystem media storage', () => {
     jest.mocked(del).mockReset();
     jest.mocked(get).mockReset();
     jest.mocked(head).mockReset();
+    jest.mocked(put).mockReset();
   });
 
   afterEach(async () => {
@@ -241,9 +245,74 @@ describe('isolated Atlas filesystem media storage', () => {
       storeId: 'atlasstore12345',
       ifNoneMatch: 'previous-etag',
     });
-    expect(del).toHaveBeenCalledWith([pathname], {
+    expect(del).toHaveBeenCalledWith(pathname, {
       storeId: 'atlasstore12345',
     });
+  });
+
+  it('classifies only a Blob not-found response as a missing object', async () => {
+    process.env.ATLAS_BLOB_STORE_ID = 'store_atlasstore12345';
+    process.env.VERCEL_OIDC_TOKEN = 'short-lived-oidc-token';
+    jest.mocked(head).mockRejectedValueOnce(new BlobNotFoundError());
+
+    await expect(inspectAtlasMediaObject(pathname)).resolves.toEqual({
+      status: 'missing',
+    });
+
+    jest.mocked(head).mockRejectedValueOnce(new Error('network unavailable'));
+    await expect(inspectAtlasMediaObject(pathname)).rejects.toThrow(
+      'network unavailable',
+    );
+  });
+
+  it('writes exact immutable private objects with the active Blob identity', async () => {
+    process.env.ATLAS_BLOB_STORE_ID = 'store_atlasstore12345';
+    process.env.VERCEL_OIDC_TOKEN = 'short-lived-oidc-token';
+    const bytes = new TextEncoder().encode('private photo bytes');
+    jest.mocked(put).mockResolvedValue({ pathname } as never);
+
+    await expect(
+      putAtlasMediaObjectIfAbsent({
+        pathname,
+        contentType: 'image/jpeg',
+        bytes,
+      }),
+    ).resolves.toMatchObject({ pathname });
+
+    expect(put).toHaveBeenCalledWith(pathname, bytes, {
+      access: 'private',
+      storeId: 'atlasstore12345',
+      contentType: 'image/jpeg',
+      addRandomSuffix: false,
+      allowOverwrite: false,
+      maximumSizeInBytes: 10 * 1024 * 1024,
+      cacheControlMaxAge: 30 * 24 * 60 * 60,
+    });
+  });
+
+  it('validates every deletion path before deleting and de-duplicates paths', async () => {
+    process.env.ATLAS_BLOB_STORE_ID = 'store_atlasstore12345';
+    process.env.VERCEL_OIDC_TOKEN = 'short-lived-oidc-token';
+    jest.mocked(del).mockResolvedValue(undefined);
+
+    await deleteAtlasMediaObjects([pathname, pathname]);
+    expect(del).toHaveBeenCalledWith(pathname, {
+      storeId: 'atlasstore12345',
+    });
+
+    jest.mocked(del).mockClear();
+    await expect(
+      deleteAtlasMediaObjects([pathname, '../unrelated-object']),
+    ).rejects.toThrow('pathname');
+    expect(del).not.toHaveBeenCalled();
+  });
+
+  it('treats an already-missing production delete as successful', async () => {
+    process.env.ATLAS_BLOB_STORE_ID = 'store_atlasstore12345';
+    process.env.VERCEL_OIDC_TOKEN = 'short-lived-oidc-token';
+    jest.mocked(del).mockRejectedValue(new BlobNotFoundError());
+
+    await expect(deleteAtlasMediaObjects([pathname])).resolves.toBeUndefined();
   });
 
   it('keeps an explicit read-write token fallback for local development', () => {

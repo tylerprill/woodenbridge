@@ -18,7 +18,6 @@ import {
   TrashIcon,
   XMarkIcon,
 } from '@heroicons/react/24/outline';
-import Image from 'next/image';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import {
@@ -50,6 +49,7 @@ import type {
   ChapterEditorSource,
   ChapterSuggestionPrefill,
 } from '@/app/lib/chapters/prefill';
+import { ResilientMediaImage } from '@/components/atlas/resilient-media-image';
 import {
   CHAPTER_INTRODUCTION_MAX_LENGTH,
   CHAPTER_MAX_MEMORIES,
@@ -104,13 +104,14 @@ function MemoryThumbnail({
       aria-hidden="true"
     >
       {entry.thumbnailUrl ? (
-        <Image
+        <ResilientMediaImage
           src={entry.thumbnailUrl}
           alt=""
           fill
           sizes={compact ? '44px' : '(max-width: 680px) 58px, 68px'}
           loading="lazy"
           unoptimized
+          fallback={<MapPinIcon />}
         />
       ) : (
         <MapPinIcon />

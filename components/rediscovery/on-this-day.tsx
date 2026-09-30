@@ -6,7 +6,6 @@ import {
   MapPinIcon,
   PhotoIcon,
 } from '@heroicons/react/24/outline';
-import Image from 'next/image';
 import Link from 'next/link';
 import type { ReactNode } from 'react';
 
@@ -19,6 +18,7 @@ import type {
   RediscoveredMemory,
   RediscoveryData,
 } from '@/app/lib/atlas/rediscovery/definitions';
+import { ResilientMediaImage } from '@/components/atlas/resilient-media-image';
 import { BridgeScene } from '@/components/clean/bridge-scene';
 import styles from './on-this-day.module.css';
 
@@ -43,7 +43,7 @@ function MemoryCard({
       >
         <div className={styles.artwork}>
           {photo ? (
-            <Image
+            <ResilientMediaImage
               src={photo.thumbnailUrl}
               alt={photo.altText.trim() || title}
               fill
@@ -51,6 +51,9 @@ function MemoryCard({
               loading={eager ? 'eager' : 'lazy'}
               fetchPriority={eager ? 'high' : 'auto'}
               unoptimized
+              fallback={
+                <BridgeScene className={styles.fallbackArtwork} tone="cedar" />
+              }
             />
           ) : (
             <BridgeScene className={styles.fallbackArtwork} tone="cedar" />
