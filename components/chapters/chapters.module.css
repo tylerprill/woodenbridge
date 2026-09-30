@@ -2842,6 +2842,26 @@
   font-size: 0.62rem;
 }
 
+.chapterMapDetailsSingle {
+  margin-top: 0.35rem;
+}
+
+.chapterMapDetailsSegment {
+  display: block;
+  margin: 0.38rem 0 0.12rem;
+  color: var(--forest-950);
+  font-size: 0.5rem;
+  font-weight: 800;
+  letter-spacing: 0.07em;
+  line-height: 1.35;
+  text-transform: uppercase;
+}
+
+.chapterMapDetailsSingle .chapterMapDetailsSegment,
+.chapterMapDetailsList li:first-child .chapterMapDetailsSegment {
+  margin-top: 0;
+}
+
 .chapterMapDetailsList {
   min-height: 0;
   overflow-y: auto;
@@ -2858,8 +2878,14 @@
   line-height: 1.35;
 }
 
-.chapterMapDetailsList li > span {
-  margin-right: 0.22rem;
+.chapterMapDetailsMemory {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  align-items: baseline;
+  column-gap: 0.22rem;
+}
+
+.chapterMapDetailsMemory > span:first-child {
   color: var(--timber-ink);
   font-weight: 800;
 }

@@ -140,21 +140,32 @@ export function ChapterReader({
       : null;
   const showMap = mode === 'owner' || chapter.shareMap;
   const mapEntries = showMap
-    ? orderedEntries.flatMap(({ entry }) =>
-        typeof entry.latitude === 'number' &&
-        typeof entry.longitude === 'number'
-          ? [
-              {
-                id: entry.id,
-                title: entry.title,
-                placeLabel: entry.placeLabel,
-                placeName: entry.placeName,
-                latitude: entry.latitude,
-                longitude: entry.longitude,
-              },
-            ]
-          : [],
-      )
+    ? orderedEntries.flatMap(({ entry }, memoryIndex) => {
+        if (
+          typeof entry.latitude !== 'number' ||
+          typeof entry.longitude !== 'number'
+        ) {
+          return [];
+        }
+        const segmentTitle = entry.segmentId
+          ? segmentsById.get(entry.segmentId)?.title
+          : chapter.segments.length
+            ? 'Before the first segment'
+            : null;
+        return [
+          {
+            id: entry.id,
+            title: entry.title,
+            placeLabel: entry.placeLabel,
+            placeName: entry.placeName,
+            latitude: entry.latitude,
+            longitude: entry.longitude,
+            memoryNumber: memoryIndex + 1,
+            segmentId: entry.segmentId,
+            segmentTitle,
+          },
+        ];
+      })
     : [];
   const chapterStart = chapter.introduction
     ? '#chapter-story'

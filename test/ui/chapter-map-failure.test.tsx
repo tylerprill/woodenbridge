@@ -9,6 +9,7 @@ import {
   ChapterMap,
   chapterMarkerGroups,
   keepMarkersInsideFrame,
+  startsChapterMapSegment,
 } from '@/components/chapters/chapter-map';
 
 const mockMapConstructor = jest.fn();
@@ -236,7 +237,7 @@ describe('chapter map failure recovery', () => {
     expect(setOffset).toHaveBeenCalledWith([0, 0]);
   });
 
-  it('condenses dense mobile stops into readable screen-space groups', () => {
+  it('spreads dense mobile stops across the full route', () => {
     const container = document.createElement('div');
     Object.defineProperty(container, 'clientWidth', {
       configurable: true,
@@ -264,7 +265,7 @@ describe('chapter map failure recovery', () => {
     const map = {
       getContainer: () => container,
       project: ([longitude]: [number, number]) => ({
-        x: longitude * 8,
+        x: longitude * 10,
         y: 120,
       }),
     };
@@ -274,26 +275,135 @@ describe('chapter map failure recovery', () => {
     expect(groups).toEqual([
       {
         representativeIndex: 0,
-        entryIndexes: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9],
+        entryIndexes: [0, 1, 2, 3, 4],
+      },
+      {
+        representativeIndex: 5,
+        entryIndexes: [5, 6, 7, 8, 9],
       },
       {
         representativeIndex: 10,
-        entryIndexes: [10, 11, 12, 13, 14, 15, 16, 17, 18, 19],
+        entryIndexes: [10, 11, 12, 13, 14],
       },
-      { representativeIndex: 20, entryIndexes: [20, 21, 22, 23] },
+      {
+        representativeIndex: 15,
+        entryIndexes: [15, 16, 17, 18],
+      },
+      {
+        representativeIndex: 23,
+        entryIndexes: [19, 20, 21, 22, 23],
+      },
     ]);
     expect(groups.flatMap((group) => group.entryIndexes)).toEqual(
       entries.map((_, index) => index),
     );
   });
 
-  it('uses more breathing room between groups on phone maps', () => {
+  it('anchors groups at both spatial extremes when reading order doubles back', () => {
+    const container = document.createElement('div');
+    Object.defineProperty(container, 'clientWidth', {
+      configurable: true,
+      value: 320,
+    });
+    const projectedX = [24, 0, 12, 120, 96, 108, 192, 216, 204];
+    const entries = projectedX.map((longitude, index) => ({
+      id: `memory-${index + 1}`,
+      title: `Memory ${index + 1}`,
+      placeLabel: 'A remembered route',
+      placeName: null,
+      latitude: 42,
+      longitude,
+    }));
+    const map = {
+      getContainer: () => container,
+      project: ([longitude]: [number, number]) => ({ x: longitude, y: 100 }),
+    };
+
+    const groups = chapterMarkerGroups(map as never, entries);
+
+    expect(groups).toEqual([
+      { representativeIndex: 1, entryIndexes: [0, 1, 2] },
+      { representativeIndex: 3, entryIndexes: [3, 4, 5] },
+      { representativeIndex: 7, entryIndexes: [6, 7, 8] },
+    ]);
+    const representativeX = groups.map(
+      (group) => projectedX[group.representativeIndex],
+    );
+    expect(Math.min(...representativeX)).toBe(Math.min(...projectedX));
+    expect(Math.max(...representativeX)).toBe(Math.max(...projectedX));
+    representativeX.forEach((first, firstIndex) => {
+      representativeX.slice(firstIndex + 1).forEach((second) => {
+        expect(Math.abs(first - second)).toBeGreaterThan(48);
+      });
+    });
+  });
+
+  it('keeps both visible ends when chronological endpoints coincide', () => {
+    const container = document.createElement('div');
+    Object.defineProperty(container, 'clientWidth', {
+      configurable: true,
+      value: 320,
+    });
+    const projectedX = [50, 0, 50, 100, 50];
+    const entries = projectedX.map((longitude, index) => ({
+      id: `memory-${index + 1}`,
+      title: `Memory ${index + 1}`,
+      placeLabel: 'An out-and-back route',
+      placeName: null,
+      latitude: 42,
+      longitude,
+    }));
+    const map = {
+      getContainer: () => container,
+      project: ([longitude]: [number, number]) => ({ x: longitude, y: 100 }),
+    };
+
+    const groups = chapterMarkerGroups(map as never, entries);
+    const representativeX = groups.map(
+      (group) => projectedX[group.representativeIndex],
+    );
+
+    expect(representativeX).toEqual(expect.arrayContaining([0, 100]));
+    expect(groups.flatMap((group) => group.entryIndexes).sort()).toEqual([
+      0, 1, 2, 3, 4,
+    ]);
+  });
+
+  it('starts a new tooltip heading for distinct segments with duplicate titles', () => {
+    const entries = [
+      {
+        id: 'memory-1',
+        title: 'First memory',
+        placeLabel: 'Somewhere',
+        placeName: null,
+        latitude: 40,
+        longitude: -105,
+        segmentId: 'segment-a',
+        segmentTitle: 'Travel day',
+      },
+      {
+        id: 'memory-2',
+        title: 'Second memory',
+        placeLabel: 'Somewhere',
+        placeName: null,
+        latitude: 41,
+        longitude: -104,
+        segmentId: 'segment-b',
+        segmentTitle: 'Travel day',
+      },
+    ];
+
+    expect(startsChapterMapSegment(entries, 0)).toBe(true);
+    expect(startsChapterMapSegment(entries, 1)).toBe(true);
+  });
+
+  it('uses a tighter grouping distance on phone maps', () => {
     const container = document.createElement('div');
     const project = ([longitude]: [number, number]) => ({
       x: longitude,
       y: 100,
     });
-    const entries = [0, 60, 120].map((longitude, index) => ({
+    const entries = [0, 50, 100].map((longitude, index) => ({
       id: `memory-${index + 1}`,
       title: `Memory ${index + 1}`,
       placeLabel: 'A remembered route',
@@ -307,12 +417,12 @@ describe('chapter map failure recovery', () => {
       configurable: true,
       value: 320,
     });
-    expect(chapterMarkerGroups(map as never, entries)).toHaveLength(2);
+    expect(chapterMarkerGroups(map as never, entries)).toHaveLength(3);
 
     Object.defineProperty(container, 'clientWidth', {
       configurable: true,
       value: 900,
     });
-    expect(chapterMarkerGroups(map as never, entries)).toHaveLength(3);
+    expect(chapterMarkerGroups(map as never, entries)).toHaveLength(2);
   });
 });

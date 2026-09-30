@@ -423,6 +423,13 @@ test('shared chapter reveals its route map and every memory', async ({
   await expect(firstMarker).toHaveAttribute('aria-expanded', 'true');
   const markerDetails = page.locator('[data-chapter-map-details="true"]');
   await expect(markerDetails).toContainText(/Stops? 1/);
+  await expect(markerDetails).toContainText('Detroit river morning');
+  await expect(
+    markerDetails.getByRole('heading', {
+      level: 3,
+      name: 'Detroit river morning',
+    }),
+  ).toBeVisible();
   await markerDetails
     .getByRole('button', { name: 'Close map memory details' })
     .click();
