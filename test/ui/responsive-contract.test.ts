@@ -18,13 +18,9 @@ describe('responsive and route-level UI contracts', () => {
     expect(mobile).not.toContain('min-height: 35rem');
   });
 
-  it('keeps MapLibre full-frame and provides legacy iOS height fallbacks', () => {
+  it('keeps MapLibre full-frame and provides a legacy iOS height fallback', () => {
     const atlasCss = readFileSync(
       join(root, 'components/atlas/atlas.module.css'),
-      'utf8',
-    );
-    const importCss = readFileSync(
-      join(root, 'components/atlas/photo-import.module.css'),
       'utf8',
     );
 
@@ -35,7 +31,6 @@ describe('responsive and route-level UI contracts', () => {
     expect(atlasCss).toMatch(
       /@media \(max-width: 900px\) \{[\s\S]*?\.workspace \{[\s\S]*?min-height: 0;/,
     );
-    expect(importCss).toContain('height: min(29rem, 66vh)');
   });
 
   it('uses a compact 2-by-2 owner summary on mobile', () => {
@@ -83,109 +78,6 @@ describe('responsive and route-level UI contracts', () => {
     expect(css).toMatch(
       /@media \(min-width: 521px\) and \(max-width: 1100px\)[\s\S]*?\.home-footer \{[\s\S]*?grid-template-columns: 1fr auto;[\s\S]*?\.home-footer nav \{[\s\S]*?grid-column: 1 \/ -1;/,
     );
-  });
-
-  it('keeps the photo-import surface within a 320px viewport', () => {
-    const css = readFileSync(
-      join(root, 'components/atlas/photo-import.module.css'),
-      'utf8',
-    );
-    const compactPage = css.match(
-      /@media \(max-width: 480px\) \{[\s\S]*?\.page \{([\s\S]*?)\n  \}/,
-    )?.[1];
-
-    expect(compactPage).toContain('width: 100%');
-    expect(compactPage).toContain('margin-inline: auto');
-    expect(compactPage).not.toMatch(/calc\(100%\s*\+/);
-    expect(compactPage).not.toMatch(/margin-inline:\s*-/);
-  });
-
-  it('uses fluid compact spacing and keeps upload actions in flow', () => {
-    const css = readFileSync(
-      join(root, 'components/atlas/photo-import.module.css'),
-      'utf8',
-    );
-    const compactLayout = css.match(
-      /@media \(max-width: 1120px\) \{[\s\S]*?@media/,
-    )?.[0];
-    const mobile = css.match(
-      /@media \(max-width: 760px\) \{[\s\S]*?@media/,
-    )?.[0];
-    const compact = css.match(/@media \(max-width: 480px\) \{[\s\S]*\}/)?.[0];
-
-    expect(mobile).toContain(
-      '--import-mobile-card-padding: clamp(1rem, 3vw, 1.425rem)',
-    );
-    expect(mobile).toContain('--import-mobile-gap: clamp(1rem, 2.5vw, 1.2rem)');
-    expect(mobile).toMatch(
-      /\.chooseLayout,[\s\S]*?\.chapterLayout \{[\s\S]*?gap: var\(--import-mobile-gap\);/,
-    );
-    expect(mobile).toMatch(
-      /\.dropCard,[\s\S]*?\.chapterOrder \{[\s\S]*?padding: var\(--import-mobile-card-padding\);[\s\S]*?border-radius: var\(--import-mobile-card-radius\);/,
-    );
-    expect(compactLayout).toMatch(
-      /\.journeyMap \{[\s\S]*?height: clamp\(16rem, 43vw, 30rem\);[\s\S]*?min-height: 0;/,
-    );
-    expect(compactLayout).toMatch(
-      /\.storyPhoto figure \{[\s\S]*?min-height: clamp\([\s\S]*?60vw[\s\S]*?\);/,
-    );
-    expect(compactLayout).toMatch(
-      /\.actionBar \{[\s\S]*?position: static;[\s\S]*?bottom: auto;/,
-    );
-    expect(mobile).toMatch(
-      /\.storyLayout > \.actionBar \{[\s\S]*?grid-row: 3;[\s\S]*?\.storyRail \{[\s\S]*?grid-row: 4;/,
-    );
-    expect(mobile).toMatch(
-      /\.storyActions,[\s\S]*?\.finalActions \{[\s\S]*?flex-direction: row;[\s\S]*?align-items: center;/,
-    );
-    expect(mobile).toMatch(
-      /\.longActionLabel \{[\s\S]*?display: none;[\s\S]*?\.shortActionLabel \{[\s\S]*?display: inline;/,
-    );
-    expect(mobile).toMatch(
-      /\.chapterCover button \{[\s\S]*?aspect-ratio: 16 \/ 9;[\s\S]*?min-height: 0;/,
-    );
-    expect(compact).toMatch(
-      /\.actionBar \{[\s\S]*?padding: 0\.625rem;[\s\S]*?gap: 0\.5rem;/,
-    );
-    expect(compact).toMatch(
-      /\.storyForm \.sectionHeading \{[\s\S]*?display: flex;[\s\S]*?gap: 0\.75rem;/,
-    );
-    expect(compact).toMatch(
-      /\.chapterLayout \.actionBar \{[\s\S]*?grid-template-columns: minmax\(0, auto\) minmax\(0, 1fr\);/,
-    );
-    expect(compact).toMatch(
-      /\.chapterLayout \.finalActions \{[\s\S]*?flex-direction: row;[\s\S]*?gap: 0\.3rem;/,
-    );
-    expect(compact).toMatch(
-      /\.leaveDialog > div:last-child \{[\s\S]*?justify-content: stretch;/,
-    );
-  });
-
-  it('keeps optional-detail actions in one compact phone row', () => {
-    const css = readFileSync(
-      join(root, 'components/atlas/photo-import.module.css'),
-      'utf8',
-    );
-    const compact = css.match(/@media \(max-width: 480px\) \{[\s\S]*\}/)?.[0];
-
-    expect(compact).toMatch(
-      /\.storyActions \{[\s\S]*?flex-direction: row;[\s\S]*?align-items: center;/,
-    );
-    expect(compact).toMatch(
-      /\.storyActions > button \{[\s\S]*?min-width: 0;[\s\S]*?flex: 1 1 0;/,
-    );
-  });
-
-  it('keeps the keyboard map-center action at least 44px tall', () => {
-    const css = readFileSync(
-      join(root, 'components/atlas/photo-import.module.css'),
-      'utf8',
-    );
-    const centerAction = css.match(
-      /\.locationControls button \{([\s\S]*?)\n\}/,
-    )?.[1];
-
-    expect(centerAction).toContain('min-height: 2.75rem');
   });
 
   it('keeps authenticated compact controls at least 44px tall', () => {

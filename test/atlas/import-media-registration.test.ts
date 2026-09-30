@@ -30,9 +30,6 @@ jest.mock('@/app/lib/atlas/upload-intents', () => ({
   consumeAtlasMediaUploadIntent: jest.fn(),
   discardAtlasMediaUploadIntent: jest.fn(),
 }));
-jest.mock('@vercel/blob', () => ({
-  BlobNotFoundError: class BlobNotFoundError extends Error {},
-}));
 jest.mock('sharp', () => ({
   __esModule: true,
   default: jest.fn((bytes: Buffer) => ({
@@ -44,13 +41,9 @@ jest.mock('sharp', () => ({
   })),
 }));
 
-import { BlobNotFoundError } from '@vercel/blob';
 import sharp from 'sharp';
 import { requireVerifiedSession } from '@/app/lib/auth/session';
-import {
-  getAtlasImportMediaPairStatusAction,
-  registerAtlasMediaAction,
-} from '@/app/lib/actions/atlas-media';
+import { registerAtlasMediaAction } from '@/app/lib/actions/atlas-media';
 import {
   consumeAtlasMediaUploadIntent,
   lockAtlasMediaUploadIntentForRegistration,
@@ -405,68 +398,6 @@ describe('Atlas import media registration', () => {
     expect(
       queries.some((query) => query.includes("SET status = 'uploaded'")),
     ).toBe(false);
-  });
-
-  it('reports a committed original and missing thumbnail without allowing overwrite', async () => {
-    __testMocks.taggedQuery.mockResolvedValue({
-      rows: [
-        {
-          prepared_byte_size: 4,
-          thumbnail_byte_size: 5,
-          registered: false,
-        },
-      ],
-      rowCount: 1,
-    });
-    jest
-      .mocked(headAtlasMediaObject)
-      .mockImplementation(async (requestedPath) => {
-        if (requestedPath === pathname) {
-          return {
-            pathname,
-            contentType: 'image/jpeg',
-            size: 4,
-          } as never;
-        }
-        throw new BlobNotFoundError();
-      });
-
-    await expect(
-      getAtlasImportMediaPairStatusAction({
-        entryId,
-        mediaId,
-        pathname,
-        thumbnailPathname,
-        width: 1000,
-        height: 750,
-        altText: '',
-      }),
-    ).resolves.toEqual({
-      ok: true,
-      data: {
-        originalCommitted: true,
-        thumbnailCommitted: false,
-        registered: false,
-      },
-    });
-    expect(headAtlasMediaObject).toHaveBeenCalledTimes(2);
-  });
-
-  it('does not probe Blob storage for a foreign or cancelled import item', async () => {
-    __testMocks.taggedQuery.mockResolvedValue({ rows: [], rowCount: 0 });
-
-    await expect(
-      getAtlasImportMediaPairStatusAction({
-        entryId,
-        mediaId,
-        pathname,
-        thumbnailPathname,
-        width: 1000,
-        height: 750,
-        altText: '',
-      }),
-    ).resolves.toMatchObject({ ok: false, error: 'not-found' });
-    expect(headAtlasMediaObject).not.toHaveBeenCalled();
   });
 
   it('rejects a metadata-free thumbnail that does not match the master dimensions', async () => {

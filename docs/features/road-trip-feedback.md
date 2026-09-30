@@ -5,10 +5,9 @@ Atlas. This is the working product backlog for the resulting improvements. The
 item numbers preserve the order in which the feedback was recorded; they do
 not assign implementation priority.
 
-This direction supersedes conflicting parts of
-[`atlas.md`](./atlas.md) and [`photo-import.md`](./photo-import.md), especially
-where those documents make bulk photo import or Journey creation a primary
-Atlas action.
+This direction supersedes conflicting parts of [`atlas.md`](./atlas.md),
+especially the earlier model that made bulk photo import or Journey creation a
+primary Atlas action. The separate bulk-import product flow has been retired.
 
 ## Agreed product model
 
@@ -78,8 +77,8 @@ In the original deployed flow, multi-image upload failed with a Vercel client-ID
 or token error. The original failing network response was not captured, so this
 is not a forensic confirmation of that exact error.
 
-Both the Memory drawer and bulk importer use the same media-upload client and
-server route. The repaired path no longer derives browser upload credentials
+The Memory drawer and retired bulk importer used the same media-upload client
+and server route. The repaired path no longer derives browser upload credentials
 from the long-lived `ATLAS_BLOB_READ_WRITE_TOKEN`. It now uses the deployment's
 short-lived Vercel OIDC identity to issue a pathname-, operation-, type-, size-,
 and expiry-scoped presigned URL. Completion callbacks are verified with the
@@ -113,11 +112,10 @@ contract and verifies valid, missing, and tampered completion signatures.
 - [x] Verify successful multi-photo upload on desktop, mobile portrait, the
       smallest supported portrait, and mobile landscape viewports.
 
-**Scope decision:** The current Atlas bulk importer can create multiple
-Memories and optionally a Journey. Item 6 removes Journey creation and separate
-bulk-import actions from Atlas. Before repairing that particular UI, decide
-whether it will be removed. Fix any shared upload defect needed by the new
-multi-photo Memory flow even if the old Atlas importer is retired.
+**Scope decision:** The Atlas bulk importer has been retired. Shared photo
+processing, private upload authorization, and cleanup remain because the
+multi-photo Memory flow depends on them and older unfinished batches must be
+drained safely.
 
 **Acceptance criteria:** The retained multi-photo Memory flow completes in the
 deployed application without a client-ID/token error, and a failed upload can
@@ -314,8 +312,6 @@ happened. Memories with no known time remain visible in a consistent position.
 
 ## Open product decisions
 
-- Retire the existing Atlas bulk importer completely, or reuse parts of it
-  behind the Memories **New memory** flow?
 - Should On this day live within Memories or on Atlas?
 
 ## Prioritized delivery sequence

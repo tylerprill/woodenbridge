@@ -35,9 +35,18 @@ async function signIn(page: Page) {
   });
 }
 
-async function capture(page: Page, testInfo: TestInfo, label: string) {
+async function capture(
+  page: Page,
+  testInfo: TestInfo,
+  label: string,
+  fullPage = true,
+) {
   const screenshotPath = testInfo.outputPath(`${label}.png`);
-  await page.screenshot({ path: screenshotPath, fullPage: true });
+  await page.screenshot({
+    path: screenshotPath,
+    fullPage,
+    animations: 'disabled',
+  });
   await testInfo.attach(label, {
     path: screenshotPath,
     contentType: 'image/png',
@@ -181,7 +190,7 @@ test('one Memory keeps multiple photos and a sortable local occurrence time', as
 
     await editor.getByLabel('Time visited').scrollIntoViewIfNeeded();
     await expectEditorFits(page, 'desktop editor');
-    await capture(page, testInfo, 'memory-editor-desktop-1440x900');
+    await capture(page, testInfo, 'memory-editor-desktop-1440x900', false);
 
     for (const viewport of [
       { label: 'mobile-portrait-412x915', width: 412, height: 915 },
@@ -192,10 +201,14 @@ test('one Memory keeps multiple photos and a sortable local occurrence time', as
         width: viewport.width,
         height: viewport.height,
       });
+      // Crossing the mobile breakpoint restarts the drawer entrance animation.
+      // Measure and capture only after the responsive state is fully settled.
+      await page.waitForTimeout(400);
+      await expect(editor).toHaveCSS('opacity', '1');
       await editor.getByLabel('Time visited').scrollIntoViewIfNeeded();
       await expect(editor.getByLabel('Time visited')).toBeVisible();
       await expectEditorFits(page, viewport.label);
-      await capture(page, testInfo, `memory-editor-${viewport.label}`);
+      await capture(page, testInfo, `memory-editor-${viewport.label}`, false);
     }
 
     await page.setViewportSize({ width: 1440, height: 900 });

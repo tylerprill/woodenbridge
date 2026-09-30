@@ -1,6 +1,5 @@
 'use server';
 
-import { BlobNotFoundError } from '@vercel/blob';
 import { db, sql } from '@/app/lib/db';
 import { revalidatePath } from 'next/cache';
 import sharp, { type Metadata } from 'sharp';
@@ -36,10 +35,12 @@ import {
   lockAtlasMediaUploadIntentForRegistration,
 } from '@/app/lib/atlas/upload-intents';
 import { atlasEntryIdSchema } from '@/app/lib/atlas/validation';
-import {
-  ATLAS_IMPORT_MAX_MEDIA_EDGE,
-  ATLAS_IMPORT_MAX_PIXELS,
-} from '@/app/lib/atlas/import-validation';
+
+// Completed records created by the retired bulk importer still carry their
+// original preparation contract. Keep these bounds until its database tables
+// are drained and removed in a dedicated migration.
+const LEGACY_ATLAS_IMPORT_MAX_MEDIA_EDGE = 2_560;
+const LEGACY_ATLAS_IMPORT_MAX_PIXELS = 25_000_000;
 
 type ImportMediaPreflight = {
   id: string;
@@ -97,7 +98,8 @@ async function validateImportedMedia({
     expected.expected_thumbnail_byte_size !== thumbnailSize ||
     !expected.source_width ||
     !expected.source_height ||
-    expected.source_width * expected.source_height > ATLAS_IMPORT_MAX_PIXELS
+    expected.source_width * expected.source_height >
+      LEGACY_ATLAS_IMPORT_MAX_PIXELS
   ) {
     return false;
   }
@@ -115,10 +117,10 @@ async function validateImportedMedia({
 
   const [master, thumbnail] = await Promise.all([
     sharp(masterBytes, {
-      limitInputPixels: ATLAS_IMPORT_MAX_PIXELS,
+      limitInputPixels: LEGACY_ATLAS_IMPORT_MAX_PIXELS,
     }).metadata(),
     sharp(thumbnailBytes, {
-      limitInputPixels: ATLAS_IMPORT_MAX_PIXELS,
+      limitInputPixels: LEGACY_ATLAS_IMPORT_MAX_PIXELS,
     }).metadata(),
   ]);
   const masterWidth = master.width ?? 0;
@@ -138,163 +140,21 @@ async function validateImportedMedia({
     master.format === 'jpeg' &&
     masterWidth === width &&
     masterHeight === height &&
-    Math.max(masterWidth, masterHeight) <= ATLAS_IMPORT_MAX_MEDIA_EDGE &&
-    masterWidth * masterHeight <= ATLAS_IMPORT_MAX_PIXELS &&
+    Math.max(masterWidth, masterHeight) <= LEGACY_ATLAS_IMPORT_MAX_MEDIA_EDGE &&
+    masterWidth * masterHeight <= LEGACY_ATLAS_IMPORT_MAX_PIXELS &&
     !hasPrivateImageMetadata(master) &&
     expectedThumbnailContentType !== null &&
     thumbnail.format === expectedThumbnailFormat &&
     Math.abs(thumbnailWidth - expectedThumbnail.width) <= 1 &&
     Math.abs(thumbnailHeight - expectedThumbnail.height) <= 1 &&
     Math.max(thumbnailWidth, thumbnailHeight) <= 1024 &&
-    thumbnailWidth * thumbnailHeight <= ATLAS_IMPORT_MAX_PIXELS &&
+    thumbnailWidth * thumbnailHeight <= LEGACY_ATLAS_IMPORT_MAX_PIXELS &&
     !hasPrivateImageMetadata(thumbnail)
   );
 }
 
 function failed(message = 'The photo could not be saved. Please try again.') {
   return { ok: false, error: 'failed', message } as const;
-}
-
-type ImportMediaPairStatus = {
-  originalCommitted: boolean;
-  thumbnailCommitted: boolean;
-  registered: boolean;
-};
-
-async function importedBlobCommitted({
-  pathname,
-  expectedContentType,
-  expectedSize,
-}: {
-  pathname: string;
-  expectedContentType: string;
-  expectedSize: number;
-}) {
-  try {
-    const blob = await headAtlasMediaObject(pathname);
-    if (
-      blob.pathname !== pathname ||
-      blob.contentType !== expectedContentType ||
-      blob.size !== expectedSize
-    ) {
-      throw new Error('Committed import media did not match its preparation.');
-    }
-    return true;
-  } catch (error) {
-    if (error instanceof BlobNotFoundError) return false;
-    throw error;
-  }
-}
-
-/**
- * Recovers deterministic private Blob writes whose browser response was lost.
- * The probe is intentionally scoped to the signed-in user's expected import
- * item; it never accepts a caller-supplied arbitrary Blob pathname.
- */
-export async function getAtlasImportMediaPairStatusAction(
-  input: AtlasMediaRegistrationInput,
-): Promise<AtlasActionResult<ImportMediaPairStatus>> {
-  const session = await requireVerifiedSession();
-  const parsed = atlasMediaRegistrationSchema.safeParse(input);
-
-  if (
-    !parsed.success ||
-    !areAtlasMediaPathsPaired(
-      parsed.data.pathname,
-      parsed.data.thumbnailPathname,
-      parsed.data.entryId,
-    ) ||
-    getAtlasMediaPathId(parsed.data.pathname) !== parsed.data.mediaId
-  ) {
-    return { ok: false, error: 'invalid', message: 'Invalid photo.' };
-  }
-
-  const mediaInput = parsed.data;
-  const expectedThumbnailContentType = getAtlasThumbnailContentType(
-    mediaInput.thumbnailPathname,
-  );
-  if (!expectedThumbnailContentType) {
-    return { ok: false, error: 'invalid', message: 'Invalid photo.' };
-  }
-  try {
-    const expected = await sql<{
-      prepared_byte_size: number | null;
-      thumbnail_byte_size: number | null;
-      registered: boolean;
-    }>`
-      SELECT
-        item.prepared_byte_size,
-        item.thumbnail_byte_size,
-        EXISTS (
-          SELECT 1
-          FROM atlas_media AS media
-          WHERE media.id = ${mediaInput.mediaId}
-            AND media.entry_id = item.entry_id
-            AND media.user_id = item.user_id
-            AND media.storage_path = ${mediaInput.pathname}
-            AND media.thumbnail_path = ${mediaInput.thumbnailPathname}
-        ) AS registered
-      FROM atlas_import_items AS item
-      INNER JOIN atlas_import_batches AS batch
-        ON batch.id = item.batch_id AND batch.user_id = item.user_id
-      INNER JOIN atlas_entries AS entry
-        ON entry.id = item.entry_id AND entry.user_id = item.user_id
-      WHERE item.entry_id = ${mediaInput.entryId}
-        AND item.expected_media_id = ${mediaInput.mediaId}
-        AND item.user_id = ${session.user.id}
-        AND entry.deleted_at IS NULL
-        AND batch.status IN ('uploading', 'ready', 'completed')
-      LIMIT 1
-    `;
-    const row = expected.rows[0];
-    if (!row) {
-      return {
-        ok: false,
-        error: 'not-found',
-        message: 'That import is unavailable.',
-      };
-    }
-    if (row.registered) {
-      return {
-        ok: true,
-        data: {
-          originalCommitted: true,
-          thumbnailCommitted: true,
-          registered: true,
-        },
-      };
-    }
-    if (!row.prepared_byte_size || !row.thumbnail_byte_size) {
-      return {
-        ok: true,
-        data: {
-          originalCommitted: false,
-          thumbnailCommitted: false,
-          registered: false,
-        },
-      };
-    }
-
-    const [originalCommitted, thumbnailCommitted] = await Promise.all([
-      importedBlobCommitted({
-        pathname: mediaInput.pathname,
-        expectedContentType: 'image/jpeg',
-        expectedSize: row.prepared_byte_size,
-      }),
-      importedBlobCommitted({
-        pathname: mediaInput.thumbnailPathname,
-        expectedContentType: expectedThumbnailContentType,
-        expectedSize: row.thumbnail_byte_size,
-      }),
-    ]);
-    return {
-      ok: true,
-      data: { originalCommitted, thumbnailCommitted, registered: false },
-    };
-  } catch (error) {
-    console.error('Atlas import media recovery probe failed:', error);
-    return failed('The private upload status could not be checked. Try again.');
-  }
 }
 
 export async function getAtlasEntryMediaAction(

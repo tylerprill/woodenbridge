@@ -108,7 +108,8 @@ The production journey experience now includes:
   omitted entirely from public journey data when a map is disabled;
 - ownership-checked private originals, with public journeys restricted to
   metadata-stripped JPEG or WebP derivatives so EXIF data cannot bypass map
-  privacy; bulk imports use JPEG for reliable canvas export on iOS browsers;
+  privacy; photographs created by the retired bulk importer remain compatible
+  with its metadata-stripped JPEG derivatives;
   and
 - lazy thumbnails, bounded editor rendering, and off-screen content containment
   for responsive long journeys.
