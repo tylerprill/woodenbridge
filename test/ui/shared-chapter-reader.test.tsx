@@ -18,6 +18,8 @@ import type { SharedAtlasChapter } from '@/app/lib/chapters/definitions';
 import { ChapterReader } from '@/components/chapters/chapter-reader';
 import { ChapterSaveNotice } from '@/components/chapters/chapter-save-notice';
 
+const mockChapterMapLoader = jest.fn();
+
 jest.mock('next/image', () => ({
   __esModule: true,
   default: ({
@@ -34,7 +36,10 @@ jest.mock('next/image', () => ({
 }));
 
 jest.mock('@/components/chapters/chapter-map-loader', () => ({
-  ChapterMapLoader: () => <div data-testid="chapter-map">Chapter map</div>,
+  ChapterMapLoader: (props: { entries: unknown[] }) => {
+    mockChapterMapLoader(props);
+    return <div data-testid="chapter-map">Chapter map</div>;
+  },
 }));
 
 const chapter: SharedAtlasChapter = {
@@ -113,6 +118,7 @@ const chapter: SharedAtlasChapter = {
 
 describe('shared Chapter reader', () => {
   afterEach(() => {
+    mockChapterMapLoader.mockClear();
     window.history.replaceState(null, '', '/');
   });
 
@@ -368,6 +374,56 @@ describe('shared Chapter reader', () => {
     expect(
       screen.queryByText('Eastward, desert stone gave way to lantern light.'),
     ).not.toBeInTheDocument();
+  });
+
+  it('passes segment titles and global memory numbers to the route map', () => {
+    const firstSegment = {
+      id: 'e8ef6529-4961-4847-8272-e0da4aebf38b',
+      title: 'Day 1 · Petra',
+      position: 0,
+      memoryCount: 1,
+      startDate: '2026-01-03',
+      endDate: '2026-01-03',
+    };
+    const secondSegment = {
+      id: 'c47412f0-b990-421d-9321-693f153bd2d1',
+      title: 'Day 2 · Kyoto',
+      position: 1,
+      memoryCount: 1,
+      startDate: '2026-02-12',
+      endDate: '2026-02-12',
+    };
+
+    render(
+      <ChapterReader
+        chapter={{
+          ...chapter,
+          segments: [firstSegment, secondSegment],
+          entries: [
+            { ...chapter.entries[0], segmentId: firstSegment.id },
+            { ...chapter.entries[1], segmentId: secondSegment.id },
+          ],
+        }}
+        mode="shared"
+      />,
+    );
+
+    const mapEntries = mockChapterMapLoader.mock.calls.at(-1)?.[0]
+      .entries as Array<Record<string, unknown>>;
+    expect(mapEntries).toEqual([
+      expect.objectContaining({
+        id: 'memory-1',
+        memoryNumber: 1,
+        segmentId: firstSegment.id,
+        segmentTitle: firstSegment.title,
+      }),
+      expect.objectContaining({
+        id: 'memory-2',
+        memoryNumber: 2,
+        segmentId: secondSegment.id,
+        segmentTitle: secondSegment.title,
+      }),
+    ]);
   });
 
   it('keeps empty and non-contiguous persisted Segments uniquely addressable', async () => {

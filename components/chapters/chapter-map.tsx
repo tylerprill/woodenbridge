@@ -14,7 +14,10 @@ import {
   createGentleChapterRoute,
   unwrapChapterCoordinates,
 } from '@/app/lib/chapters/route-geometry';
-import { groupNearbyMapMarkers } from '@/app/lib/maps/marker-groups';
+import {
+  groupNearbyMapMarkers,
+  type ProjectedMapMarker,
+} from '@/app/lib/maps/marker-groups';
 import { sanitizeOpenFreeMapStyle } from '@/app/lib/maps/openfreemap-style';
 import styles from './chapters.module.css';
 
@@ -23,8 +26,11 @@ const DEFAULT_STYLE =
   'https://tiles.openfreemap.org/styles/positron';
 const CHAPTER_MARKER_GUTTER = 12;
 const CHAPTER_MARKER_GROUP_DISTANCE_DESKTOP = 52;
-const CHAPTER_MARKER_GROUP_DISTANCE_TABLET = 60;
-const CHAPTER_MARKER_GROUP_DISTANCE_PHONE = 72;
+const CHAPTER_MARKER_GROUP_DISTANCE_TABLET = 52;
+// The marker control is 44px square. Requiring centers to be more than 44px
+// apart preserves a visible gap between hit targets while keeping enough
+// anchors to tell the story of a long route on a narrow phone map.
+const CHAPTER_MARKER_GROUP_DISTANCE_PHONE = 48;
 const MAP_LOAD_TIMEOUT_MS = 15_000;
 
 maplibregl.setWorkerUrl('/maplibre/maplibre-gl-worker.mjs');
@@ -36,6 +42,9 @@ export type ChapterMapMemory = {
   placeName: string | null;
   latitude: number;
   longitude: number;
+  memoryNumber?: number;
+  segmentId?: string | null;
+  segmentTitle?: string | null;
 };
 
 type ChapterMarkerGroup = {
@@ -65,13 +74,16 @@ function routeData(entries: ChapterMapMemory[]) {
   };
 }
 
-function stopNumberRanges(entryIndexes: number[]) {
+function chapterMemoryNumber(entry: ChapterMapMemory, index: number) {
+  return entry.memoryNumber ?? index + 1;
+}
+
+function stopNumberRanges(stopNumbers: number[]) {
   const ranges: string[] = [];
-  let rangeStart = entryIndexes[0] + 1;
+  let rangeStart = stopNumbers[0];
   let rangeEnd = rangeStart;
 
-  entryIndexes.slice(1).forEach((index) => {
-    const stopNumber = index + 1;
+  stopNumbers.slice(1).forEach((stopNumber) => {
     if (stopNumber === rangeEnd + 1) {
       rangeEnd = stopNumber;
       return;
@@ -90,6 +102,28 @@ function stopNumberRanges(entryIndexes: number[]) {
   return ranges.join(', ');
 }
 
+function groupStopNumbers(entries: ChapterMapMemory[], entryIndexes: number[]) {
+  return entryIndexes.map((index) =>
+    chapterMemoryNumber(entries[index], index),
+  );
+}
+
+function chapterMapSegmentKey(entry: ChapterMapMemory | undefined) {
+  const title = entry?.segmentTitle?.trim();
+  if (!title) return null;
+  return entry?.segmentId ?? `title:${title}`;
+}
+
+export function startsChapterMapSegment(
+  entries: readonly ChapterMapMemory[],
+  index: number,
+) {
+  const segmentKey = chapterMapSegmentKey(entries[index]);
+  return Boolean(
+    segmentKey && segmentKey !== chapterMapSegmentKey(entries[index - 1]),
+  );
+}
+
 function chapterMarkerGroupDistance(map: MapLibreMap) {
   const container = map.getContainer();
   const width =
@@ -97,6 +131,33 @@ function chapterMarkerGroupDistance(map: MapLibreMap) {
   if (width <= 480) return CHAPTER_MARKER_GROUP_DISTANCE_PHONE;
   if (width <= 760) return CHAPTER_MARKER_GROUP_DISTANCE_TABLET;
   return CHAPTER_MARKER_GROUP_DISTANCE_DESKTOP;
+}
+
+function spatialExtremeFirstIndexes(points: readonly ProjectedMapMarker[]) {
+  const indexes = points.map((_, index) => index);
+  if (points.length < 2) return indexes;
+
+  const xValues = points.map((point) => point.x);
+  const yValues = points.map((point) => point.y);
+  const xSpan = Math.max(...xValues) - Math.min(...xValues);
+  const ySpan = Math.max(...yValues) - Math.min(...yValues);
+  const values = xSpan >= ySpan ? xValues : yValues;
+  let minimumIndex = 0;
+  let maximumIndex = 0;
+
+  values.forEach((value, index) => {
+    if (value < values[minimumIndex]) minimumIndex = index;
+    if (value > values[maximumIndex]) maximumIndex = index;
+  });
+
+  const prioritizedIndexes = [minimumIndex];
+  if (maximumIndex !== minimumIndex) prioritizedIndexes.push(maximumIndex);
+  indexes.forEach((index) => {
+    if (index !== minimumIndex && index !== maximumIndex) {
+      prioritizedIndexes.push(index);
+    }
+  });
+  return prioritizedIndexes;
 }
 
 export function chapterMarkerGroups(
@@ -120,12 +181,21 @@ export function chapterMarkerGroups(
       return fallbackGroups();
     }
 
-    return groupNearbyMapMarkers(points, chapterMarkerGroupDistance(map)).map(
-      (entryIndexes) => ({
-        representativeIndex: entryIndexes[0],
-        entryIndexes,
-      }),
-    );
+    // Seed the grouping pass with the projected route's two spatial extremes.
+    // That keeps a marker on both visible ends even for there-and-back routes
+    // whose chronological first and last stops can occupy the same area.
+    const prioritizedIndexes = spatialExtremeFirstIndexes(points);
+    return groupNearbyMapMarkers(
+      prioritizedIndexes.map((index) => points[index]),
+      chapterMarkerGroupDistance(map),
+    )
+      .map((group) => ({
+        representativeIndex: prioritizedIndexes[group[0]],
+        entryIndexes: group
+          .map((index) => prioritizedIndexes[index])
+          .sort((first, second) => first - second),
+      }))
+      .sort((first, second) => first.entryIndexes[0] - second.entryIndexes[0]);
   } catch {
     // Projection can be briefly unavailable while MapLibre changes styles.
     // Individual markers are a safe fallback until the next camera settle.
@@ -164,10 +234,11 @@ function createChapterMarkers(
     element.dataset.groupKey = chapterMarkerKey(entryIndexes);
     element.dataset.memoryCount = String(entryIndexes.length);
     element.dataset.stopIndexes = entryIndexes.join(',');
+    const stopNumbers = groupStopNumbers(entries, entryIndexes);
     markerLabel.textContent =
       entryIndexes.length > 1
         ? `×${entryIndexes.length}`
-        : String(entryIndexes[0] + 1);
+        : String(stopNumbers[0]);
     element.append(markerLabel);
     element.setAttribute('aria-controls', 'chapter-map-details');
     element.setAttribute('aria-expanded', 'false');
@@ -176,12 +247,12 @@ function createChapterMarkers(
       const entry = entries[index];
       element.setAttribute(
         'aria-label',
-        `Stop ${index + 1}: ${entry.title || 'Untitled memory'}, ${
+        `Stop ${chapterMemoryNumber(entry, index)}: ${entry.title || 'Untitled memory'}, ${
           entry.placeLabel || entry.placeName || 'Pinned place'
         }`,
       );
     } else {
-      const label = `${entryIndexes.length} nearby memories: stops ${stopNumberRanges(entryIndexes)}. Open list.`;
+      const label = `${entryIndexes.length} nearby memories: stops ${stopNumberRanges(stopNumbers)}. Open list.`;
       element.setAttribute('aria-label', label);
       element.title = `${entryIndexes.length} nearby memories`;
     }
@@ -272,10 +343,11 @@ function fitChapter(
   createGentleChapterRoute(entries).forEach((coordinates) =>
     bounds.extend(coordinates),
   );
+  const mapWidth = map.getContainer().clientWidth || window.innerWidth;
   map.fitBounds(bounds, {
-    // Mobile markers have a visual radius plus an offset from their route
-    // coordinate. Give both room so the first and last stops stay in frame.
-    padding: window.innerWidth < 680 ? 92 : 96,
+    // Let the route use more of a narrow frame so distinct locations remain
+    // legible. The containment pass still preserves a marker-sized edge gutter.
+    padding: mapWidth <= 340 ? 48 : mapWidth < 680 ? 64 : 96,
     maxZoom: 8.5,
     duration: duration ?? 900,
   });
@@ -522,8 +594,21 @@ export function ChapterMap({ entries }: { entries: ChapterMapMemory[] }) {
   }, [activeMarkerGroup]);
 
   const activeEntries = (activeMarkerGroup?.entryIndexes ?? []).flatMap(
-    (index) => (entries[index] ? [{ entry: entries[index], index }] : []),
+    (index) =>
+      entries[index]
+        ? [
+            {
+              entry: entries[index],
+              index,
+              memoryNumber: chapterMemoryNumber(entries[index], index),
+            },
+          ]
+        : [],
   );
+  const activeStopNumbers = activeEntries.map(
+    ({ memoryNumber }) => memoryNumber,
+  );
+  const activeMemoryEntries = activeEntries.map(({ entry }) => entry);
   const closeMarkerDetails = (restoreFocus = false) => {
     const activeKey = activeMarkerGroup
       ? chapterMarkerKey(activeMarkerGroup.entryIndexes)
@@ -554,7 +639,7 @@ export function ChapterMap({ entries }: { entries: ChapterMapMemory[] }) {
           aria-label={
             activeEntries.length > 1
               ? `${activeEntries.length} memories in this map marker`
-              : `Details for stop ${activeEntries[0].index + 1}`
+              : `Details for stop ${activeEntries[0].memoryNumber}`
           }
           data-chapter-map-details="true"
           onKeyDown={(event) => {
@@ -568,11 +653,11 @@ export function ChapterMap({ entries }: { entries: ChapterMapMemory[] }) {
               <span>
                 {activeEntries.length > 1
                   ? `${activeEntries.length} memories here`
-                  : `Stop ${activeEntries[0].index + 1}`}
+                  : `Stop ${activeEntries[0].memoryNumber}`}
               </span>
               <strong>
                 {activeEntries.length > 1
-                  ? `Stops ${stopNumberRanges(activeMarkerGroup.entryIndexes)}`
+                  ? `Stops ${stopNumberRanges(activeStopNumbers)}`
                   : activeEntries[0].entry.title || 'Untitled memory'}
               </strong>
             </div>
@@ -591,19 +676,51 @@ export function ChapterMap({ entries }: { entries: ChapterMapMemory[] }) {
               aria-label="Memories in this map marker"
               tabIndex={0}
             >
-              {activeEntries.map(({ entry, index }) => (
-                <li key={entry.id}>
-                  <span>{index + 1}.</span>
-                  {entry.title || 'Untitled memory'}
-                </li>
-              ))}
+              {activeEntries.map(
+                ({ entry, memoryNumber }, activeEntryIndex) => {
+                  const segmentTitle = entry.segmentTitle?.trim();
+                  return (
+                    <li key={entry.id}>
+                      {segmentTitle &&
+                      startsChapterMapSegment(
+                        activeMemoryEntries,
+                        activeEntryIndex,
+                      ) ? (
+                        <h3
+                          className={styles.chapterMapDetailsSegment}
+                          data-chapter-map-segment-title="true"
+                        >
+                          {segmentTitle}
+                        </h3>
+                      ) : null}
+                      <div
+                        className={styles.chapterMapDetailsMemory}
+                        data-memory-number={memoryNumber}
+                      >
+                        <span>{memoryNumber}.</span>
+                        <span>{entry.title || 'Untitled memory'}</span>
+                      </div>
+                    </li>
+                  );
+                },
+              )}
             </ol>
           ) : (
-            <p className={styles.chapterMapDetailsPlace}>
-              {activeEntries[0].entry.placeLabel ||
-                activeEntries[0].entry.placeName ||
-                'Pinned place'}
-            </p>
+            <div className={styles.chapterMapDetailsSingle}>
+              {activeEntries[0].entry.segmentTitle ? (
+                <h3
+                  className={styles.chapterMapDetailsSegment}
+                  data-chapter-map-segment-title="true"
+                >
+                  {activeEntries[0].entry.segmentTitle}
+                </h3>
+              ) : null}
+              <p className={styles.chapterMapDetailsPlace}>
+                {activeEntries[0].entry.placeLabel ||
+                  activeEntries[0].entry.placeName ||
+                  'Pinned place'}
+              </p>
+            </div>
           )}
         </section>
       ) : null}

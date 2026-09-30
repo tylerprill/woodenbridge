@@ -174,12 +174,13 @@ describe('responsive and route-level UI contracts', () => {
     );
   });
 
-  it('reserves mobile route-map padding for marker radius and offsets', () => {
+  it('uses responsive route-map padding that spreads narrow-screen markers', () => {
     const source = readFileSync(
       join(root, 'components/chapters/chapter-map.tsx'),
       'utf8',
     );
-    expect(source).toContain('window.innerWidth < 680 ? 92 : 96');
+    expect(source).toContain('mapWidth <= 340 ? 48 : mapWidth < 680 ? 64 : 96');
+    expect(source).toContain('map.getContainer().clientWidth');
     expect(source).toContain('const CHAPTER_MARKER_GUTTER = 12');
   });
 
