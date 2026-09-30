@@ -1,4 +1,5 @@
 import type { AtlasChapter } from '@/app/lib/chapters/definitions';
+import { deriveJourneyDisplayRoute } from '@/app/lib/chapters/journey-display';
 import { toSharedAtlasChapter } from '@/app/lib/chapters/shared';
 
 const chapter: AtlasChapter = {
@@ -73,6 +74,43 @@ describe('shared chapter privacy DTO', () => {
       latitude: 45,
       longitude: -84.1,
     });
+  });
+
+  it('derives a round-trip label after private coordinates are removed', () => {
+    const start = {
+      ...chapter.entries[0],
+      id: 'grand-blanc-start',
+      placeLabel: 'Grand Blanc',
+      placeName: 'Grand Blanc',
+      placeLocality: 'Grand Blanc',
+      placeRegion: 'Michigan',
+      latitude: 42.9275,
+      longitude: -83.63,
+    };
+    const destination = {
+      ...start,
+      id: 'leadville',
+      placeLabel: 'Leadville',
+      placeName: 'Leadville',
+      placeLocality: 'Leadville',
+      placeRegion: 'Colorado',
+      latitude: 39.2508,
+      longitude: -106.2925,
+    };
+    const shared = toSharedAtlasChapter({
+      ...chapter,
+      memoryCount: 3,
+      shareMap: false,
+      entries: [start, destination, { ...start, id: 'grand-blanc-return' }],
+    });
+
+    expect(deriveJourneyDisplayRoute(shared.entries)).toMatchObject({
+      kind: 'round-trip',
+      origin: 'Grand Blanc',
+      destination: 'Leadville',
+    });
+    expect(JSON.stringify(shared)).not.toContain('latitude');
+    expect(JSON.stringify(shared)).not.toContain('longitude');
   });
 
   it('publishes only metadata-stripped thumbnail derivatives', () => {

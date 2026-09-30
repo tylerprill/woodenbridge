@@ -163,12 +163,14 @@ describe('shared Chapter reader', () => {
     expect(
       screen.getByRole('link', { name: /Begin the journey/i }),
     ).toHaveAttribute('href', '#chapter-story');
-    expect(
-      screen.getByLabelText('From Petra, Jordan to Kyoto, Japan'),
-    ).toHaveTextContent('Petra, Jordan');
-    expect(
-      screen.getByLabelText('From Petra, Jordan to Kyoto, Japan'),
-    ).toHaveTextContent('Kyoto, Japan');
+    const route = screen
+      .getByText('From Petra, Jordan to Kyoto, Japan', {
+        selector: '.sr-only',
+      })
+      .closest('p')!;
+    expect(route).toHaveTextContent('Petra, Jordan');
+    expect(route).toHaveTextContent('Kyoto, Japan');
+    expect(screen.queryByText('Round trip')).not.toBeInTheDocument();
     expect(
       screen.getByRole('region', { name: 'Journey introduction' }),
     ).toHaveTextContent('Ten places across the world');
@@ -199,6 +201,118 @@ describe('shared Chapter reader', () => {
     expect(
       screen.queryByRole('link', { name: /Open Petra at dawn keepsake/i }),
     ).not.toBeInTheDocument();
+  });
+
+  it('preserves the featured destination when a journey returns to its origin', () => {
+    const origin = {
+      ...chapter.entries[0],
+      id: 'grand-blanc-start',
+      title: 'Leaving home',
+      placeLabel: 'Grand Blanc',
+      placeName: 'Grand Blanc',
+      placeLocality: 'Grand Blanc',
+      placeRegion: 'Michigan',
+      placeCountry: 'United States',
+      placeCountryCode: 'US',
+      latitude: 42.9275,
+      longitude: -83.63,
+    };
+    const destination = {
+      ...chapter.entries[1],
+      id: 'leadville',
+      title: 'Above the clouds',
+      placeLabel: 'Leadville',
+      placeName: 'Leadville',
+      placeLocality: 'Leadville',
+      placeRegion: 'Colorado',
+      placeCountry: 'United States',
+      placeCountryCode: 'US',
+      latitude: 39.2508,
+      longitude: -106.2925,
+    };
+    const returned = {
+      ...origin,
+      id: 'grand-blanc-return',
+      title: 'Home again',
+      latitude: 42.93,
+      longitude: -83.62,
+    };
+
+    render(
+      <ChapterReader
+        chapter={{
+          ...chapter,
+          memoryCount: 3,
+          entries: [origin, destination, returned],
+        }}
+        mode="shared"
+      />,
+    );
+
+    const route = screen
+      .getByText(
+        'Round trip from Grand Blanc via Leadville, returning to Grand Blanc',
+        { selector: '.sr-only' },
+      )
+      .closest('p')!;
+    expect(within(route).getByText('Grand Blanc')).toBeInTheDocument();
+    expect(within(route).getByText('Leadville')).toBeInTheDocument();
+    expect(within(route).getByText('Round trip')).toBeInTheDocument();
+    expect(route.querySelectorAll('svg')).toHaveLength(2);
+  });
+
+  it('summarizes a short same-area return without a duplicate arrow', () => {
+    const origin = {
+      ...chapter.entries[0],
+      id: 'local-start',
+      placeLabel: 'Grand Blanc',
+      placeName: 'Grand Blanc',
+      placeLocality: 'Grand Blanc',
+      placeRegion: 'Michigan',
+      placeCountry: 'United States',
+      placeCountryCode: 'US',
+      latitude: 42.9275,
+      longitude: -83.63,
+    };
+    const nearby = {
+      ...chapter.entries[1],
+      id: 'local-stop',
+      placeLabel: 'Flint',
+      placeName: 'Flint',
+      placeLocality: 'Flint',
+      placeRegion: 'Michigan',
+      placeCountry: 'United States',
+      placeCountryCode: 'US',
+      latitude: 43.0125,
+      longitude: -83.6875,
+    };
+
+    render(
+      <ChapterReader
+        chapter={{
+          ...chapter,
+          memoryCount: 3,
+          entries: [
+            origin,
+            nearby,
+            {
+              ...origin,
+              id: 'local-return',
+              latitude: 42.93,
+              longitude: -83.62,
+            },
+          ],
+        }}
+        mode="shared"
+      />,
+    );
+
+    const route = screen
+      .getByText('Around Grand Blanc', { selector: '.sr-only' })
+      .closest('p')!;
+    expect(route).toHaveTextContent('Around Grand Blanc');
+    expect(route).not.toHaveTextContent('Round trip');
+    expect(route.querySelector('svg')).toBeNull();
   });
 
   it('keeps the owner opening concise and hands focus to its field note', async () => {
