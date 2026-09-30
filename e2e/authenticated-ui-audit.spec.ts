@@ -1,5 +1,3 @@
-import path from 'node:path';
-
 import {
   expect,
   test,
@@ -15,10 +13,6 @@ import {
   openAndAudit,
 } from './support/ui-audit';
 
-const fixtureRoot = path.join(
-  process.cwd(),
-  'output/uiux-image-upload/test-images',
-);
 const e2eChapterId =
   process.env.E2E_CHAPTER_ID?.trim() || '6a67afcf-768f-4fe4-8c62-41b58a19840d';
 const e2eEntryId =
@@ -201,11 +195,6 @@ test('authenticated routes and primary interactions pass the UI audit', async ({
       path: '/dashboard',
       expectedHeading: /world$/,
       readySelector: '[data-map-state="ready"]',
-    },
-    {
-      name: 'upload',
-      path: '/dashboard/import',
-      expectedHeading: 'Turn your camera roll into an atlas.',
     },
     {
       name: 'places',
@@ -458,56 +447,10 @@ test('authenticated routes and primary interactions pass the UI audit', async ({
     },
   );
 
-  const uploadViewports = isMobileProject(testInfo)
-    ? nativeMobileViewport
-    : [
-        { name: 'small-phone', width: 320, height: 568 },
-        { name: 'desktop', width: 1440, height: 900 },
-      ];
-
-  for (const viewport of uploadViewports) {
-    await applyViewport(page, viewport);
-    // A cold desktop browser can paint the server-rendered picker just before
-    // React attaches its change handler. Network idle is the observable point
-    // at which the upload surface is ready for an immediate automated selection.
-    await page.goto('/dashboard/import', { waitUntil: 'networkidle' });
-    const chooser = page.locator('input[type="file"]').first();
-    await chooser.setInputFiles([
-      path.join(fixtureRoot, 'riverwalk-test.png'),
-      path.join(fixtureRoot, 'kyoto-test.png'),
-    ]);
-    await expect(page.getByText('2 photos selected')).toBeVisible({
-      timeout: 20_000,
-    });
-    await auditCurrentPage(
-      page,
-      testInfo,
-      `upload-selection-${viewport.name}-${testInfo.project.name}`,
-      monitor,
-      {
-        accessibility: testInfo.project.name === 'chromium',
-      },
-    );
-    await page.getByRole('button', { name: 'Review 2 photos' }).click();
-    await expect(
-      page.getByRole('heading', { name: /2 memories across the map/i }),
-    ).toBeVisible();
-    await auditCurrentPage(
-      page,
-      testInfo,
-      `upload-review-${viewport.name}-${testInfo.project.name}`,
-      monitor,
-      {
-        accessibility: testInfo.project.name === 'chromium',
-        readySelector: '[data-map-state="ready"]',
-      },
-    );
-  }
-
   monitor.stop();
 });
 
-test('the removed Adventures route returns the authenticated 404', async ({
+test('removed dashboard routes return the authenticated 404', async ({
   page,
 }, testInfo) => {
   test.skip(
@@ -523,23 +466,34 @@ test('the removed Adventures route returns the authenticated 404', async ({
     { name: 'smallest-portrait-320x568', width: 320, height: 568 },
     { name: 'mobile-landscape-915x412', width: 915, height: 412 },
   ];
+  const removedRoutes = [
+    { name: 'adventures', path: '/dashboard/adventures' },
+    {
+      name: 'bulk-import',
+      path: '/dashboard/import?source=legacy-bookmark#resume',
+    },
+  ];
 
-  for (const viewport of viewports) {
-    await applyViewport(page, viewport);
-    await openAndAudit(
-      page,
-      testInfo,
-      '/dashboard/adventures',
-      `removed-adventures-${viewport.name}`,
-      monitor,
-      {
-        accessibility:
-          viewport.name === 'desktop-1440x900' ||
-          viewport.name === 'smallest-portrait-320x568',
-        expectedHeading: 'This path is not in the atlas.',
-        expectedStatus: 404,
-      },
-    );
+  for (const route of removedRoutes) {
+    for (const viewport of viewports) {
+      await applyViewport(page, viewport);
+      const auditedRoute = new URL(route.path, 'http://field-atlas.test');
+      auditedRoute.searchParams.set('audit-viewport', viewport.name);
+      await openAndAudit(
+        page,
+        testInfo,
+        `${auditedRoute.pathname}${auditedRoute.search}${auditedRoute.hash}`,
+        `removed-${route.name}-${viewport.name}`,
+        monitor,
+        {
+          accessibility:
+            viewport.name === 'desktop-1440x900' ||
+            viewport.name === 'smallest-portrait-320x568',
+          expectedHeading: 'This path is not in the atlas.',
+          expectedStatus: 404,
+        },
+      );
+    }
   }
 
   monitor.stop();

@@ -9,21 +9,21 @@ import Link from 'next/link';
 const principles = [
   {
     icon: PhotoIcon,
-    metric: 'One batch',
-    title: 'Select the trip once.',
-    copy: 'Photos keep their captured order while the whole journey moves forward together.',
+    metric: 'One place',
+    title: 'Place the moment.',
+    copy: 'Start with the spot that matters and give the Memory a home on your atlas.',
   },
   {
     icon: MapIcon,
-    metric: 'Exceptions only',
-    title: 'Skip the obvious checks.',
-    copy: 'Clear place and date matches move on. Only uncertain photos ask for your attention.',
+    metric: 'One complete Memory',
+    title: 'Keep every detail together.',
+    copy: 'Add multiple photos, the date, and the field notes you want to remember.',
   },
   {
     icon: BookOpenIcon,
-    metric: 'One final choice',
-    title: 'Finish in the right shape.',
-    copy: 'Keep individual memories or gather the trip into a journey—without rebuilding either.',
+    metric: 'One connected Journey',
+    title: 'Build the story over time.',
+    copy: 'Connect Memories into a Journey whenever they belong to something bigger.',
   },
 ];
 
@@ -38,12 +38,13 @@ export function FieldJournal({ isLoggedIn = false }: { isLoggedIn?: boolean }) {
         <div className="journal-intro">
           <p className="section-kicker">Why it’s faster · 02</p>
           <h2 id="journal-title">
-            Your attention goes
-            <span>only where it matters.</span>
+            Build one Memory.
+            <span>Let the Journey follow.</span>
           </h2>
           <p>
-            Field Atlas handles the repeatable first pass, then gets out of your
-            way. You stay responsible for the moments that need judgment.
+            Field Atlas keeps place, photos, and details together from the
+            start. Add what matters now and shape the larger story when you’re
+            ready.
           </p>
         </div>
 
@@ -77,13 +78,11 @@ export function FieldJournal({ isLoggedIn = false }: { isLoggedIn?: boolean }) {
           <span />
         </div>
         <p className="section-kicker">Private by default · 03</p>
-        <h2 id="collection-title">
-          Your next journey is already in your camera roll.
-        </h2>
+        <h2 id="collection-title">Your next Memory starts with a place.</h2>
         <p>
-          Start with the photos you already have. Every imported memory begins
-          private, every place remains editable, and nothing is shared until you
-          choose.
+          Place it on your atlas, add up to six photos and the details the
+          moment needs, and connect it to a Journey whenever you choose. Every
+          Memory begins private and remains editable.
         </p>
         <ul className="callout-trust" aria-label="Privacy promises">
           <li>
@@ -98,11 +97,11 @@ export function FieldJournal({ isLoggedIn = false }: { isLoggedIn?: boolean }) {
         </ul>
         <Link
           href={
-            isLoggedIn ? '/dashboard/import' : '/sign-up?intent=photo-import'
+            isLoggedIn ? '/dashboard?new=memory' : '/sign-up?intent=new-memory'
           }
           className="callout-action"
         >
-          {isLoggedIn ? 'Upload another journey' : 'Upload your first journey'}
+          {isLoggedIn ? 'Place another Memory' : 'Place your first Memory'}
           <span aria-hidden="true">↗</span>
         </Link>
       </section>

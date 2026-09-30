@@ -1,19 +1,19 @@
 import {
   getPostAuthDestination,
   getPostAuthIntent,
-  PHOTO_IMPORT_INTENT,
+  NEW_MEMORY_INTENT,
   withPostAuthIntent,
 } from '@/app/lib/auth/post-auth-intent';
 
 describe('post-auth intent', () => {
-  it('carries the photo-import journey to the import workspace', () => {
-    expect(getPostAuthIntent(PHOTO_IMPORT_INTENT)).toBe(PHOTO_IMPORT_INTENT);
-    expect(getPostAuthDestination(PHOTO_IMPORT_INTENT)).toBe(
-      '/dashboard/import',
+  it('carries the new-Memory journey to Memory creation', () => {
+    expect(getPostAuthIntent(NEW_MEMORY_INTENT)).toBe(NEW_MEMORY_INTENT);
+    expect(getPostAuthDestination(NEW_MEMORY_INTENT)).toBe(
+      '/dashboard?new=memory',
     );
-    expect(
-      withPostAuthIntent('/verify-email?sent=1', PHOTO_IMPORT_INTENT),
-    ).toBe('/verify-email?sent=1&intent=photo-import');
+    expect(withPostAuthIntent('/verify-email?sent=1', NEW_MEMORY_INTENT)).toBe(
+      '/verify-email?sent=1&intent=new-memory',
+    );
   });
 
   it('ignores arbitrary destinations instead of creating an open redirect', () => {

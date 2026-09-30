@@ -71,7 +71,7 @@ the date picker or previous/next day controls; February 29 matches only February
 
 When no anniversaries match, a separate **Recent memories** section shows up to
 six visited memories on or before the selected date. Only your saved, visited,
-undeleted memories appear; unfinished photo imports are excluded. Cards link
+undeleted memories appear; unfinished legacy imports are excluded. Cards link
 to the memory's keepsake, its pin on the Atlas, and a related journey when one
 exists. The page and its photographs remain private to your verified account.
 
@@ -112,7 +112,6 @@ npm run seed:e2e
 
 DATABASE_URL=postgresql://...@127.0.0.1:5432/field_atlas_e2e \
 E2E_DATABASE_ADAPTER=pg \
-E2E_REQUIRE_FULL_IMPORT=1 \
 POSTGRES_URL=postgresql://...@127.0.0.1:5432/field_atlas_e2e \
 ATLAS_GEOCODER_ENDPOINT=http://127.0.0.1:3100/e2e-geocoder.json \
 CRON_SECRET=local-e2e-cleanup-secret \
@@ -127,17 +126,14 @@ suite. Set `E2E_SHARED_CHAPTER_ID` when that run should also audit a shared
 journey. The local style keeps the required authenticated gate independent of
 third-party tile availability; production continues to use the configured map
 provider. The authenticated suite also uses a filesystem media store confined
-to the operating system's temporary directory. Its full-import canary sends
-real image bytes through the upload API, verifies persistence and private media
-delivery, recovers a committed upload whose browser response was lost, and
-proves cancelled-import cleanup without touching Vercel Blob.
+to the operating system's temporary directory. The retained Memory and Journey
+tests send real image bytes through the upload API, verify persistence and
+private media delivery, and clean up without touching Vercel Blob.
 
 Set `E2E_BASE_URL` when auditing an already-running production build. If it is
 unset, Playwright starts the built application on its configured local port.
-The destructive full-import canary only runs against that Playwright-owned
-loopback server with both guarded filesystem-adapter flags enabled; it always
-skips external-server audits. CI sets `E2E_REQUIRE_FULL_IMPORT=1`, which turns a
-missing isolation condition into a test failure instead of a silent skip.
+Database-mutating lifecycle coverage remains restricted to Playwright-owned,
+loopback test databases with explicit seed and filesystem-adapter guards.
 
 ## Contributing
 

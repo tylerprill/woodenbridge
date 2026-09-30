@@ -5,7 +5,7 @@
 import { render, screen } from '@testing-library/react';
 
 import type { SignUpState } from '@/app/lib/auth/sign-up';
-import { PHOTO_IMPORT_INTENT } from '@/app/lib/auth/post-auth-intent';
+import { NEW_MEMORY_INTENT } from '@/app/lib/auth/post-auth-intent';
 import { SignUpFieldsForm } from '@/components/unclean/sign-up-form';
 import VerifyEmailForm, {
   VerificationCodeForm,
@@ -74,27 +74,27 @@ describe('account creation and verification UI', () => {
     expect(screen.queryByLabelText('Email address')).not.toBeInTheDocument();
   });
 
-  it('preserves the photo-import intent when returning to account creation', () => {
+  it('preserves the new-Memory intent when returning to account creation', () => {
     render(
       <VerifyEmailForm
         hasChallenge={false}
         codeSent={false}
-        intent={PHOTO_IMPORT_INTENT}
+        intent={NEW_MEMORY_INTENT}
       />,
     );
 
     expect(
       screen.getByRole('link', { name: 'Return to create account' }),
-    ).toHaveAttribute('href', '/sign-up?intent=photo-import');
+    ).toHaveAttribute('href', '/sign-up?intent=new-memory');
   });
 
-  it('submits the photo-import intent with the verification code', () => {
+  it('submits the new-Memory intent with the verification code', () => {
     const { container } = render(
-      <VerificationCodeForm codeSent={false} intent={PHOTO_IMPORT_INTENT} />,
+      <VerificationCodeForm codeSent={false} intent={NEW_MEMORY_INTENT} />,
     );
 
     expect(
       container.querySelector('form.auth-form input[name="intent"]'),
-    ).toHaveValue(PHOTO_IMPORT_INTENT);
+    ).toHaveValue(NEW_MEMORY_INTENT);
   });
 });

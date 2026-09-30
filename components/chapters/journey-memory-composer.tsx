@@ -28,9 +28,9 @@ import type {
 import { ATLAS_MEDIA_MAX_FILES } from '@/app/lib/atlas/media-policy';
 import { withAtlasPlaceContext } from '@/app/lib/atlas/place';
 import { analyzeAtlasImportPhoto } from '@/app/lib/atlas/photo-import-client';
+import { getAtlasPhotoFileProblem } from '@/app/lib/atlas/photo-upload-validation';
 import type { AtlasJourneyContinuation } from '@/app/lib/chapters/definitions';
 import AtlasMap from '@/components/atlas/atlas-map-loader';
-import { getImportFileProblem } from '@/components/atlas/photo-import-helpers';
 import { MemoryDrawer } from '@/components/atlas/memory-drawer';
 import styles from './chapters.module.css';
 
@@ -94,11 +94,11 @@ export function JourneyMemoryComposer({
           }
 
           const invalidFile = photoFiles.find((file) =>
-            getImportFileProblem(file),
+            getAtlasPhotoFileProblem(file),
           );
           if (invalidFile) {
             setMessage(
-              `${invalidFile.name}: ${getImportFileProblem(invalidFile)}`,
+              `${invalidFile.name}: ${getAtlasPhotoFileProblem(invalidFile)}`,
             );
             return;
           }

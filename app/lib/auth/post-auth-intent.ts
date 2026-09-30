@@ -1,13 +1,13 @@
-export const PHOTO_IMPORT_INTENT = 'photo-import';
+export const NEW_MEMORY_INTENT = 'new-memory';
 
-export type PostAuthIntent = typeof PHOTO_IMPORT_INTENT;
+export type PostAuthIntent = typeof NEW_MEMORY_INTENT;
 
 export function getPostAuthIntent(value: unknown): PostAuthIntent | undefined {
-  return value === PHOTO_IMPORT_INTENT ? PHOTO_IMPORT_INTENT : undefined;
+  return value === NEW_MEMORY_INTENT ? NEW_MEMORY_INTENT : undefined;
 }
 
 export function getPostAuthDestination(value: unknown) {
-  return getPostAuthIntent(value) ? '/dashboard/import' : '/dashboard';
+  return getPostAuthIntent(value) ? '/dashboard?new=memory' : '/dashboard';
 }
 
 export function withPostAuthIntent(path: string, value: unknown) {

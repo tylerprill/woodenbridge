@@ -9,7 +9,7 @@ import { BrandLockup } from '@/components/clean/brand-lockup';
 import { HeaderLogoutButton } from '@/components/home/header-logout-button';
 
 const navigation = [
-  { label: 'Photo upload', href: '#photo-upload' },
+  { label: 'Create a Memory', href: '#memory-creation' },
   { label: 'Why it’s faster', href: '#how-it-works' },
   { label: 'Private by default', href: '#privacy' },
 ];
@@ -61,7 +61,7 @@ export function SiteHeader({ user }: SiteHeaderProps) {
           </Link>
           <Link
             className="header-action header-action-primary"
-            href="/sign-up?intent=photo-import"
+            href="/sign-up?intent=new-memory"
           >
             Create account
             <span aria-hidden="true">↗</span>

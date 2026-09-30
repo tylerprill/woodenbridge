@@ -13,29 +13,29 @@ type PreviewKind = 'select' | 'recognize' | 'finish';
 const features = [
   {
     index: '01',
-    name: 'Bring in the whole trip.',
-    label: 'Choose your photos',
+    name: 'Place a Memory.',
+    label: 'Choose its place',
     description:
-      'Select a camera-roll batch instead of building memories one pin at a time. The captured order stays intact.',
-    detail: 'JPG, PNG, WebP, and HEIC',
+      'Drop a pin where the moment happened so every photo and detail begins with the right place.',
+    detail: 'Anywhere on your atlas',
     kind: 'select' as const,
   },
   {
     index: '02',
-    name: 'Review only what needs you.',
-    label: 'Recognized for you',
+    name: 'Add the whole moment.',
+    label: 'Photos and details',
     description:
-      'Places and captured dates are prepared automatically. Clear matches move forward while exceptions stay visible.',
-    detail: '2 brought forward for review',
+      'Keep multiple photos together, then add the date, title, and field notes that make the Memory yours.',
+    detail: 'Photos, date, and notes in one place',
     kind: 'recognize' as const,
   },
   {
     index: '03',
-    name: 'Keep memories or shape a journey.',
-    label: 'Finish your way',
+    name: 'Connect Memories into a Journey.',
+    label: 'Build the story',
     description:
-      'Add only the titles and field notes that matter, then save private memories or gather the trip into one journey.',
-    detail: 'Everything remains editable',
+      'Bring related Memories together in order, then keep growing and refining the Journey over time.',
+    detail: 'Reorder and edit anytime',
     kind: 'finish' as const,
   },
 ];
@@ -47,7 +47,7 @@ function FeaturePreview({ kind, index }: { kind: PreviewKind; index: string }) {
       aria-hidden="true"
     >
       <div className="feature-preview-bar">
-        <span>Example import</span>
+        <span>Example Memory</span>
         <strong>{index} / 03</strong>
       </div>
 
@@ -65,8 +65,8 @@ function FeaturePreview({ kind, index }: { kind: PreviewKind; index: string }) {
           <div className="feature-preview-summary">
             <PhotoIcon />
             <span>
-              <small>Ready to import</small>
-              <strong>12 photos selected</strong>
+              <small>Added to this Memory</small>
+              <strong>6 photos together</strong>
             </span>
           </div>
         </>
@@ -84,15 +84,15 @@ function FeaturePreview({ kind, index }: { kind: PreviewKind; index: string }) {
             <span>
               <CheckCircleIcon />
               <span>
-                <small>Ready</small>
-                <strong>10 places recognized</strong>
+                <small>Place and date</small>
+                <strong>Saved to your atlas</strong>
               </span>
             </span>
             <span data-review="true">
               <ExclamationTriangleIcon />
               <span>
-                <small>Needs you</small>
-                <strong>2 photos to review</strong>
+                <small>Add when ready</small>
+                <strong>Your field notes</strong>
               </span>
             </span>
           </div>
@@ -130,16 +130,16 @@ function FeaturePreview({ kind, index }: { kind: PreviewKind; index: string }) {
 export function FeaturedBridges() {
   return (
     <section
-      id="photo-upload"
+      id="memory-creation"
       className="featured-section"
       aria-labelledby="featured-title"
     >
       <div className="section-heading">
-        <p>Photo upload · 01</p>
-        <h2 id="featured-title">From camera roll to mapped journey.</h2>
+        <p>Memory creation · 01</p>
+        <h2 id="featured-title">From one place to a mapped Journey.</h2>
         <p className="section-description">
-          The repetitive work happens quietly. You stay in control of every
-          place, detail, and final memory.
+          Start with one meaningful place, keep the whole Memory together, and
+          connect it to the Journeys that tell your story.
         </p>
       </div>
 

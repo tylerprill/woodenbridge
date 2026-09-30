@@ -2,11 +2,13 @@ import 'server-only';
 
 import { db, sql } from '@/app/lib/db';
 import { deleteAtlasMediaObjects } from './media-storage';
-import { ATLAS_IMPORT_CLEANUP_FENCE_MINUTES } from './import-validation';
 
 const CLEANUP_LEASE_MINUTES = 15;
 const CLEANUP_BATCH_SIZE = 10;
 const IMPORT_STALE_HOURS = 24;
+// Retained temporarily so unfinished batches created before the importer was
+// retired can release their private media safely.
+const LEGACY_IMPORT_CLEANUP_FENCE_MINUTES = 31;
 
 type CleanupClaim = {
   id: string;
@@ -163,7 +165,7 @@ export async function cleanupCancelledAtlasImportBatches() {
       SET
         status = 'cancel_pending',
         version = version + 1,
-        cleanup_not_before = NOW() + (${ATLAS_IMPORT_CLEANUP_FENCE_MINUTES} * INTERVAL '1 minute'),
+        cleanup_not_before = NOW() + (${LEGACY_IMPORT_CLEANUP_FENCE_MINUTES} * INTERVAL '1 minute'),
         updated_at = NOW()
       WHERE status IN ('uploading', 'ready')
         AND updated_at < NOW() - (${IMPORT_STALE_HOURS} * INTERVAL '1 hour')
