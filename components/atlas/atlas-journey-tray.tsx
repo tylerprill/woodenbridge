@@ -15,7 +15,9 @@ import { type RefObject, useEffect, useMemo, useRef } from 'react';
 
 import type { AtlasJourneySummary } from '@/app/lib/atlas/journeys/definitions';
 import { formatChapterDateRange } from '@/app/lib/chapters/format';
+import { journeyReaderHref } from '@/app/lib/chapters/links';
 import {
+  JOURNEY_START_SEGMENT_KEY,
   journeySegmentGroups,
   type JourneyStop,
 } from './atlas-journey-segments';
@@ -144,6 +146,11 @@ export function AtlasJourneyTray({
       )?.key
     : null;
   const openSegmentKey = selectedGroupKey ?? selectedSegmentKey;
+  const readerDestination = openSegmentKey
+    ? openSegmentKey === JOURNEY_START_SEGMENT_KEY
+      ? ({ kind: 'unsegmented' } as const)
+      : ({ kind: 'segment', segmentId: openSegmentKey } as const)
+    : undefined;
 
   useEffect(() => {
     headingRef.current?.focus({ preventScroll: true });
@@ -359,7 +366,7 @@ export function AtlasJourneyTray({
             <PlayIcon aria-hidden="true" /> <span>Relive</span>
           </button>
           <Link
-            href={`/dashboard/chapters/${selectedJourney.id}`}
+            href={journeyReaderHref(selectedJourney.id, readerDestination)}
             aria-label="Read journey"
           >
             <BookOpenIcon aria-hidden="true" />

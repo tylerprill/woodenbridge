@@ -422,6 +422,7 @@ export function ChapterReader({
         </div>
         {chapter.segments.length ? (
           <ChapterSegmentedTimeline
+            key={chapter.id}
             segments={chapter.segments.map((segment) => ({
               id: segment.id,
               positionLabel: String(segment.position + 1).padStart(2, '0'),

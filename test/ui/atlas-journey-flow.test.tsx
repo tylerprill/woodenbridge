@@ -416,6 +416,10 @@ describe('Atlas Journey Lens', () => {
     expect(screen.getByTestId('selected-map-segment-stops')).toHaveTextContent(
       'none',
     );
+    expect(screen.getByRole('link', { name: 'Read journey' })).toHaveAttribute(
+      'href',
+      `/dashboard/chapters/${JOURNEY_ID}`,
+    );
 
     await user.click(firstSegment);
     expect(firstSegment).toHaveAttribute('aria-expanded', 'true');
@@ -426,6 +430,10 @@ describe('Atlas Journey Lens', () => {
     ).toBeVisible();
     expect(screen.getByTestId('selected-map-segment-stops')).toHaveTextContent(
       FIRST_MEMORY_ID,
+    );
+    expect(screen.getByRole('link', { name: 'Read journey' })).toHaveAttribute(
+      'href',
+      `/dashboard/chapters/${JOURNEY_ID}#journey-segment-${FIRST_SEGMENT_ID}`,
     );
 
     await user.click(secondSegment);
@@ -445,6 +453,10 @@ describe('Atlas Journey Lens', () => {
     ).toBeVisible();
     expect(screen.getByTestId('selected-map-segment-stops')).toHaveTextContent(
       SECOND_MEMORY_ID,
+    );
+    expect(screen.getByRole('link', { name: 'Read journey' })).toHaveAttribute(
+      'href',
+      `/dashboard/chapters/${JOURNEY_ID}#journey-segment-${SECOND_SEGMENT_ID}`,
     );
 
     await user.click(secondSegment);

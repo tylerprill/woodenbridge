@@ -54,14 +54,33 @@ export function ChapterSegmentedTimeline({
   segments: ChapterSegmentIndexItem[];
   groups: ChapterSegmentGroup[];
 }) {
-  const [expandedGroupIds, setExpandedGroupIds] = useState(
-    () => new Set(groups.map((group) => group.key)),
-  );
+  const [expandedGroupIds, setExpandedGroupIds] = useState(() => {
+    const latestSegmentId = segments.at(-1)?.id;
+    const latestSegmentGroup = groups.find(
+      (group) => group.segmentId === latestSegmentId,
+    );
+
+    return new Set(latestSegmentGroup ? [latestSegmentGroup.key] : []);
+  });
   const [selectedSegmentId, setSelectedSegmentId] = useState<string | null>(
     null,
   );
   const [pendingNavigation, setPendingNavigation] =
     useState<PendingNavigation | null>(null);
+
+  const revealGroup = useCallback(
+    (group: ChapterSegmentGroup, moveFocus: boolean) => {
+      setExpandedGroupIds((current) => {
+        if (current.has(group.key)) return current;
+        const next = new Set(current);
+        next.add(group.key);
+        return next;
+      });
+      setSelectedSegmentId(group.segmentId);
+      setPendingNavigation({ targetId: group.targetId, moveFocus });
+    },
+    [],
+  );
 
   const revealSegment = useCallback(
     (segmentId: string, moveFocus: boolean) => {
@@ -70,26 +89,17 @@ export function ChapterSegmentedTimeline({
       );
       if (!group) return;
 
-      setExpandedGroupIds((current) => {
-        if (current.has(group.key)) return current;
-        const next = new Set(current);
-        next.add(group.key);
-        return next;
-      });
-      setSelectedSegmentId(segmentId);
-      setPendingNavigation({ targetId: group.targetId, moveFocus });
+      revealGroup(group, moveFocus);
     },
-    [groups],
+    [groups, revealGroup],
   );
 
   useEffect(() => {
     function revealHashTarget() {
       const targetId = window.location.hash.slice(1);
-      const group = groups.find(
-        (candidate) => candidate.segmentId && candidate.targetId === targetId,
-      );
-      if (group?.segmentId) {
-        revealSegment(group.segmentId, false);
+      const group = groups.find((candidate) => candidate.targetId === targetId);
+      if (group) {
+        revealGroup(group, false);
         return;
       }
       setSelectedSegmentId(null);
@@ -103,7 +113,7 @@ export function ChapterSegmentedTimeline({
       window.removeEventListener('hashchange', revealHashTarget);
       window.removeEventListener('popstate', revealHashTarget);
     };
-  }, [groups, revealSegment]);
+  }, [groups, revealGroup]);
 
   useEffect(() => {
     if (!pendingNavigation) return;

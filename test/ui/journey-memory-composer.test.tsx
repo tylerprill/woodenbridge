@@ -11,7 +11,10 @@ import {
 } from '@/app/lib/actions/atlas';
 import type { AtlasEntry, AtlasView } from '@/app/lib/atlas/definitions';
 import { analyzeAtlasImportPhoto } from '@/app/lib/atlas/photo-import-client';
-import type { AtlasJourneyContinuation } from '@/app/lib/chapters/definitions';
+import type {
+  AtlasJourneyContinuation,
+  JourneyContinuationDestination,
+} from '@/app/lib/chapters/definitions';
 import { JourneyMemoryComposer } from '@/components/chapters/journey-memory-composer';
 
 const mockPush = jest.fn();
@@ -79,7 +82,10 @@ jest.mock('@/components/atlas/memory-drawer', () => ({
   }: {
     continuationJourney: AtlasJourneyContinuation;
     onArchive: (id: string) => void;
-    onContinuationSaved: (entry: AtlasEntry) => void;
+    onContinuationSaved: (
+      entry: AtlasEntry,
+      destination: JourneyContinuationDestination,
+    ) => void;
     initialPhotoFiles?: File[];
     surface: string;
   }) => (
@@ -88,7 +94,20 @@ jest.mock('@/components/atlas/memory-drawer', () => ({
       <span>{continuationJourney.selectedSegmentId}</span>
       <span>{surface}</span>
       <span>{initialPhotoFiles?.length ?? 0} photos ready</span>
-      <button type="button" onClick={() => onContinuationSaved(entry)}>
+      <button
+        type="button"
+        onClick={() =>
+          onContinuationSaved(
+            entry,
+            continuationJourney.selectedSegmentId
+              ? {
+                  kind: 'segment',
+                  segmentId: continuationJourney.selectedSegmentId,
+                }
+              : { kind: 'unsegmented' },
+          )
+        }
+      >
         Finish memory
       </button>
       <button type="button" onClick={() => onArchive(entry.id)}>
@@ -197,7 +216,7 @@ it('starts at the latest Journey stop and opens the scoped Memory editor', async
 
   await user.click(screen.getByRole('button', { name: 'Finish memory' }));
   expect(mockPush).toHaveBeenCalledWith(
-    `/dashboard/chapters/${journey.id}?saved=continued#chapter-memories`,
+    `/dashboard/chapters/${journey.id}?saved=continued#journey-segment-${journey.selectedSegmentId}`,
   );
 });
 

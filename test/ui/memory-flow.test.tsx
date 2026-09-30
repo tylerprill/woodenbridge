@@ -586,7 +586,9 @@ describe('memory capture UI', () => {
       ),
     );
     expect(onUpdate).toHaveBeenCalledWith(saved);
-    expect(onContinuationSaved).toHaveBeenCalledWith(saved);
+    expect(onContinuationSaved).toHaveBeenCalledWith(saved, {
+      kind: 'unsegmented',
+    });
   });
 
   it('keeps many Journey Segments compact and can start a suggested new day', async () => {
@@ -614,6 +616,7 @@ describe('memory capture UI', () => {
       recordState: 'saved' as const,
       version: 2,
     };
+    const onContinuationSaved = jest.fn();
     jest.mocked(updateAtlasEntryAction).mockResolvedValue({
       ok: true,
       data: saved,
@@ -630,7 +633,7 @@ describe('memory capture UI', () => {
         mediaLoading={false}
         placeResolving={false}
         continuationJourney={journey}
-        onContinuationSaved={jest.fn()}
+        onContinuationSaved={onContinuationSaved}
       />,
     );
 
@@ -665,6 +668,9 @@ describe('memory capture UI', () => {
         }),
       ),
     );
+    expect(onContinuationSaved).toHaveBeenCalledWith(saved, {
+      kind: 'new-segment',
+    });
   });
 
   it('can continue an older Segment selected from the same compact control', async () => {
@@ -691,6 +697,7 @@ describe('memory capture UI', () => {
       recordState: 'saved' as const,
       version: 2,
     };
+    const onContinuationSaved = jest.fn();
     jest.mocked(updateAtlasEntryAction).mockResolvedValue({
       ok: true,
       data: saved,
@@ -715,7 +722,7 @@ describe('memory capture UI', () => {
           latestMemoryDate: latestSegment.endDate,
           latestMemoryLocation: null,
         }}
-        onContinuationSaved={jest.fn()}
+        onContinuationSaved={onContinuationSaved}
       />,
     );
 
@@ -737,6 +744,10 @@ describe('memory capture UI', () => {
         }),
       ),
     );
+    expect(onContinuationSaved).toHaveBeenCalledWith(saved, {
+      kind: 'segment',
+      segmentId: firstSegment.id,
+    });
   });
 
   it('discards a cancelled Journey memory before returning', async () => {
