@@ -1,5 +1,6 @@
 import {
   ArrowLeftIcon,
+  ArrowPathIcon,
   ArrowRightIcon,
   CalendarDaysIcon,
   GlobeAltIcon,
@@ -18,6 +19,7 @@ import {
   chapterMemoryLabel,
   formatChapterDateRange,
 } from '@/app/lib/chapters/format';
+import { deriveJourneyDisplayRoute } from '@/app/lib/chapters/journey-display';
 import { continueJourneyEditorHref } from '@/app/lib/chapters/links';
 import { KeepsakeCard } from '@/components/atlas/keepsake-card';
 import { ChapterJumpLink } from './chapter-jump-link';
@@ -130,14 +132,9 @@ export function ChapterReader({
   const displayIndexByEntryId = new Map(
     orderedEntries.map(({ entry }, index) => [entry.id, index]),
   );
-  const places = orderedEntries
-    .map(({ entry }) => entry.placeLabel || entry.placeName)
-    .filter((place): place is string => Boolean(place));
-  const journeyStart = places[0];
-  const journeyEnd =
-    places.length > 1 && places.some((place) => place !== journeyStart)
-      ? places[places.length - 1]
-      : null;
+  const journeyDisplay = deriveJourneyDisplayRoute(
+    orderedEntries.map(({ entry }) => entry),
+  );
   const showMap = mode === 'owner' || chapter.shareMap;
   const mapEntries = showMap
     ? orderedEntries.flatMap(({ entry }, memoryIndex) => {
@@ -332,21 +329,30 @@ export function ChapterReader({
               {chapterMemoryLabel(chapter.memoryCount)}
             </span>
           </div>
-          {journeyStart ? (
+          {journeyDisplay.kind !== 'none' ? (
             <p
               className={styles.chapterPlaces}
-              aria-label={
-                journeyEnd
-                  ? `From ${journeyStart} to ${journeyEnd}`
-                  : journeyStart
-              }
+              data-route-kind={journeyDisplay.kind}
             >
-              <span>{journeyStart}</span>
-              {journeyEnd ? (
-                <>
-                  <ArrowRightIcon aria-hidden="true" />
-                  <span>{journeyEnd}</span>
-                </>
+              <span className="sr-only">{journeyDisplay.ariaLabel}</span>
+              <span className={styles.chapterPlacePath} aria-hidden="true">
+                <span>
+                  {journeyDisplay.kind === 'local-loop'
+                    ? `Around ${journeyDisplay.origin}`
+                    : journeyDisplay.origin}
+                </span>
+                {journeyDisplay.destination ? (
+                  <>
+                    <ArrowRightIcon />
+                    <span>{journeyDisplay.destination}</span>
+                  </>
+                ) : null}
+              </span>
+              {journeyDisplay.status ? (
+                <span className={styles.chapterRoundTrip} aria-hidden="true">
+                  <ArrowPathIcon />
+                  {journeyDisplay.status}
+                </span>
               ) : null}
             </p>
           ) : null}

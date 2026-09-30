@@ -172,6 +172,24 @@ describe('responsive and route-level UI contracts', () => {
     expect(mobile).toMatch(
       /\.chapterPrologue,[\s\S]*?\.chapterMemories \{\s*scroll-margin-top: 2\.75rem;/,
     );
+    expect(mobile).toMatch(
+      /\.chapterPlacePath \{[\s\S]*?grid-template-columns: minmax\(0, 1fr\);[\s\S]*?gap: 0\.3rem;/,
+    );
+    expect(mobile).toMatch(/\.chapterRoundTrip svg \{[\s\S]*?transform: none;/);
+  });
+
+  it('gives completed Journey routes a compact noninteractive status cue', () => {
+    const css = readFileSync(
+      join(root, 'components/chapters/chapters.module.css'),
+      'utf8',
+    );
+
+    expect(css).toMatch(
+      /\.chapterRoundTrip \{[\s\S]*?min-height: 1\.55rem;[\s\S]*?border-radius: 999px;[\s\S]*?font-size: 0\.56rem;/,
+    );
+    expect(css).toMatch(
+      /\.chapterDetail\[data-reader-mode='shared'\] \.chapterRoundTrip \{[\s\S]*?color: var\(--timber-light\);/,
+    );
   });
 
   it('uses responsive route-map padding that spreads narrow-screen markers', () => {
