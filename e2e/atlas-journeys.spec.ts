@@ -202,8 +202,31 @@ test('Journey Lens connects the Atlas, playback, and Journey workshop', async ({
     'aria-controls',
     /^journey-segment-/,
   );
-  await expect(firstSegment).toHaveAttribute('aria-expanded', 'true');
+  await expect(firstSegment).toHaveAttribute('aria-expanded', 'false');
   await expect(secondSegment).toHaveAttribute('aria-expanded', 'false');
+  await expect(
+    page.getByRole('list', {
+      name: `Segment 01: ${journeySegments[0].title} memories`,
+    }),
+  ).toHaveCount(0);
+  await expect(
+    page.getByRole('list', {
+      name: `Segment 02: ${journeySegments[1].title} memories`,
+    }),
+  ).toHaveCount(0);
+  const overviewMapStops = page.locator(
+    'button.maplibregl-marker[aria-label^="Stop "]',
+  );
+  await expect(overviewMapStops).toHaveCount(memories.length);
+  for (let index = 0; index < memories.length; index += 1) {
+    await expect(overviewMapStops.nth(index)).toHaveAttribute(
+      'data-segment',
+      'journey',
+    );
+  }
+
+  await firstSegment.click();
+  await expect(firstSegment).toHaveAttribute('aria-expanded', 'true');
   const firstSegmentMemories = page.getByRole('list', {
     name: `Segment 01: ${journeySegments[0].title} memories`,
   });
@@ -218,11 +241,18 @@ test('Journey Lens connects the Atlas, playback, and Journey workshop', async ({
       name: new RegExp(`^2 ${memories[1].title}`, 'i'),
     }),
   ).toBeVisible();
-  await expect(
-    page.getByRole('list', {
-      name: `Segment 02: ${journeySegments[1].title} memories`,
-    }),
-  ).toHaveCount(0);
+  await expect(overviewMapStops.nth(0)).toHaveAttribute(
+    'data-segment',
+    'active',
+  );
+  await expect(overviewMapStops.nth(1)).toHaveAttribute(
+    'data-segment',
+    'active',
+  );
+  await expect(overviewMapStops.nth(2)).toHaveAttribute(
+    'data-segment',
+    'inactive',
+  );
 
   await secondSegment.click();
   await expect(firstSegment).toHaveAttribute('aria-expanded', 'false');
@@ -239,10 +269,28 @@ test('Journey Lens connects the Atlas, playback, and Journey workshop', async ({
       name: new RegExp(`^3 ${memories[2].title}`, 'i'),
     }),
   ).toBeVisible();
+  await expect(overviewMapStops.nth(0)).toHaveAttribute(
+    'data-segment',
+    'inactive',
+  );
+  await expect(overviewMapStops.nth(2)).toHaveAttribute(
+    'data-segment',
+    'active',
+  );
+  await expect(overviewMapStops.nth(3)).toHaveAttribute(
+    'data-segment',
+    'active',
+  );
+  await auditJourneyState(page, testInfo, 'segment-focused', monitor);
+
   await secondSegment.click();
   await expect(secondSegment).toHaveAttribute('aria-expanded', 'false');
-  await firstSegment.click();
-  await expect(firstSegment).toHaveAttribute('aria-expanded', 'true');
+  for (let index = 0; index < memories.length; index += 1) {
+    await expect(overviewMapStops.nth(index)).toHaveAttribute(
+      'data-segment',
+      'journey',
+    );
+  }
   await auditJourneyState(page, testInfo, 'fitted-detail', monitor);
 
   const detailUrl = new URL('/dashboard', 'http://field-atlas.test');
@@ -296,6 +344,10 @@ test('Journey Lens connects the Atlas, playback, and Journey workshop', async ({
       name: new RegExp(`^Stop 3 of 4: ${memories[2].title}`, 'i'),
     }),
   ).toHaveAttribute('aria-current', 'step');
+  await expect(mapStops.nth(0)).toHaveAttribute('data-segment', 'inactive');
+  await expect(mapStops.nth(1)).toHaveAttribute('data-segment', 'inactive');
+  await expect(mapStops.nth(2)).toHaveAttribute('data-segment', 'active');
+  await expect(mapStops.nth(3)).toHaveAttribute('data-segment', 'active');
   await expectActiveJourneyDotClearOfOverlays(page);
   await expect(page.getByRole('button', { name: 'Relive' })).toBeInViewport();
   await auditJourneyState(page, testInfo, 'detail', monitor);

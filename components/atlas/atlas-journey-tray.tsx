@@ -11,75 +11,20 @@ import {
   XMarkIcon,
 } from '@heroicons/react/24/outline';
 import Link from 'next/link';
-import { type RefObject, useEffect, useMemo, useRef, useState } from 'react';
+import { type RefObject, useEffect, useMemo, useRef } from 'react';
 
 import type { AtlasJourneySummary } from '@/app/lib/atlas/journeys/definitions';
 import { formatChapterDateRange } from '@/app/lib/chapters/format';
+import {
+  journeySegmentGroups,
+  type JourneyStop,
+} from './atlas-journey-segments';
 import styles from './atlas.module.css';
 
 type JourneyLoadState = 'idle' | 'loading' | 'ready' | 'error';
-type JourneyStop = AtlasJourneySummary['stops'][number];
-
-type JourneySegmentGroup = {
-  key: string;
-  eyebrow: string;
-  title: string;
-  startDate: string | null;
-  endDate: string | null;
-  stops: JourneyStop[];
-};
 
 function journeyPlace(stop: AtlasJourneySummary['stops'][number] | undefined) {
   return stop?.placeLabel || stop?.placeName || 'Pinned place';
-}
-
-function journeyStopDateRange(stops: JourneyStop[]) {
-  const dates = stops
-    .map((stop) => stop.visitedOn)
-    .filter((date): date is string => Boolean(date))
-    .sort();
-
-  return {
-    startDate: dates[0] ?? null,
-    endDate: dates.at(-1) ?? null,
-  };
-}
-
-function journeySegmentGroups(journey: AtlasJourneySummary) {
-  if (!journey.segments.length) return [];
-
-  const knownSegmentIds = new Set(
-    journey.segments.map((segment) => segment.id),
-  );
-  const unassignedStops = journey.stops.filter(
-    (stop) => !stop.segmentId || !knownSegmentIds.has(stop.segmentId),
-  );
-  const groups: JourneySegmentGroup[] = [];
-
-  if (unassignedStops.length) {
-    const range = journeyStopDateRange(unassignedStops);
-    groups.push({
-      key: 'journey-start',
-      eyebrow: 'Journey start',
-      title: 'Before the first segment',
-      startDate: range.startDate,
-      endDate: range.endDate,
-      stops: unassignedStops,
-    });
-  }
-
-  journey.segments.forEach((segment) => {
-    groups.push({
-      key: segment.id,
-      eyebrow: `Segment ${String(segment.position + 1).padStart(2, '0')}`,
-      title: segment.title,
-      startDate: segment.startDate,
-      endDate: segment.endDate,
-      stops: journey.stops.filter((stop) => stop.segmentId === segment.id),
-    });
-  });
-
-  return groups;
 }
 
 function JourneyMemoryList({
@@ -162,26 +107,28 @@ export function AtlasJourneyTray({
   journeys,
   selectedJourney,
   selectedStopId,
+  selectedSegmentKey,
   loadState,
   errorMessage,
   onClose,
   onRetry,
   onSelectJourney,
   onSelectStop,
-  onClearStop,
+  onSelectSegment,
   onShowOverview,
   onStartPlayback,
 }: {
   journeys: AtlasJourneySummary[];
   selectedJourney: AtlasJourneySummary | null;
   selectedStopId: string | null;
+  selectedSegmentKey: string | null;
   loadState: JourneyLoadState;
   errorMessage: string;
   onClose: () => void;
   onRetry: () => void;
   onSelectJourney: (id: string) => void;
   onSelectStop: (id: string) => void;
-  onClearStop: () => void;
+  onSelectSegment: (key: string | null) => void;
   onShowOverview: () => void;
   onStartPlayback: (id: string) => void;
 }) {
@@ -191,30 +138,12 @@ export function AtlasJourneyTray({
     () => (selectedJourney ? journeySegmentGroups(selectedJourney) : []),
     [selectedJourney],
   );
-  const [segmentDisclosure, setSegmentDisclosure] = useState<{
-    journeyId: string;
-    selectedStopId: string | null;
-    openKey: string | null;
-  } | null>(null);
   const selectedGroupKey = selectedStopId
     ? segmentGroups.find((group) =>
         group.stops.some((stop) => stop.entryId === selectedStopId),
       )?.key
     : null;
-  const defaultOpenKey =
-    selectedGroupKey ??
-    segmentGroups.find((group) => group.stops.length)?.key ??
-    segmentGroups[0]?.key ??
-    null;
-  const disclosureMatchesView =
-    segmentDisclosure !== null &&
-    segmentDisclosure.journeyId === selectedJourney?.id &&
-    segmentDisclosure.selectedStopId === selectedStopId &&
-    (segmentDisclosure.openKey === null ||
-      segmentGroups.some((group) => group.key === segmentDisclosure.openKey));
-  const openSegmentKey = disclosureMatchesView
-    ? segmentDisclosure.openKey
-    : defaultOpenKey;
+  const openSegmentKey = selectedGroupKey ?? selectedSegmentKey;
 
   useEffect(() => {
     headingRef.current?.focus({ preventScroll: true });
@@ -306,26 +235,11 @@ export function AtlasJourneyTray({
                         className={styles.journeySegmentHeading}
                         aria-expanded={expanded}
                         aria-controls={panelId}
-                        onClick={() => {
-                          const nextOpenKey =
-                            openSegmentKey === group.key ? null : group.key;
-                          const ownsSelectedStop = group.stops.some(
-                            (stop) => stop.entryId === selectedStopId,
-                          );
-                          const shouldClearStop = Boolean(
-                            selectedStopId &&
-                            (nextOpenKey === null || !ownsSelectedStop),
-                          );
-
-                          setSegmentDisclosure({
-                            journeyId: selectedJourney.id,
-                            selectedStopId: shouldClearStop
-                              ? null
-                              : selectedStopId,
-                            openKey: nextOpenKey,
-                          });
-                          if (shouldClearStop) onClearStop();
-                        }}
+                        onClick={() =>
+                          onSelectSegment(
+                            openSegmentKey === group.key ? null : group.key,
+                          )
+                        }
                       >
                         <span>
                           <small>{group.eyebrow}</small>

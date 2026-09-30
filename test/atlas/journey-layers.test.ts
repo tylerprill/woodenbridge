@@ -395,6 +395,71 @@ describe('Atlas journey map layers', () => {
     );
   });
 
+  it('emphasizes only route legs and endpoints inside the active Segment', () => {
+    const map = { setFeatureState: jest.fn() };
+    const firstSegmentId = '00000000-0000-4000-8000-000000000021';
+    const secondSegmentId = '00000000-0000-4000-8000-000000000022';
+    const value = journey({
+      segments: [
+        {
+          id: firstSegmentId,
+          title: 'Lakeshore morning',
+          position: 0,
+          memoryCount: 2,
+          startDate: '2026-09-10',
+          endDate: '2026-09-11',
+        },
+        {
+          id: secondSegmentId,
+          title: 'Island morning',
+          position: 1,
+          memoryCount: 1,
+          startDate: '2026-09-12',
+          endDate: '2026-09-12',
+        },
+      ],
+      stops: journey().stops.map((stop, index) => ({
+        ...stop,
+        segmentId: index < 2 ? firstSegmentId : secondSegmentId,
+      })),
+    });
+    const overviewState = {
+      selectedJourneyId: value.id,
+      selectedSegmentStopIds: [],
+    };
+    const firstSegmentState = {
+      ...overviewState,
+      selectedSegmentStopIds: value.stops
+        .slice(0, 2)
+        .map((stop) => stop.entryId),
+    };
+
+    syncAtlasJourneyLayerState(
+      map as never,
+      [value],
+      overviewState,
+      firstSegmentState,
+    );
+
+    expect(map.setFeatureState).toHaveBeenCalledTimes(4);
+    expect(map.setFeatureState).toHaveBeenCalledWith(
+      { source: 'field-atlas-journey-routes', id: `${value.id}:0` },
+      { segmentActive: true },
+    );
+    expect(map.setFeatureState).toHaveBeenCalledWith(
+      { source: 'field-atlas-journey-routes', id: `${value.id}:1` },
+      { segmentDimmed: true },
+    );
+    expect(map.setFeatureState).toHaveBeenCalledWith(
+      { source: 'field-atlas-journey-endpoints', id: `${value.id}:start` },
+      { segmentActive: true },
+    );
+    expect(map.setFeatureState).toHaveBeenCalledWith(
+      { source: 'field-atlas-journey-endpoints', id: `${value.id}:end` },
+      { segmentDimmed: true },
+    );
+  });
+
   it('clears retained feature state when route source data changes', () => {
     const map = { removeFeatureState: jest.fn() };
 
