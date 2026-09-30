@@ -148,6 +148,32 @@ describe('responsive and route-level UI contracts', () => {
     );
   });
 
+  it('uses a compact, consistent reading rhythm on mobile Journey details', () => {
+    const css = readFileSync(
+      join(root, 'components/chapters/chapters.module.css'),
+      'utf8',
+    );
+    const mobile = css.match(
+      /@media \(max-width: 680px\) \{[\s\S]*?@media \(max-width: 760px\),/,
+    )?.[0];
+
+    expect(mobile).toMatch(
+      /\.chapterDetail\[data-reader-mode='owner'\] \.chapterHeroStory \{\s*padding: 1\.5rem;/,
+    );
+    expect(mobile).toMatch(
+      /\.chapterDetail\[data-reader-mode='owner'\] \.chapterPrologue \{\s*padding-top: 3rem;/,
+    );
+    expect(mobile).toMatch(
+      /\.chapterSectionHeading \{[\s\S]*?margin-bottom: 1\.2rem;[\s\S]*?gap: 0\.5rem;/,
+    );
+    expect(mobile).toMatch(
+      /\.journeySegmentHeading \{[\s\S]*?margin: 1\.5rem 0 0\.9rem;[\s\S]*?padding: 0\.75rem 0\.8rem;/,
+    );
+    expect(mobile).toMatch(
+      /\.chapterPrologue,[\s\S]*?\.chapterMemories \{\s*scroll-margin-top: 2\.75rem;/,
+    );
+  });
+
   it('reserves mobile route-map padding for marker radius and offsets', () => {
     const source = readFileSync(
       join(root, 'components/chapters/chapter-map.tsx'),
