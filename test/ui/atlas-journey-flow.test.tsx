@@ -37,14 +37,19 @@ jest.mock('@/components/atlas/atlas-map-loader', () => ({
   __esModule: true,
   default: ({
     selectedJourneyStopId,
+    selectedJourneySegmentStopIds,
     onJourneyStopSelect,
   }: {
     selectedJourneyStopId?: string | null;
+    selectedJourneySegmentStopIds?: string[];
     onJourneyStopSelect?: (id: string) => void;
   }) => (
     <div data-testid="atlas-map">
       <output data-testid="selected-map-stop">
         {selectedJourneyStopId ?? 'none'}
+      </output>
+      <output data-testid="selected-map-segment-stops">
+        {selectedJourneySegmentStopIds?.join(',') || 'none'}
       </output>
       <button
         type="button"
@@ -396,18 +401,32 @@ describe('Atlas Journey Lens', () => {
     const secondSegment = screen.getByRole('button', {
       name: /Segment 02 Harbor evening/i,
     });
-    expect(firstSegment).toHaveAttribute('aria-expanded', 'true');
+    expect(firstSegment).toHaveAttribute('aria-expanded', 'false');
     expect(secondSegment).toHaveAttribute('aria-expanded', 'false');
     expect(
-      screen.getByRole('list', {
+      screen.queryByRole('list', {
         name: 'Segment 01: Dune sunrise memories',
       }),
-    ).toBeVisible();
+    ).not.toBeInTheDocument();
     expect(
       screen.queryByRole('list', {
         name: 'Segment 02: Harbor evening memories',
       }),
     ).not.toBeInTheDocument();
+    expect(screen.getByTestId('selected-map-segment-stops')).toHaveTextContent(
+      'none',
+    );
+
+    await user.click(firstSegment);
+    expect(firstSegment).toHaveAttribute('aria-expanded', 'true');
+    expect(
+      screen.getByRole('list', {
+        name: 'Segment 01: Dune sunrise memories',
+      }),
+    ).toBeVisible();
+    expect(screen.getByTestId('selected-map-segment-stops')).toHaveTextContent(
+      FIRST_MEMORY_ID,
+    );
 
     await user.click(secondSegment);
     expect(firstSegment).toHaveAttribute('aria-expanded', 'false');
@@ -424,9 +443,15 @@ describe('Atlas Journey Lens', () => {
         }),
       ).getByRole('button', { name: /^2 Leland harbor/i }),
     ).toBeVisible();
+    expect(screen.getByTestId('selected-map-segment-stops')).toHaveTextContent(
+      SECOND_MEMORY_ID,
+    );
 
     await user.click(secondSegment);
     expect(secondSegment).toHaveAttribute('aria-expanded', 'false');
+    expect(screen.getByTestId('selected-map-segment-stops')).toHaveTextContent(
+      'none',
+    );
 
     await user.click(
       screen.getByRole('button', { name: 'Select second map stop' }),
@@ -441,6 +466,9 @@ describe('Atlas Journey Lens', () => {
         }),
       ).getByRole('button', { name: /Leland harbor/i }),
     ).toHaveAttribute('aria-current', 'step');
+    expect(screen.getByTestId('selected-map-segment-stops')).toHaveTextContent(
+      SECOND_MEMORY_ID,
+    );
 
     await user.click(secondSegment);
     expect(secondSegment).toHaveAttribute('aria-expanded', 'false');

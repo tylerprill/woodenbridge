@@ -58,6 +58,7 @@ const JOURNEY_PALETTE = [
 
 export type AtlasJourneyLayerState = {
   selectedJourneyId: string | null;
+  selectedSegmentStopIds?: readonly string[];
   hoveredJourneyId?: string | null;
   playbackStopIndex?: number | null;
 };
@@ -93,6 +94,14 @@ function hoveredJourneyExpression(): ExpressionSpecification {
   return ['boolean', ['feature-state', 'hovered'], false];
 }
 
+function activeSegmentExpression(): ExpressionSpecification {
+  return ['boolean', ['feature-state', 'segmentActive'], false];
+}
+
+function dimmedSegmentExpression(): ExpressionSpecification {
+  return ['boolean', ['feature-state', 'segmentDimmed'], false];
+}
+
 function playbackStateExpression(): ExpressionSpecification {
   return ['string', ['feature-state', 'playbackState'], 'idle'];
 }
@@ -125,6 +134,49 @@ function playbackState(
   if (segmentEndIndex <= state.playbackStopIndex) return 'complete';
   if (segmentStartIndex === state.playbackStopIndex) return 'active';
   return 'ahead';
+}
+
+function routeSegmentState(
+  journey: AtlasJourneySummary,
+  segmentIndex: number,
+  state: AtlasJourneyLayerState | null,
+  focusedStopIds: ReadonlySet<string>,
+) {
+  if (
+    !state ||
+    journey.id !== state.selectedJourneyId ||
+    !focusedStopIds.size
+  ) {
+    return { segmentActive: false, segmentDimmed: false };
+  }
+
+  const startId = journey.stops[segmentIndex]?.entryId;
+  const endId = journey.stops[segmentIndex + 1]?.entryId;
+  const segmentActive = Boolean(
+    startId &&
+    endId &&
+    focusedStopIds.has(startId) &&
+    focusedStopIds.has(endId),
+  );
+  return { segmentActive, segmentDimmed: !segmentActive };
+}
+
+function endpointSegmentState(
+  journey: AtlasJourneySummary,
+  endpoint: 'start' | 'end',
+  state: AtlasJourneyLayerState | null,
+  focusedStopIds: ReadonlySet<string>,
+) {
+  if (
+    !state ||
+    journey.id !== state.selectedJourneyId ||
+    !focusedStopIds.size
+  ) {
+    return { segmentActive: false, segmentDimmed: false };
+  }
+  const stop = endpoint === 'start' ? journey.stops[0] : journey.stops.at(-1);
+  const segmentActive = Boolean(stop && focusedStopIds.has(stop.entryId));
+  return { segmentActive, segmentDimmed: !segmentActive };
 }
 
 export function journeysToRouteGeoJson(
@@ -223,7 +275,12 @@ export function addAtlasJourneyLayers(
     paint: {
       'line-color': '#fbfaf5',
       'line-width': 8,
-      'line-opacity': ['case', selectedJourneyExpression(), 0.88, 0],
+      'line-opacity': [
+        'case',
+        selectedJourneyExpression(),
+        ['case', dimmedSegmentExpression(), 0.24, 0.88],
+        0,
+      ],
     },
   };
   const routeLine: LineLayerSpecification = {
@@ -270,6 +327,8 @@ export function addAtlasJourneyLayers(
       'line-color': ['get', 'color'],
       'line-width': [
         'case',
+        activeSegmentExpression(),
+        2.8,
         selectedJourneyExpression(),
         2,
         hoveredJourneyExpression(),
@@ -279,7 +338,16 @@ export function addAtlasJourneyLayers(
       'line-opacity': [
         'case',
         selectedJourneyExpression(),
-        ['case', aheadPlaybackExpression(), 0.24, 0.68],
+        [
+          'case',
+          activeSegmentExpression(),
+          0.95,
+          dimmedSegmentExpression(),
+          0.18,
+          aheadPlaybackExpression(),
+          0.24,
+          0.68,
+        ],
         hoveredJourneyExpression(),
         0.34,
         0,
@@ -295,6 +363,8 @@ export function addAtlasJourneyLayers(
       'line-color': ['get', 'color'],
       'line-width': [
         'case',
+        activeSegmentExpression(),
+        5,
         selectedJourneyExpression(),
         3.5,
         hoveredJourneyExpression(),
@@ -304,7 +374,16 @@ export function addAtlasJourneyLayers(
       'line-opacity': [
         'case',
         selectedJourneyExpression(),
-        ['case', aheadPlaybackExpression(), 0.42, 0.96],
+        [
+          'case',
+          activeSegmentExpression(),
+          1,
+          dimmedSegmentExpression(),
+          0.24,
+          aheadPlaybackExpression(),
+          0.42,
+          0.96,
+        ],
         hoveredJourneyExpression(),
         0.75,
         0,
@@ -346,12 +425,19 @@ export function addAtlasJourneyLayers(
     type: 'circle',
     source: ATLAS_JOURNEY_ENDPOINT_SOURCE,
     paint: {
-      'circle-radius': ['case', selectedJourneyExpression(), 12, 9],
+      'circle-radius': [
+        'case',
+        activeSegmentExpression(),
+        13,
+        selectedJourneyExpression(),
+        12,
+        9,
+      ],
       'circle-color': ['get', 'color'],
       'circle-opacity': [
         'case',
         selectedJourneyExpression(),
-        0.22,
+        ['case', dimmedSegmentExpression(), 0.08, 0.22],
         hoveredJourneyExpression(),
         0.18,
         0.1,
@@ -366,6 +452,8 @@ export function addAtlasJourneyLayers(
     paint: {
       'circle-radius': [
         'case',
+        activeSegmentExpression(),
+        6.5,
         selectedJourneyExpression(),
         5.5,
         hoveredJourneyExpression(),
@@ -375,7 +463,12 @@ export function addAtlasJourneyLayers(
       'circle-color': ['get', 'color'],
       'circle-stroke-width': 2,
       'circle-stroke-color': '#fbfaf5',
-      'circle-opacity': ['case', selectedJourneyExpression(), 1, 0.78],
+      'circle-opacity': [
+        'case',
+        selectedJourneyExpression(),
+        ['case', dimmedSegmentExpression(), 0.34, 1],
+        0.78,
+      ],
     },
   };
 
@@ -420,6 +513,10 @@ export function syncAtlasJourneyLayerState(
   previousState: AtlasJourneyLayerState | null,
   state: AtlasJourneyLayerState,
 ) {
+  const previousFocusedStopIds = new Set(
+    previousState?.selectedSegmentStopIds ?? [],
+  );
+  const nextFocusedStopIds = new Set(state.selectedSegmentStopIds ?? []);
   const affectedJourneyIds = new Set(
     [
       previousState?.selectedJourneyId,
@@ -438,6 +535,12 @@ export function syncAtlasJourneyLayerState(
       const previousFeatureState = {
         selected: journey.id === previousState?.selectedJourneyId,
         hovered: journey.id === previousState?.hoveredJourneyId,
+        ...routeSegmentState(
+          journey,
+          segmentIndex,
+          previousState,
+          previousFocusedStopIds,
+        ),
         playbackState: playbackState(
           journey.id,
           segmentIndex,
@@ -448,6 +551,7 @@ export function syncAtlasJourneyLayerState(
       const nextFeatureState = {
         selected: journey.id === state.selectedJourneyId,
         hovered: journey.id === state.hoveredJourneyId,
+        ...routeSegmentState(journey, segmentIndex, state, nextFocusedStopIds),
         playbackState: playbackState(
           journey.id,
           segmentIndex,
@@ -474,24 +578,30 @@ export function syncAtlasJourneyLayerState(
       }
     });
 
-    const previousEndpointState = {
-      selected: journey.id === previousState?.selectedJourneyId,
-      hovered: journey.id === previousState?.hoveredJourneyId,
-    };
-    const nextEndpointState = {
-      selected: journey.id === state.selectedJourneyId,
-      hovered: journey.id === state.hoveredJourneyId,
-    };
-    const changedEndpointState = Object.fromEntries(
-      Object.entries(nextEndpointState).filter(
-        ([key, value]) =>
-          previousEndpointState[key as keyof typeof previousEndpointState] !==
-          value,
-      ),
-    );
-    if (!Object.keys(changedEndpointState).length) return;
-
     (['start', 'end'] as const).forEach((endpoint) => {
+      const previousEndpointState = {
+        selected: journey.id === previousState?.selectedJourneyId,
+        hovered: journey.id === previousState?.hoveredJourneyId,
+        ...endpointSegmentState(
+          journey,
+          endpoint,
+          previousState,
+          previousFocusedStopIds,
+        ),
+      };
+      const nextEndpointState = {
+        selected: journey.id === state.selectedJourneyId,
+        hovered: journey.id === state.hoveredJourneyId,
+        ...endpointSegmentState(journey, endpoint, state, nextFocusedStopIds),
+      };
+      const changedEndpointState = Object.fromEntries(
+        Object.entries(nextEndpointState).filter(
+          ([key, value]) =>
+            previousEndpointState[key as keyof typeof previousEndpointState] !==
+            value,
+        ),
+      );
+      if (!Object.keys(changedEndpointState).length) return;
       map.setFeatureState(
         {
           source: ATLAS_JOURNEY_ENDPOINT_SOURCE,
