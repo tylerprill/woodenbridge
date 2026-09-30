@@ -8,6 +8,7 @@ import { sanitizeOpenFreeMapStyle } from '@/app/lib/maps/openfreemap-style';
 import {
   ChapterMap,
   chapterMarkerGroups,
+  formatChapterMapSegmentTitle,
   keepMarkersInsideFrame,
   startsChapterMapSegment,
 } from '@/components/chapters/chapter-map';
@@ -395,6 +396,14 @@ describe('chapter map failure recovery', () => {
 
     expect(startsChapterMapSegment(entries, 0)).toBe(true);
     expect(startsChapterMapSegment(entries, 1)).toBe(true);
+  });
+
+  it('normalizes tooltip segment titles with one trailing colon', () => {
+    expect(formatChapterMapSegmentTitle('  Day 3 · High Plains  ')).toBe(
+      'Day 3 · High Plains:',
+    );
+    expect(formatChapterMapSegmentTitle('Day 4:')).toBe('Day 4:');
+    expect(formatChapterMapSegmentTitle('   ')).toBeNull();
   });
 
   it('uses a tighter grouping distance on phone maps', () => {

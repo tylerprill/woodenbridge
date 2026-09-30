@@ -421,15 +421,20 @@ test('shared chapter reveals its route map and every memory', async ({
   await expect(firstMarker).toBeFocused();
   await firstMarker.press('Enter');
   await expect(firstMarker).toHaveAttribute('aria-expanded', 'true');
+  await expect(firstMarker).toBeFocused();
+  const detailsId = await firstMarker.getAttribute('aria-controls');
+  expect(detailsId).toBeTruthy();
   const markerDetails = page.locator('[data-chapter-map-details="true"]');
+  await expect(markerDetails).toHaveAttribute('id', detailsId!);
   await expect(markerDetails).toContainText(/Stops? 1/);
   await expect(markerDetails).toContainText('Detroit river morning');
   await expect(
     markerDetails.getByRole('heading', {
       level: 3,
-      name: 'Detroit river morning',
+      name: 'Detroit river morning:',
+      exact: true,
     }),
-  ).toBeVisible();
+  ).toHaveText('Detroit river morning:');
   await markerDetails
     .getByRole('button', { name: 'Close map memory details' })
     .click();
@@ -437,8 +442,14 @@ test('shared chapter reveals its route map and every memory', async ({
   await expect(firstMarker).toHaveAttribute('aria-expanded', 'false');
   await firstMarker.press('Enter');
   await expect(firstMarker).toHaveAttribute('aria-expanded', 'true');
-  await firstMarker.press('Escape');
+  const closeButton = markerDetails.getByRole('button', {
+    name: 'Close map memory details',
+  });
+  await closeButton.focus();
+  await closeButton.press('Escape');
+  await expect(markerDetails).toHaveCount(0);
   await expect(firstMarker).toHaveAttribute('aria-expanded', 'false');
+  await expect(firstMarker).toBeFocused();
   await auditCurrentPage(
     page,
     testInfo,

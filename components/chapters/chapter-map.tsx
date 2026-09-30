@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useId, useRef, useState } from 'react';
 import * as maplibregl from 'maplibre-gl';
 import type {
   ErrorEvent as MapLibreErrorEvent,
@@ -108,8 +108,14 @@ function groupStopNumbers(entries: ChapterMapMemory[], entryIndexes: number[]) {
   );
 }
 
+export function formatChapterMapSegmentTitle(title: string | null | undefined) {
+  const trimmedTitle = title?.trim();
+  if (!trimmedTitle) return null;
+  return trimmedTitle.endsWith(':') ? trimmedTitle : `${trimmedTitle}:`;
+}
+
 function chapterMapSegmentKey(entry: ChapterMapMemory | undefined) {
-  const title = entry?.segmentTitle?.trim();
+  const title = formatChapterMapSegmentTitle(entry?.segmentTitle);
   if (!title) return null;
   return entry?.segmentId ?? `title:${title}`;
 }
@@ -220,6 +226,7 @@ function createChapterMarkers(
   map: MapLibreMap,
   entries: ChapterMapMemory[],
   groups: ChapterMarkerGroup[],
+  detailsId: string,
   toggleGroup: (group: ChapterMarkerGroup) => void,
   dismissGroup: () => void,
 ) {
@@ -240,7 +247,7 @@ function createChapterMarkers(
         ? `×${entryIndexes.length}`
         : String(stopNumbers[0]);
     element.append(markerLabel);
-    element.setAttribute('aria-controls', 'chapter-map-details');
+    element.setAttribute('aria-controls', detailsId);
     element.setAttribute('aria-expanded', 'false');
     if (entryIndexes.length === 1) {
       const index = entryIndexes[0];
@@ -354,12 +361,14 @@ function fitChapter(
 }
 
 export function ChapterMap({ entries }: { entries: ChapterMapMemory[] }) {
+  const detailsId = useId();
   const containerRef = useRef<HTMLDivElement>(null);
   const mapRef = useRef<MapLibreMap | null>(null);
   const markersRef = useRef<Marker[]>([]);
   const markerBaseOffsetsRef = useRef<ChapterMarkerOffset[]>([]);
   const markerGroupKeyRef = useRef<string | null>(null);
   const refreshMarkersRef = useRef<((force?: boolean) => void) | null>(null);
+  const activeMarkerGroupRef = useRef<ChapterMarkerGroup | null>(null);
   const entriesRef = useRef(entries);
   const [activeMarkerGroup, setActiveMarkerGroup] =
     useState<ChapterMarkerGroup | null>(null);
@@ -395,12 +404,14 @@ export function ChapterMap({ entries }: { entries: ChapterMapMemory[] }) {
 
     const toggleMarkerGroup = (group: ChapterMarkerGroup) => {
       const nextKey = chapterMarkerKey(group.entryIndexes);
-      setActiveMarkerGroup((current) =>
+      const current = activeMarkerGroupRef.current;
+      const nextGroup =
         current && chapterMarkerKey(current.entryIndexes) === nextKey
           ? null
-          : group,
-      );
-      if (window.innerHeight <= 480) {
+          : group;
+      activeMarkerGroupRef.current = nextGroup;
+      setActiveMarkerGroup(nextGroup);
+      if (nextGroup && window.innerHeight <= 480) {
         requestAnimationFrame(() => {
           containerRef.current?.scrollIntoView({
             behavior: 'auto',
@@ -409,7 +420,10 @@ export function ChapterMap({ entries }: { entries: ChapterMapMemory[] }) {
         });
       }
     };
-    const dismissMarkerGroup = () => setActiveMarkerGroup(null);
+    const dismissMarkerGroup = () => {
+      activeMarkerGroupRef.current = null;
+      setActiveMarkerGroup(null);
+    };
     let markersReady = false;
     const refreshMarkers = (force = false) => {
       if (!markersReady) return;
@@ -418,17 +432,42 @@ export function ChapterMap({ entries }: { entries: ChapterMapMemory[] }) {
       const groupKey = chapterMarkerGroupKey(groups);
       if (!force && groupKey === markerGroupKeyRef.current) return;
 
-      setActiveMarkerGroup(null);
+      const currentActiveKey = activeMarkerGroupRef.current
+        ? chapterMarkerKey(activeMarkerGroupRef.current.entryIndexes)
+        : null;
+      const nextActiveGroup = currentActiveKey
+        ? (groups.find(
+            (group) =>
+              chapterMarkerKey(group.entryIndexes) === currentActiveKey,
+          ) ?? null)
+        : null;
+      const focusedMarkerKey = markersRef.current
+        .find((marker) => marker.getElement() === document.activeElement)
+        ?.getElement().dataset.groupKey;
+      activeMarkerGroupRef.current = nextActiveGroup;
+      setActiveMarkerGroup(nextActiveGroup);
       markersRef.current.forEach((marker) => marker.remove());
       markersRef.current = createChapterMarkers(
         map,
         currentEntries,
         groups,
+        detailsId,
         toggleMarkerGroup,
         dismissMarkerGroup,
       );
       markerBaseOffsetsRef.current = groups.map(() => [0, 0]);
       markerGroupKeyRef.current = groupKey;
+      if (focusedMarkerKey) {
+        requestAnimationFrame(() => {
+          markersRef.current
+            .find(
+              (marker) =>
+                marker.getElement().dataset.groupKey === focusedMarkerKey,
+            )
+            ?.getElement()
+            .focus();
+        });
+      }
     };
     refreshMarkersRef.current = refreshMarkers;
     let containmentFrame: number | null = null;
@@ -565,7 +604,7 @@ export function ChapterMap({ entries }: { entries: ChapterMapMemory[] }) {
     }
 
     return cleanupMap;
-  }, [mapAttempt]);
+  }, [detailsId, mapAttempt]);
 
   useEffect(() => {
     entriesRef.current = entries;
@@ -613,6 +652,7 @@ export function ChapterMap({ entries }: { entries: ChapterMapMemory[] }) {
     const activeKey = activeMarkerGroup
       ? chapterMarkerKey(activeMarkerGroup.entryIndexes)
       : null;
+    activeMarkerGroupRef.current = null;
     setActiveMarkerGroup(null);
     if (!restoreFocus || !activeKey) return;
     requestAnimationFrame(() => {
@@ -633,7 +673,7 @@ export function ChapterMap({ entries }: { entries: ChapterMapMemory[] }) {
       />
       {activeMarkerGroup && activeEntries.length ? (
         <section
-          id="chapter-map-details"
+          id={detailsId}
           className={styles.chapterMapDetails}
           role="region"
           aria-label={
@@ -678,7 +718,9 @@ export function ChapterMap({ entries }: { entries: ChapterMapMemory[] }) {
             >
               {activeEntries.map(
                 ({ entry, memoryNumber }, activeEntryIndex) => {
-                  const segmentTitle = entry.segmentTitle?.trim();
+                  const segmentTitle = formatChapterMapSegmentTitle(
+                    entry.segmentTitle,
+                  );
                   return (
                     <li key={entry.id}>
                       {segmentTitle &&
@@ -707,12 +749,16 @@ export function ChapterMap({ entries }: { entries: ChapterMapMemory[] }) {
             </ol>
           ) : (
             <div className={styles.chapterMapDetailsSingle}>
-              {activeEntries[0].entry.segmentTitle ? (
+              {formatChapterMapSegmentTitle(
+                activeEntries[0].entry.segmentTitle,
+              ) ? (
                 <h3
                   className={styles.chapterMapDetailsSegment}
                   data-chapter-map-segment-title="true"
                 >
-                  {activeEntries[0].entry.segmentTitle}
+                  {formatChapterMapSegmentTitle(
+                    activeEntries[0].entry.segmentTitle,
+                  )}
                 </h3>
               ) : null}
               <p className={styles.chapterMapDetailsPlace}>
