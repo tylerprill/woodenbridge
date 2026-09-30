@@ -184,6 +184,26 @@ describe('responsive and route-level UI contracts', () => {
     expect(source).toContain('const CHAPTER_MARKER_GUTTER = 12');
   });
 
+  it('keeps Journey map details aligned and scrollable at narrow sizes', () => {
+    const css = readFileSync(
+      join(root, 'components/chapters/chapters.module.css'),
+      'utf8',
+    );
+
+    expect(css).toMatch(
+      /\.chapterMapDetails \{[\s\S]*?width: min\(21rem, calc\(100% - 1\.5rem\)\);[\s\S]*?padding: 0;[\s\S]*?backdrop-filter: blur\(18px\)/,
+    );
+    expect(css).toMatch(
+      /\.chapterMapDetailsList \{[\s\S]*?padding: 0\.65rem 1rem 0\.9rem;[\s\S]*?list-style: none;[\s\S]*?overscroll-behavior: contain;/,
+    );
+    expect(css).toMatch(
+      /\.chapterMapDetailsMemory \{[\s\S]*?grid-template-columns: 1\.55rem minmax\(0, 1fr\);/,
+    );
+    expect(css).toMatch(
+      /@media \(max-width: 480px\) \{[\s\S]*?\.chapterMapDetails \{[\s\S]*?width: min\(21rem, calc\(100% - 1rem\)\);[\s\S]*?max-height: min\(calc\(100% - 2\.5rem\), calc\(100dvh - 1rem\)\);/,
+    );
+  });
+
   it('ships route-level recovery and loading surfaces for core journeys', () => {
     const expected = [
       'app/error.tsx',
