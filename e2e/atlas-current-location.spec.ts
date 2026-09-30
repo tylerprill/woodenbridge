@@ -265,7 +265,11 @@ test('a fresh Atlas starts near one approximate browser location without saving 
         await route.fulfill({ response, body });
       });
     }
-    await page.evaluate(() => window.sessionStorage.clear());
+    await page.addInitScript(() => {
+      window.sessionStorage.removeItem(
+        'field-atlas:initial-location-requested',
+      );
+    });
     page.on('request', (request) => {
       if (
         request.method() === 'POST' &&
