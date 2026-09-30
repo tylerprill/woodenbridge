@@ -11,10 +11,10 @@ import type {
 import 'maplibre-gl/dist/maplibre-gl.css';
 
 import {
-  createChapterMarkerOffsets,
   createGentleChapterRoute,
   unwrapChapterCoordinates,
 } from '@/app/lib/chapters/route-geometry';
+import { groupNearbyMapMarkers } from '@/app/lib/maps/marker-groups';
 import { sanitizeOpenFreeMapStyle } from '@/app/lib/maps/openfreemap-style';
 import styles from './chapters.module.css';
 
@@ -22,6 +22,9 @@ const DEFAULT_STYLE =
   process.env.NEXT_PUBLIC_ATLAS_STYLE_URL ??
   'https://tiles.openfreemap.org/styles/positron';
 const CHAPTER_MARKER_GUTTER = 12;
+const CHAPTER_MARKER_GROUP_DISTANCE_DESKTOP = 52;
+const CHAPTER_MARKER_GROUP_DISTANCE_TABLET = 60;
+const CHAPTER_MARKER_GROUP_DISTANCE_PHONE = 72;
 const MAP_LOAD_TIMEOUT_MS = 15_000;
 
 maplibregl.setWorkerUrl('/maplibre/maplibre-gl-worker.mjs');
@@ -34,6 +37,13 @@ export type ChapterMapMemory = {
   latitude: number;
   longitude: number;
 };
+
+type ChapterMarkerGroup = {
+  representativeIndex: number;
+  entryIndexes: number[];
+};
+
+type ChapterMarkerOffset = [x: number, y: number];
 
 function routeData(entries: ChapterMapMemory[]) {
   const coordinates = createGentleChapterRoute(entries);
@@ -55,55 +65,144 @@ function routeData(entries: ChapterMapMemory[]) {
   };
 }
 
-function markerPopupContent(entry: ChapterMapMemory, index: number) {
-  const content = document.createElement('div');
-  const number = document.createElement('span');
-  number.textContent = `Stop ${index + 1}`;
-  const title = document.createElement('strong');
-  title.textContent = entry.title || 'Untitled memory';
-  const place = document.createElement('p');
-  place.textContent = entry.placeLabel || entry.placeName || 'Pinned place';
-  content.append(number, title, place);
-  return content;
+function stopNumberRanges(entryIndexes: number[]) {
+  const ranges: string[] = [];
+  let rangeStart = entryIndexes[0] + 1;
+  let rangeEnd = rangeStart;
+
+  entryIndexes.slice(1).forEach((index) => {
+    const stopNumber = index + 1;
+    if (stopNumber === rangeEnd + 1) {
+      rangeEnd = stopNumber;
+      return;
+    }
+    ranges.push(
+      rangeStart === rangeEnd
+        ? String(rangeStart)
+        : `${rangeStart}–${rangeEnd}`,
+    );
+    rangeStart = stopNumber;
+    rangeEnd = stopNumber;
+  });
+  ranges.push(
+    rangeStart === rangeEnd ? String(rangeStart) : `${rangeStart}–${rangeEnd}`,
+  );
+  return ranges.join(', ');
+}
+
+function chapterMarkerGroupDistance(map: MapLibreMap) {
+  const container = map.getContainer();
+  const width =
+    container.clientWidth || container.getBoundingClientRect().width;
+  if (width <= 480) return CHAPTER_MARKER_GROUP_DISTANCE_PHONE;
+  if (width <= 760) return CHAPTER_MARKER_GROUP_DISTANCE_TABLET;
+  return CHAPTER_MARKER_GROUP_DISTANCE_DESKTOP;
+}
+
+export function chapterMarkerGroups(
+  map: MapLibreMap,
+  entries: ChapterMapMemory[],
+): ChapterMarkerGroup[] {
+  const fallbackGroups = () =>
+    entries.map((_, index) => ({
+      representativeIndex: index,
+      entryIndexes: [index],
+    }));
+
+  try {
+    const coordinates = unwrapChapterCoordinates(entries);
+    const points = coordinates.map((coordinate) => map.project(coordinate));
+    if (
+      points.some(
+        (point) => !Number.isFinite(point.x) || !Number.isFinite(point.y),
+      )
+    ) {
+      return fallbackGroups();
+    }
+
+    return groupNearbyMapMarkers(points, chapterMarkerGroupDistance(map)).map(
+      (entryIndexes) => ({
+        representativeIndex: entryIndexes[0],
+        entryIndexes,
+      }),
+    );
+  } catch {
+    // Projection can be briefly unavailable while MapLibre changes styles.
+    // Individual markers are a safe fallback until the next camera settle.
+    return fallbackGroups();
+  }
+}
+
+function chapterMarkerGroupKey(groups: ChapterMarkerGroup[]) {
+  return groups
+    .map(
+      ({ representativeIndex, entryIndexes }) =>
+        `${representativeIndex}:${entryIndexes.join(',')}`,
+    )
+    .join('|');
+}
+
+function chapterMarkerKey(entryIndexes: number[]) {
+  return entryIndexes.join(',');
 }
 
 function createChapterMarkers(
   map: MapLibreMap,
   entries: ChapterMapMemory[],
-  popup: maplibregl.Popup,
+  groups: ChapterMarkerGroup[],
+  toggleGroup: (group: ChapterMarkerGroup) => void,
+  dismissGroup: () => void,
 ) {
   const coordinates = unwrapChapterCoordinates(entries);
-  const offsets = createChapterMarkerOffsets(entries);
-  return entries.map((entry, index) => {
+  return groups.map(({ representativeIndex, entryIndexes }) => {
     const element = document.createElement('button');
     const markerLabel = document.createElement('span');
     element.type = 'button';
     element.className = styles.chapterMapMarker;
-    markerLabel.textContent = String(index + 1);
+    element.dataset.chapterMarker = 'true';
+    element.dataset.cluster = entryIndexes.length > 1 ? 'true' : 'false';
+    element.dataset.groupKey = chapterMarkerKey(entryIndexes);
+    element.dataset.memoryCount = String(entryIndexes.length);
+    element.dataset.stopIndexes = entryIndexes.join(',');
+    markerLabel.textContent =
+      entryIndexes.length > 1
+        ? `×${entryIndexes.length}`
+        : String(entryIndexes[0] + 1);
     element.append(markerLabel);
-    element.setAttribute(
-      'aria-label',
-      `Stop ${index + 1}: ${entry.title || 'Untitled memory'}, ${
-        entry.placeLabel || entry.placeName || 'Pinned place'
-      }`,
-    );
-    const showPopup = () =>
-      popup
-        .setLngLat(coordinates[index])
-        .setDOMContent(markerPopupContent(entry, index))
-        .addTo(map);
-    const hidePopup = () => popup.remove();
-    element.addEventListener('mouseenter', showPopup);
-    element.addEventListener('mouseleave', hidePopup);
-    element.addEventListener('focus', showPopup);
-    element.addEventListener('blur', hidePopup);
+    element.setAttribute('aria-controls', 'chapter-map-details');
+    element.setAttribute('aria-expanded', 'false');
+    if (entryIndexes.length === 1) {
+      const index = entryIndexes[0];
+      const entry = entries[index];
+      element.setAttribute(
+        'aria-label',
+        `Stop ${index + 1}: ${entry.title || 'Untitled memory'}, ${
+          entry.placeLabel || entry.placeName || 'Pinned place'
+        }`,
+      );
+    } else {
+      const label = `${entryIndexes.length} nearby memories: stops ${stopNumberRanges(entryIndexes)}. Open list.`;
+      element.setAttribute('aria-label', label);
+      element.title = `${entryIndexes.length} nearby memories`;
+    }
+    element.addEventListener('click', (event) => {
+      event.preventDefault();
+      event.stopPropagation();
+      toggleGroup({ representativeIndex, entryIndexes });
+    });
+    element.addEventListener('keydown', (event) => {
+      if (event.key !== 'Escape') return;
+      event.preventDefault();
+      dismissGroup();
+    });
 
     return new maplibregl.Marker({
       element,
       anchor: 'center',
-      offset: offsets[index],
+      offset: [0, 0],
+      subpixelPositioning: true,
     })
-      .setLngLat(coordinates[index])
+      .setLngLat(coordinates[representativeIndex])
       .addTo(map);
   });
 }
@@ -111,7 +210,7 @@ function createChapterMarkers(
 export function keepMarkersInsideFrame(
   map: MapLibreMap,
   markers: Marker[],
-  baseOffsets: ReturnType<typeof createChapterMarkerOffsets>,
+  baseOffsets: readonly ChapterMarkerOffset[],
 ) {
   const frame = map.getContainer().getBoundingClientRect();
 
@@ -186,8 +285,12 @@ export function ChapterMap({ entries }: { entries: ChapterMapMemory[] }) {
   const containerRef = useRef<HTMLDivElement>(null);
   const mapRef = useRef<MapLibreMap | null>(null);
   const markersRef = useRef<Marker[]>([]);
-  const popupRef = useRef<maplibregl.Popup | null>(null);
+  const markerBaseOffsetsRef = useRef<ChapterMarkerOffset[]>([]);
+  const markerGroupKeyRef = useRef<string | null>(null);
+  const refreshMarkersRef = useRef<((force?: boolean) => void) | null>(null);
   const entriesRef = useRef(entries);
+  const [activeMarkerGroup, setActiveMarkerGroup] =
+    useState<ChapterMarkerGroup | null>(null);
   const [mapFailed, setMapFailed] = useState(false);
   const [mapAttempt, setMapAttempt] = useState(0);
 
@@ -218,13 +321,44 @@ export function ChapterMap({ entries }: { entries: ChapterMapMemory[] }) {
     }, MAP_LOAD_TIMEOUT_MS);
     map.addControl(new maplibregl.AttributionControl({ compact: true }));
 
-    const popup = new maplibregl.Popup({
-      closeButton: false,
-      closeOnClick: false,
-      offset: 16,
-      className: 'chapter-map-popup',
-    });
-    popupRef.current = popup;
+    const toggleMarkerGroup = (group: ChapterMarkerGroup) => {
+      const nextKey = chapterMarkerKey(group.entryIndexes);
+      setActiveMarkerGroup((current) =>
+        current && chapterMarkerKey(current.entryIndexes) === nextKey
+          ? null
+          : group,
+      );
+      if (window.innerHeight <= 480) {
+        requestAnimationFrame(() => {
+          containerRef.current?.scrollIntoView({
+            behavior: 'auto',
+            block: 'start',
+          });
+        });
+      }
+    };
+    const dismissMarkerGroup = () => setActiveMarkerGroup(null);
+    let markersReady = false;
+    const refreshMarkers = (force = false) => {
+      if (!markersReady) return;
+      const currentEntries = entriesRef.current;
+      const groups = chapterMarkerGroups(map, currentEntries);
+      const groupKey = chapterMarkerGroupKey(groups);
+      if (!force && groupKey === markerGroupKeyRef.current) return;
+
+      setActiveMarkerGroup(null);
+      markersRef.current.forEach((marker) => marker.remove());
+      markersRef.current = createChapterMarkers(
+        map,
+        currentEntries,
+        groups,
+        toggleMarkerGroup,
+        dismissMarkerGroup,
+      );
+      markerBaseOffsetsRef.current = groups.map(() => [0, 0]);
+      markerGroupKeyRef.current = groupKey;
+    };
+    refreshMarkersRef.current = refreshMarkers;
     let containmentFrame: number | null = null;
     let containmentLayoutFrame: number | null = null;
     let containmentTimer: number | null = null;
@@ -241,7 +375,7 @@ export function ChapterMap({ entries }: { entries: ChapterMapMemory[] }) {
           keepMarkersInsideFrame(
             map,
             markersRef.current,
-            createChapterMarkerOffsets(entriesRef.current),
+            markerBaseOffsetsRef.current,
           );
         });
       });
@@ -256,6 +390,7 @@ export function ChapterMap({ entries }: { entries: ChapterMapMemory[] }) {
         // reload, which makes the marker containment pass bake in a stale
         // horizontal correction.
         fitChapter(map, entriesRef.current, false);
+        refreshMarkers();
         containMarkers();
         if (resizeContainmentTimer !== null) {
           window.clearTimeout(resizeContainmentTimer);
@@ -267,7 +402,11 @@ export function ChapterMap({ entries }: { entries: ChapterMapMemory[] }) {
       });
     });
     resizeObserver.observe(containerRef.current);
-    map.on('moveend', containMarkers);
+    const handleMoveEnd = () => {
+      refreshMarkers();
+      containMarkers();
+    };
+    map.on('moveend', handleMoveEnd);
     map.once('idle', containMarkers);
 
     const handleLoad = () => {
@@ -301,8 +440,9 @@ export function ChapterMap({ entries }: { entries: ChapterMapMemory[] }) {
           },
           layout: { 'line-cap': 'round', 'line-join': 'round' },
         });
-        markersRef.current = createChapterMarkers(map, currentEntries, popup);
+        markersReady = true;
         fitChapter(map, currentEntries);
+        refreshMarkers(true);
         containmentTimer = window.setTimeout(containMarkers, 1100);
         setMapFailed(false);
       } catch (error) {
@@ -330,11 +470,13 @@ export function ChapterMap({ entries }: { entries: ChapterMapMemory[] }) {
       resizeObserver.disconnect();
       map.off('load', handleLoad);
       map.off('error', handleError);
-      map.off('moveend', containMarkers);
+      map.off('moveend', handleMoveEnd);
+      markersReady = false;
       markersRef.current.forEach((marker) => marker.remove());
       markersRef.current = [];
-      popup.remove();
-      popupRef.current = null;
+      markerBaseOffsetsRef.current = [];
+      markerGroupKeyRef.current = null;
+      refreshMarkersRef.current = null;
       map.remove();
       mapRef.current = null;
     };
@@ -360,12 +502,41 @@ export function ChapterMap({ entries }: { entries: ChapterMapMemory[] }) {
     (map.getSource('chapter-route') as GeoJSONSource | undefined)?.setData(
       routeData(entries),
     );
-    markersRef.current.forEach((marker) => marker.remove());
-    markersRef.current = popupRef.current
-      ? createChapterMarkers(map, entries, popupRef.current)
-      : [];
     fitChapter(map, entries);
+    markerGroupKeyRef.current = null;
+    refreshMarkersRef.current?.(true);
   }, [entries]);
+
+  useEffect(() => {
+    const activeKey = activeMarkerGroup
+      ? chapterMarkerKey(activeMarkerGroup.entryIndexes)
+      : null;
+    markersRef.current.forEach((marker) => {
+      marker
+        .getElement()
+        .setAttribute(
+          'aria-expanded',
+          marker.getElement().dataset.groupKey === activeKey ? 'true' : 'false',
+        );
+    });
+  }, [activeMarkerGroup]);
+
+  const activeEntries = (activeMarkerGroup?.entryIndexes ?? []).flatMap(
+    (index) => (entries[index] ? [{ entry: entries[index], index }] : []),
+  );
+  const closeMarkerDetails = (restoreFocus = false) => {
+    const activeKey = activeMarkerGroup
+      ? chapterMarkerKey(activeMarkerGroup.entryIndexes)
+      : null;
+    setActiveMarkerGroup(null);
+    if (!restoreFocus || !activeKey) return;
+    requestAnimationFrame(() => {
+      const trigger = markersRef.current
+        .map((marker) => marker.getElement())
+        .find((element) => element.dataset.groupKey === activeKey);
+      trigger?.focus();
+    });
+  };
 
   return (
     <div className={styles.chapterMapFrame}>
@@ -375,6 +546,67 @@ export function ChapterMap({ entries }: { entries: ChapterMapMemory[] }) {
         role="region"
         aria-label={`Map of ${entries.length} ordered journey memories`}
       />
+      {activeMarkerGroup && activeEntries.length ? (
+        <section
+          id="chapter-map-details"
+          className={styles.chapterMapDetails}
+          role="region"
+          aria-label={
+            activeEntries.length > 1
+              ? `${activeEntries.length} memories in this map marker`
+              : `Details for stop ${activeEntries[0].index + 1}`
+          }
+          data-chapter-map-details="true"
+          onKeyDown={(event) => {
+            if (event.key !== 'Escape') return;
+            event.preventDefault();
+            closeMarkerDetails(true);
+          }}
+        >
+          <div className={styles.chapterMapDetailsHeader}>
+            <div>
+              <span>
+                {activeEntries.length > 1
+                  ? `${activeEntries.length} memories here`
+                  : `Stop ${activeEntries[0].index + 1}`}
+              </span>
+              <strong>
+                {activeEntries.length > 1
+                  ? `Stops ${stopNumberRanges(activeMarkerGroup.entryIndexes)}`
+                  : activeEntries[0].entry.title || 'Untitled memory'}
+              </strong>
+            </div>
+            <button
+              type="button"
+              className={styles.chapterMapDetailsClose}
+              aria-label="Close map memory details"
+              onClick={() => closeMarkerDetails(true)}
+            >
+              <span aria-hidden="true">×</span>
+            </button>
+          </div>
+          {activeEntries.length > 1 ? (
+            <ol
+              className={styles.chapterMapDetailsList}
+              aria-label="Memories in this map marker"
+              tabIndex={0}
+            >
+              {activeEntries.map(({ entry, index }) => (
+                <li key={entry.id}>
+                  <span>{index + 1}.</span>
+                  {entry.title || 'Untitled memory'}
+                </li>
+              ))}
+            </ol>
+          ) : (
+            <p className={styles.chapterMapDetailsPlace}>
+              {activeEntries[0].entry.placeLabel ||
+                activeEntries[0].entry.placeName ||
+                'Pinned place'}
+            </p>
+          )}
+        </section>
+      ) : null}
       {mapFailed ? (
         <div
           className={`${styles.chapterMapDeferred} ${styles.chapterMapFailure}`}

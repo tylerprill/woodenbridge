@@ -7,6 +7,7 @@ import { act, render, screen } from '@testing-library/react';
 import { sanitizeOpenFreeMapStyle } from '@/app/lib/maps/openfreemap-style';
 import {
   ChapterMap,
+  chapterMarkerGroups,
   keepMarkersInsideFrame,
 } from '@/components/chapters/chapter-map';
 
@@ -233,5 +234,85 @@ describe('chapter map failure recovery', () => {
 
     expect(setOffset).toHaveBeenCalledTimes(1);
     expect(setOffset).toHaveBeenCalledWith([0, 0]);
+  });
+
+  it('condenses dense mobile stops into readable screen-space groups', () => {
+    const container = document.createElement('div');
+    Object.defineProperty(container, 'clientWidth', {
+      configurable: true,
+      value: 320,
+    });
+    container.getBoundingClientRect = jest.fn(() => ({
+      bottom: 568,
+      height: 568,
+      left: 0,
+      right: 320,
+      top: 0,
+      width: 320,
+      x: 0,
+      y: 0,
+      toJSON: () => ({}),
+    }));
+    const entries = Array.from({ length: 24 }, (_, index) => ({
+      id: `memory-${index + 1}`,
+      title: `Memory ${index + 1}`,
+      placeLabel: 'A remembered route',
+      placeName: null,
+      latitude: 42,
+      longitude: index,
+    }));
+    const map = {
+      getContainer: () => container,
+      project: ([longitude]: [number, number]) => ({
+        x: longitude * 8,
+        y: 120,
+      }),
+    };
+
+    const groups = chapterMarkerGroups(map as never, entries);
+
+    expect(groups).toEqual([
+      {
+        representativeIndex: 0,
+        entryIndexes: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9],
+      },
+      {
+        representativeIndex: 10,
+        entryIndexes: [10, 11, 12, 13, 14, 15, 16, 17, 18, 19],
+      },
+      { representativeIndex: 20, entryIndexes: [20, 21, 22, 23] },
+    ]);
+    expect(groups.flatMap((group) => group.entryIndexes)).toEqual(
+      entries.map((_, index) => index),
+    );
+  });
+
+  it('uses more breathing room between groups on phone maps', () => {
+    const container = document.createElement('div');
+    const project = ([longitude]: [number, number]) => ({
+      x: longitude,
+      y: 100,
+    });
+    const entries = [0, 60, 120].map((longitude, index) => ({
+      id: `memory-${index + 1}`,
+      title: `Memory ${index + 1}`,
+      placeLabel: 'A remembered route',
+      placeName: null,
+      latitude: 42,
+      longitude,
+    }));
+    const map = { getContainer: () => container, project };
+
+    Object.defineProperty(container, 'clientWidth', {
+      configurable: true,
+      value: 320,
+    });
+    expect(chapterMarkerGroups(map as never, entries)).toHaveLength(2);
+
+    Object.defineProperty(container, 'clientWidth', {
+      configurable: true,
+      value: 900,
+    });
+    expect(chapterMarkerGroups(map as never, entries)).toHaveLength(3);
   });
 });

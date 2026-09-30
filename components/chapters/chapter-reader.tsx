@@ -392,8 +392,8 @@ export function ChapterReader({
             <p>
               {mode === 'shared' &&
               chapter.shareLocationPrecision === 'approximate'
-                ? 'Shared pins are intentionally approximate.'
-                : 'Each stop follows the reading order you chose.'}
+                ? 'Shared pins are intentionally approximate. Nearby memories share a marker.'
+                : 'Stops follow your reading order. Nearby memories share a marker.'}
             </p>
           </div>
           <ChapterMapLoader entries={mapEntries} />

@@ -100,7 +100,7 @@ async function expectJourneyDotsClearOfOverlays(
   const markers = page.locator(
     currentOnly
       ? 'button.maplibregl-marker[aria-current="step"]'
-      : 'button.maplibregl-marker[aria-label^="Stop "]',
+      : 'button.maplibregl-marker[data-journey-marker="true"]',
   );
   if (currentOnly) await expect(markers).toHaveCount(1);
   else await expect(markers.first()).toBeAttached();

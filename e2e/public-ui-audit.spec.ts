@@ -171,6 +171,38 @@ async function expectInsideInitialViewport(
     .toBeLessThanOrEqual(viewport.height);
 }
 
+async function expectChapterMarkersDoNotOverlap(markers: Locator) {
+  await expect
+    .poll(() =>
+      markers.evaluateAll((markerElements) => {
+        const visible = markerElements.flatMap((marker) => {
+          const style = getComputedStyle(marker);
+          const bounds = marker.getBoundingClientRect();
+          return style.display !== 'none' &&
+            style.visibility === 'visible' &&
+            Number(style.opacity) > 0 &&
+            bounds.width > 0 &&
+            bounds.height > 0
+            ? [{ bounds, label: marker.getAttribute('aria-label') }]
+            : [];
+        });
+        return visible.flatMap((first, firstIndex) =>
+          visible
+            .slice(firstIndex + 1)
+            .flatMap((second) =>
+              first.bounds.left < second.bounds.right &&
+              first.bounds.right > second.bounds.left &&
+              first.bounds.top < second.bounds.bottom &&
+              first.bounds.bottom > second.bounds.top
+                ? [`${first.label} overlaps ${second.label}`]
+                : [],
+            ),
+        );
+      }),
+    )
+    .toEqual([]);
+}
+
 function shouldRunAccessibilityAudit(
   testInfo: TestInfo,
   viewport: AuditViewport,
@@ -348,12 +380,58 @@ test('shared chapter reveals its route map and every memory', async ({
   expect(canvasSize.width, 'route map canvas width').toBeGreaterThan(200);
   expect(canvasSize.height, 'route map canvas height').toBeGreaterThan(150);
 
-  const markers = mapRegion.getByRole('button', { name: /^Stop \d+:/ });
-  await expect(markers).toHaveCount(memoryCount, { timeout: 20_000 });
+  const markers = mapRegion.locator(
+    'button.maplibregl-marker[data-chapter-marker="true"]',
+  );
+  await expect
+    .poll(
+      () =>
+        markers.evaluateAll((markerElements) => {
+          const groups = markerElements.map((marker) => {
+            const element = marker as HTMLElement;
+            return {
+              indexes: (element.dataset.stopIndexes ?? '')
+                .split(',')
+                .filter(Boolean)
+                .map(Number),
+              memoryCount: Number(element.dataset.memoryCount ?? 0),
+            };
+          });
+          return {
+            coveredStopIndexes: groups
+              .flatMap((group) => group.indexes)
+              .sort((first, second) => first - second),
+            countsMatch: groups.every(
+              (group) => group.memoryCount === group.indexes.length,
+            ),
+          };
+        }),
+      { message: 'Route markers represent every journey memory' },
+    )
+    .toEqual({
+      coveredStopIndexes: Array.from(
+        { length: memoryCount },
+        (_, index) => index,
+      ),
+      countsMatch: true,
+    });
+  await expectChapterMarkersDoNotOverlap(markers);
   const firstMarker = markers.first();
   await firstMarker.focus();
   await expect(firstMarker).toBeFocused();
-  await expect(page.locator('.chapter-map-popup')).toContainText('Stop 1');
+  await firstMarker.press('Enter');
+  await expect(firstMarker).toHaveAttribute('aria-expanded', 'true');
+  const markerDetails = page.locator('[data-chapter-map-details="true"]');
+  await expect(markerDetails).toContainText(/Stops? 1/);
+  await markerDetails
+    .getByRole('button', { name: 'Close map memory details' })
+    .click();
+  await expect(firstMarker).toBeFocused();
+  await expect(firstMarker).toHaveAttribute('aria-expanded', 'false');
+  await firstMarker.press('Enter');
+  await expect(firstMarker).toHaveAttribute('aria-expanded', 'true');
+  await firstMarker.press('Escape');
+  await expect(firstMarker).toHaveAttribute('aria-expanded', 'false');
   await auditCurrentPage(
     page,
     testInfo,
