@@ -2059,7 +2059,8 @@
   display: flex;
   align-items: center;
   justify-content: space-between;
-  margin-bottom: 1rem;
+  margin-bottom: 0.85rem;
+  gap: 1rem;
 }
 
 .chapterDetailActions {
@@ -2301,7 +2302,7 @@
   min-width: 0;
   flex-direction: column;
   justify-content: center;
-  padding: clamp(2rem, 5vw, 5rem);
+  padding: clamp(2rem, 4.5vw, 4.25rem);
 }
 
 .chapterDetail[data-reader-mode='owner'] .chapterHeroStory {
@@ -2322,7 +2323,7 @@
 }
 
 .chapterHeroStory h1 {
-  margin-top: 0.85rem;
+  margin-top: 0.65rem;
   font-family: Georgia, 'Times New Roman', serif;
   font-size: clamp(3rem, 6vw, 5.9rem);
   font-weight: 400;
@@ -2341,10 +2342,10 @@
 .chapterHeroMeta {
   display: flex;
   flex-wrap: wrap;
-  margin-top: 2rem;
-  padding-top: 1.25rem;
+  margin-top: 1.5rem;
+  padding-top: 1rem;
   border-top: 1px solid var(--chapter-soft-line);
-  gap: 0.7rem 1.2rem;
+  gap: 0.6rem 1.1rem;
 }
 
 .chapterHeroMeta span {
@@ -2366,7 +2367,7 @@
   display: flex;
   max-width: 100%;
   align-items: center;
-  margin-top: 0.9rem;
+  margin-top: 0.75rem;
   color: rgba(76, 106, 91, 0.8);
   gap: 0.5rem;
   font-size: 0.65rem;
@@ -2469,7 +2470,7 @@
   min-height: 2.85rem;
   align-items: center;
   justify-content: center;
-  margin-top: 1.35rem;
+  margin-top: 1.1rem;
   border: 1px solid rgba(251, 250, 245, 0.35);
   border-radius: 999px;
   background: rgba(251, 250, 245, 0.1);
@@ -2520,8 +2521,8 @@
   display: grid;
   grid-template-columns: minmax(9rem, 0.28fr) minmax(0, 1fr);
   align-items: start;
-  padding: clamp(4rem, 9vw, 8rem) clamp(0rem, 3vw, 2.5rem) 0;
-  gap: clamp(2rem, 7vw, 7rem);
+  padding: clamp(3.5rem, 7vw, 6rem) clamp(0rem, 3vw, 2.5rem) 0;
+  gap: clamp(1.75rem, 5vw, 5rem);
   scroll-margin-top: 2rem;
 }
 
@@ -2559,16 +2560,16 @@
 }
 
 .chapterDetail[data-reader-mode='owner'] .chapterPrologue {
-  padding-top: clamp(3.5rem, 7vw, 6rem);
+  padding-top: clamp(3rem, 6vw, 5rem);
 }
 
 .chapterDetail[data-reader-mode='owner'] .chapterPrologue + .routeSection {
-  padding-top: clamp(3.5rem, 7vw, 6rem);
+  padding-top: clamp(3rem, 6vw, 5rem);
 }
 
 .routeSection,
 .chapterMemories {
-  padding-top: clamp(4rem, 9vw, 7.5rem);
+  padding-top: clamp(3.5rem, 7vw, 6rem);
   scroll-margin-top: 2rem;
 }
 
@@ -2576,7 +2577,7 @@
   display: flex;
   align-items: flex-end;
   justify-content: space-between;
-  margin-bottom: 1.7rem;
+  margin-bottom: 1.45rem;
   gap: 2rem;
 }
 
@@ -2786,7 +2787,7 @@
 }
 
 .journeySegmentIndex {
-  margin: 0 0 2rem;
+  margin: 0 0 1.5rem;
 }
 
 .journeySegmentIndex ol {
@@ -2887,7 +2888,7 @@
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto;
   align-items: center;
-  margin: 3.5rem 0 1.35rem;
+  margin: 2.5rem 0 1.1rem;
   padding: 0.9rem 1rem;
   border: 1px solid rgba(183, 93, 52, 0.18);
   border-radius: 1.15rem;
@@ -2902,7 +2903,7 @@
 }
 
 .journeySegmentGroup:first-child .journeySegmentHeading {
-  margin-top: 0.5rem;
+  margin-top: 0.35rem;
 }
 
 .journeySegmentGroup[data-expanded='false'] .journeySegmentHeading {
@@ -3036,7 +3037,7 @@
 
 .chapterStopGroup {
   min-width: 0;
-  padding-block: 0.25rem;
+  padding-block: 0.2rem;
   /* content-visibility adds paint containment; keep enough ink overflow for
      the elevated card and waypoint shadows instead of clipping them. */
   content-visibility: auto;
@@ -3053,10 +3054,10 @@
 
 .chapterTransition {
   display: grid;
-  min-height: clamp(7.5rem, 13vw, 10rem);
+  min-height: clamp(7rem, 11vw, 9rem);
   grid-template-columns: 3.25rem minmax(0, 1fr);
   align-items: center;
-  padding: 1.25rem 0;
+  padding: 1rem 0;
   gap: 1.15rem;
 }
 
@@ -3724,6 +3725,10 @@
     padding: 1.4rem;
   }
 
+  .chapterDetail[data-reader-mode='owner'] .chapterHeroStory {
+    padding: 1.5rem;
+  }
+
   .chapterDetail[data-reader-mode='shared'] .chapterHeroStory h1 {
     font-size: clamp(2.75rem, 13vw, 4.15rem);
     line-height: 0.91;
@@ -3746,14 +3751,48 @@
     margin-top: 1.1rem;
   }
 
+  .chapterDetail[data-reader-mode='owner'] .chapterHeroStory h1 {
+    margin-top: 0.55rem;
+  }
+
+  .chapterDetail[data-reader-mode='owner'] .chapterHeroMeta {
+    margin-top: 1.25rem;
+    padding-top: 0.85rem;
+    gap: 0.5rem 0.9rem;
+  }
+
+  .chapterDetail[data-reader-mode='owner'] .chapterPlaces {
+    margin-top: 0.65rem;
+  }
+
+  .chapterDetail[data-reader-mode='owner'] .chapterHeroBegin {
+    margin-top: 0.9rem;
+  }
+
   .chapterPrologue {
     grid-template-columns: minmax(0, 1fr);
-    padding: 3.75rem 0 0;
-    gap: 1.35rem;
+    padding: 3rem 0 0;
+    gap: 1rem;
+  }
+
+  .chapterDetail[data-reader-mode='owner'] .chapterPrologue {
+    padding-top: 3rem;
+  }
+
+  .chapterDetail[data-reader-mode='owner'] .chapterPrologue + .routeSection,
+  .routeSection,
+  .chapterMemories {
+    padding-top: 3rem;
+  }
+
+  .chapterPrologue,
+  .routeSection,
+  .chapterMemories {
+    scroll-margin-top: 2.75rem;
   }
 
   .chapterPrologue > div {
-    gap: 0.8rem;
+    gap: 0.65rem;
   }
 
   .chapterPrologue > div > span {
@@ -3892,11 +3931,11 @@
     grid-column: 1;
     grid-row: 2;
     min-height: 7.25rem;
-    padding: 1.25rem 1.2rem 1.35rem;
+    padding: 1.05rem 1.05rem 1.2rem;
   }
 
   .chapterStop :global(.keepsake-card-index) {
-    margin-bottom: 0.8rem;
+    margin-bottom: 0.65rem;
   }
 
   .chapterStop :global(.keepsake-card-row-copy h3) {
@@ -3904,19 +3943,28 @@
   }
 
   .chapterStop :global(.keepsake-card-location) {
-    margin-top: 0.55rem;
+    margin-top: 0.45rem;
     font-size: 0.68rem;
   }
 
   .chapterStop :global(.keepsake-card-row-description) {
-    margin-top: 0.9rem;
+    margin-top: 0.75rem;
     color: var(--forest-800);
     font-size: 0.8rem;
     line-height: 1.7;
   }
 
   .chapterStop :global(.keepsake-card-row .keepsake-card-meta-main) {
-    margin-top: 0.9rem;
+    margin-top: 0.8rem;
+  }
+
+  .chapterDetailNav {
+    margin-bottom: 0.75rem;
+    gap: 0.6rem;
+  }
+
+  .chapterDetailActions {
+    gap: 0.4rem;
   }
 
   .chapterDetailNav a {
@@ -3975,12 +4023,33 @@
   .chapterSectionHeading {
     display: grid;
     align-items: start;
-    gap: 0.7rem;
+    margin-bottom: 1.2rem;
+    gap: 0.5rem;
   }
 
   .chapterSectionHeading > p {
     max-width: none;
     text-align: left;
+  }
+
+  .journeySegmentHeading {
+    margin: 1.5rem 0 0.9rem;
+    padding: 0.75rem 0.8rem;
+    gap: 0.75rem;
+  }
+
+  .journeySegmentGroup:first-child .journeySegmentHeading {
+    margin-top: 0.25rem;
+  }
+
+  .journeySegmentGroup[data-expanded='false']
+    + .journeySegmentGroup
+    .journeySegmentHeading {
+    margin-top: 0.55rem;
+  }
+
+  .chapterStopGroup {
+    padding-block: 0.15rem;
   }
 
   .chapterMap {
@@ -4006,9 +4075,9 @@
   }
 
   .chapterTransition {
-    min-height: 7rem;
+    min-height: 6.5rem;
     grid-template-columns: 2.15rem minmax(0, 1fr);
-    padding: 1rem 0;
+    padding: 0.75rem 0;
     gap: 0.75rem;
   }
 
@@ -4137,7 +4206,7 @@
 
 @media (max-width: 680px), (max-height: 480px) and (orientation: landscape) {
   .journeySegmentIndex {
-    margin: 0 -0.25rem 1rem;
+    margin: 0 -0.25rem 0.8rem;
   }
 
   .journeySegmentIndex ol {
@@ -4268,7 +4337,7 @@
   }
 
   .journeySegmentHeading {
-    margin-top: 1.25rem;
+    margin-top: 1rem;
     scroll-margin-top: 1rem;
   }
 
