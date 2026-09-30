@@ -103,6 +103,7 @@ type AtlasMapProps = {
   journeys?: AtlasJourneySummary[];
   selectedJourneyId?: string | null;
   selectedJourneyStopId?: string | null;
+  selectedJourneySegmentStopIds?: string[];
   journeyFitRequest?: number;
   journeyPlaybackIndex?: number | null;
   builderActive?: boolean;
@@ -123,6 +124,7 @@ const LOCATION_MAXIMUM_AGE_MS = 10 * 60 * 1_000;
 const LOCATION_SESSION_KEY = 'field-atlas:initial-location-requested';
 const MERCATOR_MAX_LATITUDE = 85.0511287798066;
 const EMPTY_MAP_PADDING = { top: 0, right: 0, bottom: 0, left: 0 } as const;
+const EMPTY_JOURNEY_SEGMENT_STOP_IDS: string[] = [];
 const BUILDER_PIN_HIT_RADIUS = 22;
 
 type PreparedJourneyMarkerFit = {
@@ -131,6 +133,10 @@ type PreparedJourneyMarkerFit = {
   center: [number, number];
   zoom: number;
 };
+
+function journeySegmentStopIdsKey(stopIds: readonly string[]) {
+  return stopIds.join('|');
+}
 
 type LocationStartState =
   | 'disabled'
@@ -205,6 +211,7 @@ function syncJourneyMarkerState(
   markers: Marker[],
   journey: AtlasJourneySummary,
   selectedStopId: string | null,
+  selectedSegmentStopIds: readonly string[],
   playbackIndex: number | null,
 ) {
   const selectedStopIndex = selectedStopId
@@ -212,12 +219,19 @@ function syncJourneyMarkerState(
     : -1;
   const currentIndex =
     selectedStopIndex >= 0 ? selectedStopIndex : playbackIndex;
+  const segmentStopIds = new Set(selectedSegmentStopIds);
 
   markers.forEach((marker, index) => {
     const element = marker.getElement();
+    const stopId = journey.stops[index]?.entryId;
     element.dataset.current = currentIndex === index ? 'true' : 'false';
     element.dataset.complete =
       playbackIndex != null && index < playbackIndex ? 'true' : 'false';
+    element.dataset.segment = segmentStopIds.size
+      ? stopId && segmentStopIds.has(stopId)
+        ? 'active'
+        : 'inactive'
+      : 'journey';
     if (currentIndex === index) {
       element.setAttribute('aria-current', 'step');
     } else {
@@ -284,6 +298,7 @@ function fitJourneyStops(
   map: MapLibreMap,
   journeys: AtlasJourneySummary[],
   selectedJourneyId: string | null,
+  selectedJourneySegmentStopIds: readonly string[],
   projection: ChapterRouteProjection,
   onFitPrepared?: (fit: PreparedJourneyMarkerFit | null) => void,
 ) {
@@ -292,8 +307,15 @@ function fitJourneyStops(
   const selectedJourney = selectedJourneyId
     ? journeys.find((journey) => journey.id === selectedJourneyId)
     : null;
+  const segmentStopIds = new Set(selectedJourneySegmentStopIds);
+  const focusedSegmentStops = selectedJourney
+    ? selectedJourney.stops.filter((stop) => segmentStopIds.has(stop.entryId))
+    : [];
+  const segmentFocused = focusedSegmentStops.length > 0;
   const stops = selectedJourney
-    ? selectedJourney.stops
+    ? focusedSegmentStops.length
+      ? focusedSegmentStops
+      : selectedJourney.stops
     : journeys
         .filter((journey) => journey.drawable)
         .flatMap((journey) => journey.stops);
@@ -316,7 +338,7 @@ function fitJourneyStops(
       })[0];
       map.easeTo({
         center: coordinate,
-        zoom: Math.max(map.getZoom(), 7),
+        zoom: Math.max(map.getZoom(), segmentFocused ? 12 : 7),
         padding,
         duration,
         essential: true,
@@ -325,7 +347,7 @@ function fitJourneyStops(
     }
 
     const routeCoordinates = selectedJourney
-      ? createGeodesicChapterRoute(selectedJourney.stops, { projection })
+      ? createGeodesicChapterRoute(stops, { projection })
       : journeys
           .filter((journey) => journey.drawable)
           .flatMap((journey) =>
@@ -344,7 +366,7 @@ function fitJourneyStops(
       layout,
     );
     map.setPadding(fitPadding);
-    let maxZoom = 8.5;
+    let maxZoom = segmentFocused ? 13 : 8.5;
     if (projection === 'globe') {
       const candidate = map.cameraForBounds(bounds, { padding: 0, maxZoom });
       if (!candidate?.center) return;
@@ -356,6 +378,7 @@ function fitJourneyStops(
         fitPadding,
         [center.lng, center.lat],
         map.getVerticalFieldOfView(),
+        maxZoom,
       );
     } else if (selectedJourney && onFitPrepared) {
       const candidate = map.cameraForBounds(bounds, { padding: 0, maxZoom });
@@ -714,6 +737,7 @@ export default function AtlasMap({
   journeys = [],
   selectedJourneyId = null,
   selectedJourneyStopId = null,
+  selectedJourneySegmentStopIds = EMPTY_JOURNEY_SEGMENT_STOP_IDS,
   journeyFitRequest = 0,
   journeyPlaybackIndex = null,
   builderActive = false,
@@ -739,6 +763,9 @@ export default function AtlasMap({
   const selectedRef = useRef<string | null>(null);
   const selectedJourneyRef = useRef<string | null>(selectedJourneyId);
   const selectedJourneyStopRef = useRef<string | null>(selectedJourneyStopId);
+  const selectedJourneySegmentStopIdsRef = useRef<string[]>(
+    selectedJourneySegmentStopIds,
+  );
   const journeyPlaybackIndexRef = useRef<number | null>(journeyPlaybackIndex);
   const builderSelectedRef = useRef(new Set<string>());
   const journeyMarkersRef = useRef<Marker[]>([]);
@@ -752,6 +779,7 @@ export default function AtlasMap({
         map: MapLibreMap;
         geometryKey: string;
         selectedStopId: string | null;
+        segmentStopIdsKey: string;
         playbackIndex: number | null;
       })
     | null
@@ -814,6 +842,9 @@ export default function AtlasMap({
           map,
           geometryKey: journeyMapDataKey(journeysRef.current),
           selectedStopId: selectedJourneyStopRef.current,
+          segmentStopIdsKey: journeySegmentStopIdsKey(
+            selectedJourneySegmentStopIdsRef.current,
+          ),
           playbackIndex: journeyPlaybackIndexRef.current,
         }
       : null;
@@ -842,6 +873,10 @@ export default function AtlasMap({
   useEffect(() => {
     selectedJourneyStopRef.current = selectedJourneyStopId;
   }, [selectedJourneyStopId]);
+
+  useEffect(() => {
+    selectedJourneySegmentStopIdsRef.current = selectedJourneySegmentStopIds;
+  }, [selectedJourneySegmentStopIds]);
 
   useEffect(() => {
     journeyPlaybackIndexRef.current = journeyPlaybackIndex;
@@ -1111,6 +1146,7 @@ export default function AtlasMap({
             map,
             journeysRef.current,
             selectedJourneyRef.current,
+            selectedJourneySegmentStopIdsRef.current,
             journeyRouteProjectionRef.current,
             (fit) => prepareJourneyMarkerFit(map, fit),
           );
@@ -1171,6 +1207,7 @@ export default function AtlasMap({
         addAtlasJourneyLayers(map, journeysRef.current, journeyRouteProjection);
         const initialJourneyLayerState = {
           selectedJourneyId: selectedJourneyRef.current,
+          selectedSegmentStopIds: selectedJourneySegmentStopIdsRef.current,
           playbackStopIndex: journeyPlaybackIndexRef.current,
         } satisfies AtlasJourneyLayerState;
         syncAtlasJourneyLayerState(
@@ -1212,6 +1249,8 @@ export default function AtlasMap({
         modeRef.current === 'journeys' &&
         selectedJourneyRef.current === prepared.journeyId &&
         selectedJourneyStopRef.current === prepared.selectedStopId &&
+        journeySegmentStopIdsKey(selectedJourneySegmentStopIdsRef.current) ===
+          prepared.segmentStopIdsKey &&
         journeyPlaybackIndexRef.current === prepared.playbackIndex &&
         prepared.geometryKey === journeyMapDataKey(journeysRef.current)
       ) {
@@ -1623,6 +1662,7 @@ export default function AtlasMap({
     clearAtlasJourneyLayerState(map);
     const nextJourneyLayerState = {
       selectedJourneyId,
+      selectedSegmentStopIds: selectedJourneySegmentStopIds,
       hoveredJourneyId,
       playbackStopIndex: journeyPlaybackIndex,
     } satisfies AtlasJourneyLayerState;
@@ -1636,6 +1676,7 @@ export default function AtlasMap({
     journeys,
     mapLoaded,
     selectedJourneyId,
+    selectedJourneySegmentStopIds,
   ]);
 
   useEffect(() => {
@@ -1644,6 +1685,7 @@ export default function AtlasMap({
 
     const nextJourneyLayerState = {
       selectedJourneyId,
+      selectedSegmentStopIds: selectedJourneySegmentStopIds,
       hoveredJourneyId,
       playbackStopIndex: journeyPlaybackIndex,
     } satisfies AtlasJourneyLayerState;
@@ -1654,7 +1696,13 @@ export default function AtlasMap({
       nextJourneyLayerState,
     );
     renderedJourneyLayerStateRef.current = nextJourneyLayerState;
-  }, [hoveredJourneyId, journeyPlaybackIndex, mapLoaded, selectedJourneyId]);
+  }, [
+    hoveredJourneyId,
+    journeyPlaybackIndex,
+    mapLoaded,
+    selectedJourneyId,
+    selectedJourneySegmentStopIds,
+  ]);
 
   useEffect(() => {
     const map = mapRef.current;
@@ -1826,10 +1874,18 @@ export default function AtlasMap({
       map,
       journeysRef.current,
       selectedJourneyId,
+      selectedJourneySegmentStopIds,
       journeyRouteProjectionRef.current,
       (fit) => prepareJourneyMarkerFit(map, fit),
     );
-  }, [journeyFitRequest, journeys, mapLoaded, mode, selectedJourneyId]);
+  }, [
+    journeyFitRequest,
+    journeys,
+    mapLoaded,
+    mode,
+    selectedJourneyId,
+    selectedJourneySegmentStopIds,
+  ]);
 
   useEffect(() => {
     const map = mapRef.current;
@@ -1926,6 +1982,7 @@ export default function AtlasMap({
       journeyMarkersRef.current,
       journey,
       selectedJourneyStopRef.current,
+      selectedJourneySegmentStopIdsRef.current,
       journeyPlaybackIndexRef.current,
     );
     if (
@@ -1978,6 +2035,7 @@ export default function AtlasMap({
       journeyMarkersRef.current,
       journey,
       selectedJourneyStopId,
+      selectedJourneySegmentStopIds,
       journeyPlaybackIndex,
     );
   }, [
@@ -1987,6 +2045,7 @@ export default function AtlasMap({
     mode,
     selectedJourneyId,
     selectedJourneyStopId,
+    selectedJourneySegmentStopIds,
   ]);
 
   const handlePointerMove = (event: React.PointerEvent<HTMLDivElement>) => {

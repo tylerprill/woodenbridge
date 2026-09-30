@@ -13,23 +13,29 @@ describe('responsive and route-level UI contracts', () => {
       /@media \(max-width: 760px\) \{[\s\S]*?\.workspace \{([\s\S]*?)\n  \}/,
     )?.[1];
 
-    expect(mobile).toContain('height: calc(100svh - 5.5rem)');
+    expect(mobile).toContain('height: 100%');
     expect(mobile).toContain('min-height: 0');
     expect(mobile).not.toContain('min-height: 35rem');
   });
 
-  it('keeps MapLibre full-frame and provides a legacy iOS height fallback', () => {
+  it('keeps MapLibre full-frame and sizes the compact Atlas from its viewport grid', () => {
     const atlasCss = readFileSync(
       join(root, 'components/atlas/atlas.module.css'),
       'utf8',
     );
+    const globalCss = readFileSync(join(root, 'app/global.css'), 'utf8');
 
     expect(atlasCss).toMatch(
       /\.mapFrame > \.mapCanvas \{[\s\S]*?position: absolute;[\s\S]*?width: 100%;[\s\S]*?height: 100%;/,
     );
-    expect(atlasCss).toContain('height: calc(100vh - 5.5rem)');
     expect(atlasCss).toMatch(
       /@media \(max-width: 900px\) \{[\s\S]*?\.workspace \{[\s\S]*?min-height: 0;/,
+    );
+    expect(globalCss).toMatch(
+      /@media \(max-width: 1240px\) \{[\s\S]*?\.dashboard-shell:has\(> \.dashboard-main > \.atlas-workspace-root\)[\s\S]*?height: 100dvh;[\s\S]*?grid-template-columns: minmax\(0, 1fr\);[\s\S]*?grid-template-rows: auto minmax\(0, 1fr\);/,
+    );
+    expect(globalCss).toMatch(
+      /@media \(max-width: 1240px\) \{[\s\S]*?\.dashboard-main:has\(> \.atlas-workspace-root\)[\s\S]*?height: auto;[\s\S]*?min-height: 0;/,
     );
   });
 

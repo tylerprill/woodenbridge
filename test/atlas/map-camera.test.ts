@@ -378,6 +378,36 @@ describe('Atlas fitted route longitude alignment', () => {
 });
 
 describe('Atlas globe Journey fit limit', () => {
+  it('allows a closer cap for a local Segment without changing the Journey default', () => {
+    const coordinates = [
+      [-83.0236, 42.3336],
+      [-82.9857, 42.3403],
+    ] as const;
+    const padding = getAtlasJourneyFitPadding(1440, 900);
+    const center = boundsCandidateCenter(coordinates);
+    const defaultLimit = getAtlasJourneyGlobeFitZoomLimit(
+      coordinates,
+      1440,
+      900,
+      padding,
+      center,
+      VERTICAL_FOV_DEGREES,
+    );
+    const segmentLimit = getAtlasJourneyGlobeFitZoomLimit(
+      coordinates,
+      1440,
+      900,
+      padding,
+      center,
+      VERTICAL_FOV_DEGREES,
+      13,
+    );
+
+    expect(defaultLimit).toBe(8.5);
+    expect(segmentLimit).toBeGreaterThan(defaultLimit);
+    expect(segmentLimit).toBeLessThanOrEqual(13);
+  });
+
   it.each([
     {
       label: 'the right dock',

@@ -50,6 +50,10 @@ import {
   type AtlasMode,
 } from './atlas-experience-state';
 import { AtlasJourneyPlayback } from './atlas-journey-playback';
+import {
+  journeySegmentGroups,
+  journeySegmentKeyForStop,
+} from './atlas-journey-segments';
 import { AtlasJourneyTray } from './atlas-journey-tray';
 import { MemoryDrawer } from './memory-drawer';
 import { MemoryTray } from './memory-tray';
@@ -184,6 +188,10 @@ export function AtlasWorkspace({
   >(null);
   const [journeyDetailError, setJourneyDetailError] = useState('');
   const [journeyFitRequest, setJourneyFitRequest] = useState(0);
+  const [journeySegmentFocus, setJourneySegmentFocus] = useState<{
+    journeyId: string;
+    key: string;
+  } | null>(null);
   const [overlapJourneyIds, setOverlapJourneyIds] = useState<string[]>([]);
   const [fitRequest, setFitRequest] = useState(0);
   const [focusRequest, setFocusRequest] = useState({
@@ -260,6 +268,7 @@ export function AtlasWorkspace({
       setQuery('');
       setActiveSearchIndex(-1);
       setOverlapJourneyIds([]);
+      setJourneySegmentFocus(null);
       if (initialMode === 'journeys') {
         setSelectedId(null);
         setPlacementMode(false);
@@ -387,6 +396,23 @@ export function AtlasWorkspace({
   const journeySearchResults = visibleJourneys.slice(0, 5);
   const selectedJourney =
     journeyIndex.journeys.find((journey) => journey.id === journeyId) ?? null;
+  const selectedStopSegmentKey = selectedJourney
+    ? journeySegmentKeyForStop(selectedJourney, selectedJourneyStopId)
+    : null;
+  const selectedJourneySegmentKey =
+    selectedStopSegmentKey ??
+    (journeySegmentFocus &&
+    journeySegmentFocus.journeyId === selectedJourney?.id
+      ? journeySegmentFocus.key
+      : null);
+  const selectedJourneySegmentStopIds = useMemo(() => {
+    if (!selectedJourney || !selectedJourneySegmentKey) return [];
+    return (
+      journeySegmentGroups(selectedJourney)
+        .find((group) => group.key === selectedJourneySegmentKey)
+        ?.stops.map((stop) => stop.entryId) ?? []
+    );
+  }, [selectedJourney, selectedJourneySegmentKey]);
   const currentJourneyDetail = journeyId
     ? (journeyDetails[journeyId] ?? null)
     : null;
@@ -608,6 +634,7 @@ export function AtlasWorkspace({
       setTrayOpen(false);
       setJourneyPanelOpen(nextMode === 'journeys');
       setOverlapJourneyIds([]);
+      setJourneySegmentFocus(null);
       setQuery('');
       setActiveSearchIndex(-1);
       searchInputRef.current?.blur();
@@ -631,6 +658,7 @@ export function AtlasWorkspace({
     dispatchExperience({ type: 'show-overview' });
     setJourneyPanelOpen(true);
     setOverlapJourneyIds([]);
+    setJourneySegmentFocus(null);
     router.push(journeyDashboardHref(), { scroll: false });
   }, [router]);
 
@@ -652,6 +680,7 @@ export function AtlasWorkspace({
 
   const selectJourney = useCallback(
     (id: string, stopId: string | null = null) => {
+      setJourneySegmentFocus(null);
       dispatchExperience({ type: 'select-journey', journeyId: id, stopId });
       setJourneyPanelOpen(true);
       setOverlapJourneyIds([]);
@@ -664,6 +693,12 @@ export function AtlasWorkspace({
   const selectJourneyStop = useCallback(
     (stopId: string) => {
       if (!journeyId) return;
+      const segmentKey = selectedJourney
+        ? journeySegmentKeyForStop(selectedJourney, stopId)
+        : null;
+      setJourneySegmentFocus(
+        segmentKey ? { journeyId, key: segmentKey } : null,
+      );
       if (experience.mode === 'journeys' && experience.surface === 'playback') {
         const stopIndex =
           journeyDetails[journeyId]?.stops.findIndex(
@@ -677,14 +712,19 @@ export function AtlasWorkspace({
       }
       replaceJourneyDashboardLocation(journeyId, stopId);
     },
-    [experience, journeyDetails, journeyId],
+    [experience, journeyDetails, journeyId, selectedJourney],
   );
 
-  const clearJourneyStop = useCallback(() => {
-    if (!journeyId) return;
-    dispatchExperience({ type: 'select-journey-stop', stopId: null });
-    replaceJourneyDashboardLocation(journeyId);
-  }, [journeyId]);
+  const selectJourneySegment = useCallback(
+    (key: string | null) => {
+      if (!journeyId) return;
+      setJourneySegmentFocus(key ? { journeyId, key } : null);
+      dispatchExperience({ type: 'select-journey-stop', stopId: null });
+      replaceJourneyDashboardLocation(journeyId);
+      setJourneyFitRequest((current) => current + 1);
+    },
+    [journeyId],
+  );
 
   const startJourneyPlayback = useCallback(
     (id: string) => {
@@ -1114,6 +1154,7 @@ export function AtlasWorkspace({
         journeys={visibleJourneys}
         selectedJourneyId={journeyId}
         selectedJourneyStopId={selectedJourneyStopId}
+        selectedJourneySegmentStopIds={selectedJourneySegmentStopIds}
         journeyFitRequest={journeyFitRequest}
         journeyPlaybackIndex={playbackStopIndex}
         onJourneySelect={selectJourney}
@@ -1599,6 +1640,7 @@ export function AtlasWorkspace({
           journeys={visibleJourneys}
           selectedJourney={selectedJourney}
           selectedStopId={selectedJourneyStopId}
+          selectedSegmentKey={selectedJourneySegmentKey}
           loadState={journeyLoadState}
           errorMessage={
             journeyError || 'Please try opening your journeys again.'
@@ -1607,7 +1649,7 @@ export function AtlasWorkspace({
           onRetry={() => void loadJourneys()}
           onSelectJourney={selectJourney}
           onSelectStop={selectJourneyStop}
-          onClearStop={clearJourneyStop}
+          onSelectSegment={selectJourneySegment}
           onShowOverview={showJourneyOverview}
           onStartPlayback={startJourneyPlayback}
         />

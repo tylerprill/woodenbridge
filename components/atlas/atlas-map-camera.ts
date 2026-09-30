@@ -219,8 +219,12 @@ export function getAtlasJourneyGlobeFitZoomLimit(
   padding: AtlasMapPadding,
   candidateCenter: AtlasMapCoordinate,
   verticalFovDegrees: number,
+  maximumZoom = JOURNEY_MAX_FIT_ZOOM,
 ): number {
-  if (!coordinates.length) return JOURNEY_MAX_FIT_ZOOM;
+  const safeMaximumZoom = Number.isFinite(maximumZoom)
+    ? Math.max(JOURNEY_MIN_ZOOM, maximumZoom)
+    : JOURNEY_MAX_FIT_ZOOM;
+  if (!coordinates.length) return safeMaximumZoom;
   if (
     !Number.isFinite(width) ||
     !Number.isFinite(height) ||
@@ -326,7 +330,7 @@ export function getAtlasJourneyGlobeFitZoomLimit(
   return clamp(
     Math.log2(worldSizeLimit / MERCATOR_WORLD_SIZE_AT_ZOOM_ZERO),
     minimumZoom,
-    JOURNEY_MAX_FIT_ZOOM,
+    safeMaximumZoom,
   );
 }
 

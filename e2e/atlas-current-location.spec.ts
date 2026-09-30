@@ -183,6 +183,32 @@ async function auditAtlasViewports(
     expect
       .soft(horizontalOverflow, `${viewport.label}: horizontal overflow`)
       .toBeLessThanOrEqual(1);
+    const verticalMetrics = await page.evaluate(() => {
+      const shell = document.querySelector<HTMLElement>('.dashboard-shell');
+      const shellBounds = shell?.getBoundingClientRect();
+      return {
+        documentOverflow:
+          Math.max(
+            document.documentElement.scrollHeight,
+            document.body.scrollHeight,
+          ) - window.innerHeight,
+        shellBottom: shellBounds?.bottom ?? 0,
+        shellTop: shellBounds?.top ?? 0,
+        viewportHeight: window.innerHeight,
+      };
+    });
+    expect
+      .soft(verticalMetrics.documentOverflow, `${viewport.label}: page height`)
+      .toBeLessThanOrEqual(1);
+    expect
+      .soft(verticalMetrics.shellTop, `${viewport.label}: shell top`)
+      .toBeCloseTo(0, 0);
+    expect
+      .soft(
+        verticalMetrics.shellBottom,
+        `${viewport.label}: shell bottom matches viewport`,
+      )
+      .toBeCloseTo(verticalMetrics.viewportHeight, 0);
     await capture(page, testInfo, `${label}-${viewport.label}`);
   }
 }
