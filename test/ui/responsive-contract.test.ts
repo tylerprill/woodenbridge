@@ -98,7 +98,7 @@ describe('responsive and route-level UI contracts', () => {
     );
 
     expect(globalCss).toMatch(
-      /\.collection-filter a,\s*\.collection-sort a \{[\s\S]*?min-height: 2\.75rem;/,
+      /\.collection-sort a \{[\s\S]*?min-height: 2\.75rem;/,
     );
     expect(atlasCss).toMatch(
       /\.filterDock button \{[\s\S]*?min-height: 2\.75rem;/,

@@ -8,10 +8,6 @@ export default async function LegacyCollectionRoute({
   const query = await searchParams;
   const params = new URLSearchParams();
 
-  if (query.view === 'visited' || query.view === 'ahead') {
-    params.set('view', query.view);
-  }
-
   const page = Number.parseInt(query.page ?? '', 10);
   if (Number.isFinite(page) && page > 1) params.set('page', String(page));
 
