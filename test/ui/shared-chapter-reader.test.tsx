@@ -203,7 +203,8 @@ describe('shared Chapter reader', () => {
     ).not.toBeInTheDocument();
   });
 
-  it('offers the full-image gallery to shared readers without changing the owner card', () => {
+  it('offers the full-image gallery to shared and owner readers while preserving owner navigation', async () => {
+    const user = userEvent.setup();
     const chapterWithPhoto = {
       ...chapter,
       entries: chapter.entries.map((entry, index) =>
@@ -240,11 +241,18 @@ describe('shared Chapter reader', () => {
     ).toBeInTheDocument();
 
     rerender(<ChapterReader chapter={chapterWithPhoto} mode="owner" />);
+    const ownerGalleryTrigger = screen.getByRole('button', {
+      name: 'View Petra at dawn photo 1 full size',
+    });
+    expect(ownerGalleryTrigger).toHaveAttribute('aria-haspopup', 'dialog');
     expect(
-      screen.queryByRole('button', {
-        name: 'View Petra at dawn photo 1 full size',
-      }),
-    ).not.toBeInTheDocument();
+      screen.getByRole('link', { name: /Open Petra at dawn keepsake/i }),
+    ).toHaveAttribute('href', '/dashboard/card/memory-1');
+
+    await user.click(ownerGalleryTrigger);
+    expect(
+      screen.getByRole('dialog', { name: 'Petra at dawn' }),
+    ).toBeInTheDocument();
   });
 
   it('preserves the featured destination when a journey returns to its origin', () => {

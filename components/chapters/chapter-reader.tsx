@@ -71,7 +71,7 @@ function ChapterStop({
           href={mode === 'owner' ? `/dashboard/card/${entry.id}` : undefined}
           eager={false}
           showDescription
-          expandableMedia={mode === 'shared'}
+          expandableMedia
         />
       </div>
     </li>
