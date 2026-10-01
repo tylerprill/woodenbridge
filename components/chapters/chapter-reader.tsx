@@ -164,11 +164,12 @@ export function ChapterReader({
         ];
       })
     : [];
-  const chapterStart = chapter.introduction
-    ? '#chapter-story'
-    : showMap
-      ? '#chapter-route'
-      : '#chapter-memories';
+  const chapterStart =
+    mode === 'shared' && chapter.introduction
+      ? '#chapter-story'
+      : showMap
+        ? '#chapter-route'
+        : '#chapter-memories';
   const segmentedTimelineGroups: ChapterSegmentGroup[] = segmentGroups.map(
     (group, groupIndex) => {
       const segment = group.segmentId
@@ -335,12 +336,33 @@ export function ChapterReader({
           className={styles.chapterHeroStory}
           data-long-title={chapter.title.length > 52 ? 'true' : undefined}
         >
-          <p className="section-kicker">
-            {mode === 'shared'
-              ? 'A shared Field Atlas journey'
-              : 'A journey from your atlas'}
-          </p>
-          <h1>{chapter.title}</h1>
+          {mode === 'owner' && chapter.introduction ? (
+            <section
+              id="chapter-story"
+              className={styles.chapterHeroFieldNote}
+              aria-label="Journey introduction"
+              tabIndex={-1}
+            >
+              <p
+                className={`${styles.chapterFocusTarget} section-kicker`}
+                data-chapter-focus-target
+                tabIndex={-1}
+              >
+                The field note
+              </p>
+              <h1>{chapter.title}</h1>
+              <p>{chapter.introduction}</p>
+            </section>
+          ) : (
+            <>
+              <p className="section-kicker">
+                {mode === 'shared'
+                  ? 'A shared Field Atlas journey'
+                  : 'A journey from your atlas'}
+              </p>
+              <h1>{chapter.title}</h1>
+            </>
+          )}
           <div className={styles.chapterHeroMeta}>
             <span>
               <CalendarDaysIcon aria-hidden="true" />
@@ -386,7 +408,7 @@ export function ChapterReader({
         </div>
       </header>
 
-      {chapter.introduction ? (
+      {mode === 'shared' && chapter.introduction ? (
         <section
           id="chapter-story"
           className={styles.chapterPrologue}

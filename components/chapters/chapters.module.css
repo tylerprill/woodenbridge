@@ -2405,6 +2405,7 @@
 .chapterDetail[data-reader-mode='owner']
   .chapterHeroStory
   :global(.section-kicker),
+.chapterHeroFieldNote :global(.section-kicker),
 .chapterPrologue :global(.section-kicker) {
   color: #8e4327;
 }
@@ -2424,6 +2425,22 @@
 .chapterHeroStory[data-long-title='true'] h1 {
   font-size: clamp(2.5rem, 4.8vw, 4.7rem);
   line-height: 0.98;
+}
+
+.chapterHeroFieldNote {
+  min-width: 0;
+  scroll-margin-top: 2rem;
+}
+
+.chapterHeroFieldNote > p:last-child {
+  max-width: 36rem;
+  margin-top: 1rem;
+  color: var(--forest-600);
+  font-size: clamp(0.82rem, 1.15vw, 1rem);
+  line-height: 1.7;
+  overflow-wrap: anywhere;
+  text-wrap: pretty;
+  white-space: pre-wrap;
 }
 
 .chapterHeroMeta {
@@ -2681,18 +2698,14 @@
   text-underline-offset: 0.2em;
 }
 
-.chapterDetail[data-reader-mode='owner'] .chapterPrologue {
-  padding-top: clamp(3rem, 6vw, 5rem);
-}
-
-.chapterDetail[data-reader-mode='owner'] .chapterPrologue + .routeSection {
-  padding-top: clamp(3rem, 6vw, 5rem);
-}
-
 .routeSection,
 .chapterMemories {
   padding-top: clamp(3.5rem, 7vw, 6rem);
   scroll-margin-top: 2rem;
+}
+
+.chapterDetail[data-reader-mode='owner'] .routeSection {
+  padding-top: clamp(3rem, 5vw, 4rem);
 }
 
 .chapterSectionHeading {
@@ -4049,11 +4062,7 @@
     gap: 1rem;
   }
 
-  .chapterDetail[data-reader-mode='owner'] .chapterPrologue {
-    padding-top: 3rem;
-  }
-
-  .chapterDetail[data-reader-mode='owner'] .chapterPrologue + .routeSection,
+  .chapterDetail[data-reader-mode='owner'] .routeSection,
   .routeSection,
   .chapterMemories {
     padding-top: 3rem;
@@ -4076,6 +4085,11 @@
   .chapterPrologue > p {
     font-size: clamp(1.15rem, 5.8vw, 1.5rem);
     line-height: 1.55;
+  }
+
+  .chapterHeroFieldNote > p:last-child {
+    margin-top: 0.85rem;
+    line-height: 1.65;
   }
 
   .editorSection {

@@ -161,7 +161,7 @@ describe('responsive and route-level UI contracts', () => {
       /\.chapterDetail\[data-reader-mode='owner'\] \.chapterHeroStory \{\s*padding: 1\.5rem;/,
     );
     expect(mobile).toMatch(
-      /\.chapterDetail\[data-reader-mode='owner'\] \.chapterPrologue \{\s*padding-top: 3rem;/,
+      /\.chapterDetail\[data-reader-mode='owner'\] \.routeSection,[\s\S]*?padding-top: 3rem;/,
     );
     expect(mobile).toMatch(
       /\.chapterSectionHeading \{[\s\S]*?margin-bottom: 1\.2rem;[\s\S]*?gap: 0\.5rem;/,
@@ -176,6 +176,9 @@ describe('responsive and route-level UI contracts', () => {
       /\.chapterPlacePath \{[\s\S]*?grid-template-columns: minmax\(0, 1fr\);[\s\S]*?gap: 0\.3rem;/,
     );
     expect(mobile).toMatch(/\.chapterRoundTrip svg \{[\s\S]*?transform: none;/);
+    expect(mobile).toMatch(
+      /\.chapterHeroFieldNote > p:last-child \{\s*margin-top: 0\.85rem;\s*line-height: 1\.65;/,
+    );
   });
 
   it('gives completed Journey routes a compact noninteractive status cue', () => {
