@@ -370,17 +370,13 @@ describe('shared Chapter reader', () => {
   it('keeps the owner opening concise and hands focus to its field note', async () => {
     render(<ChapterReader chapter={chapter} mode="owner" />);
 
-    expect(screen.getByRole('link', { name: 'Journeys' })).toHaveAttribute(
+    expect(screen.getByRole('link', { name: 'Open in Atlas' })).toHaveAttribute(
       'href',
-      '/dashboard/chapters',
+      '/dashboard?view=journeys&journey=chapter-1',
     );
     expect(screen.getByRole('link', { name: 'Edit journey' })).toHaveAttribute(
       'href',
       '/dashboard/chapters/chapter-1/edit',
-    );
-    expect(screen.getByRole('link', { name: 'View on Atlas' })).toHaveAttribute(
-      'href',
-      '/dashboard?view=journeys&journey=chapter-1',
     );
     expect(
       screen.getByRole('link', { name: 'Continue journey' }),
@@ -777,7 +773,7 @@ describe('shared Chapter reader', () => {
     render(<ChapterReader chapter={chapter} mode="shared" />);
 
     expect(
-      screen.queryByRole('link', { name: 'View on Atlas' }),
+      screen.queryByRole('link', { name: 'Open in Atlas' }),
     ).not.toBeInTheDocument();
     expect(
       screen.queryByRole('link', { name: 'Continue journey' }),

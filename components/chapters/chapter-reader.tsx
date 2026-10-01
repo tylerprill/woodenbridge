@@ -6,7 +6,6 @@ import {
   GlobeAltIcon,
   MapPinIcon,
   PencilIcon,
-  PlusIcon,
 } from '@heroicons/react/24/outline';
 import Link from 'next/link';
 
@@ -233,35 +232,49 @@ export function ChapterReader({
       data-reader-mode={mode}
     >
       <nav className={styles.chapterDetailNav} aria-label="Journey actions">
-        <Link href={mode === 'owner' ? '/dashboard/chapters' : '/'}>
-          <ArrowLeftIcon aria-hidden="true" />
-          {mode === 'owner' ? 'Journeys' : 'Field Atlas'}
+        <Link
+          className={mode === 'owner' ? styles.chapterAtlasAction : undefined}
+          href={
+            mode === 'owner'
+              ? `/dashboard?view=journeys&journey=${encodeURIComponent(chapter.id)}`
+              : '/'
+          }
+        >
+          {mode === 'owner' ? (
+            <GlobeAltIcon aria-hidden="true" />
+          ) : (
+            <ArrowLeftIcon aria-hidden="true" />
+          )}
+          {mode === 'owner' ? 'Open in Atlas' : 'Field Atlas'}
         </Link>
         {mode === 'owner' ? (
           <div className={styles.chapterDetailActions}>
-            <Link
-              href={`/dashboard?view=journeys&journey=${encodeURIComponent(chapter.id)}`}
-            >
-              <GlobeAltIcon aria-hidden="true" />
-              View on Atlas
-            </Link>
             <ChapterShareControl
               chapterId={chapter.id}
               chapterTitle={chapter.title}
               shareId={chapter.shareId}
               visibility={chapter.visibility}
             />
-            <Link href={`/dashboard/chapters/${chapter.id}/edit`}>
+            <Link
+              aria-label="Edit journey"
+              className={styles.chapterEditAction}
+              href={`/dashboard/chapters/${chapter.id}/edit`}
+            >
               <PencilIcon aria-hidden="true" />
-              Edit journey
+              Edit
             </Link>
             <Link
+              aria-label="Continue journey"
+              className={styles.chapterContinueAction}
               href={continueJourneyEditorHref(chapter.id, {
                 segmentId: defaultContinuationSegmentId,
               })}
             >
-              <PlusIcon aria-hidden="true" />
-              Continue journey
+              <span>
+                Continue{' '}
+                <span className={styles.chapterContinueSuffix}>journey</span>
+              </span>
+              <ArrowRightIcon aria-hidden="true" />
             </Link>
           </div>
         ) : (
