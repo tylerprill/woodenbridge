@@ -367,7 +367,7 @@ describe('shared Chapter reader', () => {
     expect(route.querySelector('svg')).toBeNull();
   });
 
-  it('keeps the owner opening concise and hands focus to its field note', async () => {
+  it('integrates the owner field note into the hero and hands focus to the route', async () => {
     render(<ChapterReader chapter={chapter} mode="owner" />);
 
     expect(screen.getByRole('link', { name: 'Open in Atlas' })).toHaveAttribute(
@@ -386,7 +386,7 @@ describe('shared Chapter reader', () => {
     );
     expect(screen.getByRole('link', { name: 'Read journey' })).toHaveAttribute(
       'href',
-      '#chapter-story',
+      '#chapter-route',
     );
     expect(
       screen.getByRole('region', { name: 'Journey introduction' }),
@@ -394,11 +394,14 @@ describe('shared Chapter reader', () => {
     const ownerHero = screen
       .getByRole('heading', { name: 'Wonders without borders', level: 1 })
       .closest('header');
-    expect(ownerHero).not.toHaveTextContent('Ten places across the world');
+    expect(ownerHero).toHaveTextContent('The field note');
+    expect(ownerHero).toHaveTextContent('Ten places across the world');
 
     fireEvent.click(screen.getByRole('link', { name: 'Read journey' }));
     await waitFor(() =>
-      expect(screen.getByText('The field note')).toHaveFocus(),
+      expect(
+        screen.getByRole('heading', { name: 'Your route, remembered.' }),
+      ).toHaveFocus(),
     );
     expect(
       screen.getByRole('list', {
