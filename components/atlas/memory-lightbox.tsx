@@ -12,11 +12,12 @@ import {
   ArrowsPointingOutIcon,
   XMarkIcon,
 } from '@heroicons/react/24/outline';
-import Image from 'next/image';
 import { useCallback, useEffect, useRef } from 'react';
 
 import type { AtlasMedia } from '@/app/lib/atlas/definitions';
+import { BridgeScene } from '@/components/clean/bridge-scene';
 import styles from './memory-lightbox.module.css';
+import { ResilientMediaImage } from './resilient-media-image';
 
 type MemoryLightboxProps = {
   photos: AtlasMedia[];
@@ -24,6 +25,7 @@ type MemoryLightboxProps = {
   open: boolean;
   title: string;
   place: string;
+  tone: 'alpine' | 'cedar' | 'ember';
   onActiveIndexChange: (index: number) => void;
   onClose: () => void;
 };
@@ -34,6 +36,7 @@ export function MemoryLightbox({
   open,
   title,
   place,
+  tone,
   onActiveIndexChange,
   onClose,
 }: MemoryLightboxProps) {
@@ -151,17 +154,18 @@ export function MemoryLightbox({
             }}
           >
             <div className={styles.ambient} aria-hidden="true">
-              <Image
+              <ResilientMediaImage
                 key={`ambient-${photo.id}`}
                 src={photo.deliveryUrl}
                 alt=""
                 fill
                 sizes="100vw"
                 unoptimized
+                fallback={<div className={styles.ambientFallback} />}
               />
             </div>
             <div className={styles.imageFrame}>
-              <Image
+              <ResilientMediaImage
                 key={photo.id}
                 src={photo.deliveryUrl}
                 alt={imageAlt}
@@ -169,6 +173,12 @@ export function MemoryLightbox({
                 sizes="100vw"
                 loading="eager"
                 unoptimized
+                fallback={
+                  <BridgeScene
+                    className={styles.unavailableArtwork}
+                    tone={tone}
+                  />
+                }
               />
             </div>
 
@@ -219,12 +229,18 @@ export function MemoryLightbox({
                       candidateIndex === activeIndex ? 'true' : undefined
                     }
                   >
-                    <Image
+                    <ResilientMediaImage
                       src={candidate.thumbnailUrl}
                       alt=""
                       fill
                       sizes="72px"
                       unoptimized
+                      fallback={
+                        <div
+                          className={styles.thumbnailFallback}
+                          aria-hidden="true"
+                        />
+                      }
                     />
                     <span>{String(candidateIndex + 1).padStart(2, '0')}</span>
                   </button>

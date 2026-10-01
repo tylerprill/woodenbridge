@@ -243,6 +243,38 @@ describe('MemoryArtwork', () => {
     ).toBeInTheDocument();
   });
 
+  it('keeps the full-image gallery usable when a photograph is unavailable', async () => {
+    const user = userEvent.setup();
+    const entry = {
+      ...baseEntry,
+      media: [media('missing', 0), media('two', 1)],
+    };
+
+    render(<MemoryArtwork entry={entry} tone="ember" preview expandable />);
+    await user.click(
+      screen.getByRole('button', { name: /photo 1 full size/i }),
+    );
+
+    const dialog = screen.getByRole('dialog');
+    fireEvent.error(within(dialog).getByRole('img', { name: 'Giza view 1' }));
+
+    expect(
+      within(dialog).getByRole('img', {
+        name: 'Giza view 1 — photo unavailable',
+      }),
+    ).toBeInTheDocument();
+    expect(dialog.querySelector('.bridge-card-art-ember')).toBeInTheDocument();
+
+    await user.click(
+      within(dialog).getByRole('button', {
+        name: 'Show next full-size photo',
+      }),
+    );
+    expect(
+      within(dialog).getByRole('img', { name: 'Giza view 2' }),
+    ).toHaveAttribute('src', '/media/two.webp');
+  });
+
   it('replaces a failed photograph without collapsing the artwork', () => {
     const { container } = render(
       <MemoryArtwork

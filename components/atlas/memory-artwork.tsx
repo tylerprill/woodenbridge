@@ -173,6 +173,7 @@ export function MemoryArtwork({
           open={lightboxOpen}
           title={entry.title}
           place={context}
+          tone={tone}
           onActiveIndexChange={setActiveIndex}
           onClose={() => setLightboxOpen(false)}
         />
