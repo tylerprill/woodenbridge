@@ -18,6 +18,7 @@ import {
   getE2ELifecycleSeedConfiguration,
   seedE2ELifecycleDatabase,
 } from '../scripts/seed-e2e-lifecycle.js';
+import { matureAndDrainFixtureMediaDeletions } from './support/media-deletion';
 import { auditCurrentPage, monitorBrowserIssues } from './support/ui-audit';
 
 const baseUrl = process.env.E2E_BASE_URL ?? 'http://127.0.0.1:3100';
@@ -1178,6 +1179,20 @@ test('an empty account can preserve memories, shape a journey, and cleanly remov
   await expect(
     page.getByRole('heading', { name: 'Your world is waiting.' }),
   ).toBeVisible();
+  const mediaCleanup = await matureAndDrainFixtureMediaDeletions(
+    page.context().request,
+    {
+      expectedDatabaseName: E2E_LIFECYCLE_FIXTURE.databaseName,
+      userId: E2E_LIFECYCLE_FIXTURE.userId,
+    },
+  );
+  const expectedQueuedMedia = testInfo.project.name === 'chromium' ? 3 : 2;
+  expect(mediaCleanup).toMatchObject({
+    completed: expectedQueuedMedia,
+    deadLettered: 0,
+    pending: 0,
+    released: expectedQueuedMedia,
+  });
   await expect.poll(async () => (await storedObjectNames()).length).toBe(0);
   const finalMemories = await loadPersistedMemories();
   expect(finalMemories).toHaveLength(selectedMemories.length);

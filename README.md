@@ -51,6 +51,8 @@ requires `RESEND_API_KEY` plus a verified `RESEND_FROM_EMAIL`. Local development
 may use console delivery for verification codes and password-reset links.
 Deployment, database-role, scheduled-cleanup, and CI controls are documented in the
 [operations runbook](docs/operations/deployment-security.md).
+Read-only media auditing and explicitly guarded thumbnail repair are documented
+in the [Atlas media integrity runbook](docs/operations/media-integrity.md).
 The enforced per-request browser policy and its rendering tradeoffs are
 documented in the
 [Content Security Policy runbook](docs/operations/content-security-policy.md).

@@ -1461,6 +1461,32 @@
   transform: scale(1.025);
 }
 
+.photoUnavailable {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  padding: 0.5rem 0.5rem 3rem;
+  place-content: center;
+  justify-items: center;
+  background:
+    radial-gradient(
+      circle at 72% 24%,
+      rgba(251, 250, 245, 0.8),
+      transparent 28%
+    ),
+    linear-gradient(145deg, rgba(184, 200, 164, 0.72), rgba(76, 106, 91, 0.28));
+  color: var(--forest-700);
+  font-size: 0.62rem;
+  font-weight: 750;
+  gap: 0.38rem;
+  text-align: center;
+}
+
+.photoUnavailable > svg {
+  width: 1.15rem;
+  height: 1.15rem;
+}
+
 .photoTile button {
   position: absolute;
   right: 0.4rem;
@@ -2066,6 +2092,7 @@
   .toolDock .addButton {
     display: flex;
     min-height: 3rem;
+    justify-content: center;
     padding-inline: 0.82rem;
     border-radius: 999px;
     font-size: 0.64rem;
@@ -3576,6 +3603,7 @@
   .toolDock .addButton {
     display: flex;
     min-height: 3rem;
+    justify-content: center;
     padding-inline: 0.78rem;
     border-radius: 999px;
     font-size: 0.62rem;

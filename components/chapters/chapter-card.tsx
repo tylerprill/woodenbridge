@@ -1,5 +1,4 @@
 import { ArrowUpRightIcon, MapPinIcon } from '@heroicons/react/24/outline';
-import Image from 'next/image';
 import Link from 'next/link';
 
 import type { AtlasChapterSummary } from '@/app/lib/chapters/definitions';
@@ -7,6 +6,7 @@ import {
   chapterMemoryLabel,
   formatChapterDateRange,
 } from '@/app/lib/chapters/format';
+import { ResilientMediaImage } from '@/components/atlas/resilient-media-image';
 import styles from './chapters.module.css';
 
 export function ChapterCard({
@@ -27,7 +27,7 @@ export function ChapterCard({
       >
         <div className={styles.chapterCardArtwork}>
           {chapter.coverMedia ? (
-            <Image
+            <ResilientMediaImage
               src={chapter.coverMedia.thumbnailUrl}
               alt={chapter.coverMedia.altText || ''}
               fill
@@ -36,6 +36,13 @@ export function ChapterCard({
               loading={eager ? 'eager' : 'lazy'}
               fetchPriority={eager ? 'high' : 'auto'}
               unoptimized
+              fallback={
+                <div className={styles.chapterCardFallback} aria-hidden="true">
+                  <span />
+                  <span />
+                  <span />
+                </div>
+              }
             />
           ) : (
             <div className={styles.chapterCardFallback} aria-hidden="true">

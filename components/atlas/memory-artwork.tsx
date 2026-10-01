@@ -5,7 +5,6 @@ import {
   ChevronLeftIcon,
   ChevronRightIcon,
 } from '@heroicons/react/24/outline';
-import Image from 'next/image';
 import { useRef, useState } from 'react';
 
 import type { AtlasEntryPresentation } from '@/app/lib/atlas/definitions';
@@ -13,6 +12,7 @@ import { getAtlasPlaceContextLabel } from '@/app/lib/atlas/place';
 import { BridgeScene } from '@/components/clean/bridge-scene';
 import { MemoryLightbox } from './memory-lightbox';
 import styles from './memory-lightbox.module.css';
+import { ResilientMediaImage } from './resilient-media-image';
 
 type MemoryArtworkProps = {
   entry: AtlasEntryPresentation;
@@ -50,7 +50,7 @@ export function MemoryArtwork({
   }
 
   const visual = photo ? (
-    <Image
+    <ResilientMediaImage
       key={photo.id}
       src={preview ? photo.thumbnailUrl : photo.deliveryUrl}
       alt={`${photo.altText.trim() || entry.title.trim() || context}${hasCarousel ? `, photo ${activeIndex + 1} of ${photoCount}` : ''}`}
@@ -59,6 +59,9 @@ export function MemoryArtwork({
       loading={eager ? 'eager' : 'lazy'}
       fetchPriority={eager ? 'high' : 'auto'}
       unoptimized
+      fallback={
+        <BridgeScene className="atlas-memory-artwork-fallback" tone={tone} />
+      }
     />
   ) : (
     <BridgeScene className="atlas-memory-artwork-fallback" tone={tone} />
@@ -170,6 +173,7 @@ export function MemoryArtwork({
           open={lightboxOpen}
           title={entry.title}
           place={context}
+          tone={tone}
           onActiveIndexChange={setActiveIndex}
           onClose={() => setLightboxOpen(false)}
         />

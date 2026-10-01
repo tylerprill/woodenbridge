@@ -2,6 +2,8 @@ import path from 'node:path';
 
 import { expect, test, type Page, type TestInfo } from '@playwright/test';
 
+import { E2E_FIXTURE } from '../scripts/seed-e2e.js';
+import { matureAndDrainFixtureMediaDeletions } from './support/media-deletion';
 import { monitorBrowserIssues } from './support/ui-audit';
 
 const photo = path.join(
@@ -550,22 +552,7 @@ test('a Journey can be continued with a new Memory', async ({
       );
     }
 
-    const unexpectedBrowserIssues = monitor.flush().filter((issue) => {
-      const isMissingLegacyFixtureImage =
-        issue.kind === 'http-response'
-          ? issue.status === 404 &&
-            issue.resourceType === 'image' &&
-            new URL(issue.url).pathname.startsWith('/api/atlas/media/')
-          : issue.kind === 'console' &&
-            issue.level === 'error' &&
-            issue.message.includes('404') &&
-            Boolean(
-              issue.url &&
-              new URL(issue.url).pathname.startsWith('/api/atlas/media/'),
-            );
-      return !isMissingLegacyFixtureImage;
-    });
-    expect(unexpectedBrowserIssues).toEqual([]);
+    expect(monitor.flush()).toEqual([]);
     monitor.stop();
     monitor = null;
   } finally {
@@ -585,8 +572,27 @@ test('a Journey can be continued with a new Memory', async ({
           .catch(() => undefined);
       }
     }
-    if (saved && journeyId) {
-      await removeTestMemory(page, journeyId, title, segmentTitle);
+    try {
+      if (saved && journeyId) {
+        await removeTestMemory(page, journeyId, title, segmentTitle);
+      }
+    } finally {
+      const mediaCleanup = await matureAndDrainFixtureMediaDeletions(
+        page.context().request,
+        {
+          expectedDatabaseName: E2E_FIXTURE.databaseName,
+          minimumQueued: saved ? 1 : 0,
+          userId: E2E_FIXTURE.userId,
+        },
+      );
+      if (saved) {
+        expect(mediaCleanup).toMatchObject({
+          completed: 1,
+          deadLettered: 0,
+          pending: 0,
+          released: 1,
+        });
+      }
     }
   }
 });

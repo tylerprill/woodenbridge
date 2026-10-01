@@ -156,7 +156,7 @@ optional local or non-Vercel fallback only. If that fallback is used, it must
 belong to the same store declared by `ATLAS_BLOB_STORE_ID`, and the webhook
 public key is still required for completion callbacks.
 
-## Scheduled security and upload retention
+## Scheduled security, media deletion, and upload retention
 
 Vercel calls `GET /api/internal/auth-cleanup` daily according to `vercel.json`.
 Vercel Cron sends `Authorization: Bearer <CRON_SECRET>`; the route rejects a
@@ -181,6 +181,28 @@ returns 503 while any dead-letter row exists). The response also reports the
 pending count and oldest pending timestamp; alert when the oldest row exceeds
 your delivery objective.
 
+Registered photograph deletion follows the same transactional-outbox pattern.
+A database trigger inserts the immutable original/thumbnail pair into
+`atlas_media_deletion_outbox` in the same PostgreSQL transaction that removes
+the `atlas_media` association. Blob removal happens only after that transaction
+commits. Newly queued work has a 15-minute first-attempt fence: the maximum
+presigned PUT lifetime is 10 minutes, followed by five minutes of in-flight
+grace. Retry attempts use their normal capped backoff rather than restarting
+that upload fence. An `after()` callback accelerates eligible cleanup, while
+the daily job reclaims expired leases and retries transient Blob failures
+indefinitely. Invalid stored paths fail closed and remain dead-lettered for
+operator review. Alert on `atlas_media.deletion_failure`, a non-zero media
+deletion `deadLettered` count, or an oldest pending deletion beyond the storage
+cleanup objective. Pending and dead-lettered objects continue to count against
+the account storage quota until deletion succeeds.
+
+The outbox deliberately accepts the raw path and byte metadata copied from a
+registered legacy row, even when that payload violates today's upload policy.
+This keeps malformed or oversized historical associations deletable. The
+worker treats every queued payload as untrusted: it validates entry scoping,
+the original/thumbnail pairing, and the recorded byte total before any Blob
+request, then dead-letters an invalid payload without touching storage.
+
 On Vercel Hobby, the checked-in daily cadence is the shortest supported cron
 interval. For a tighter retry objective, use Vercel Pro or an authenticated
 external scheduler to call this same route every 10 minutes; keep the daily job
@@ -193,10 +215,22 @@ used WebAuthn challenges and passkey reauthentication attempts are retained for
 only a 24-hour diagnostic grace period. It also
 claims expired photo-upload intents, removes their exact original/thumbnail
 Blob pair, and only then releases the reserved file slot and storage quota. A
-failed Blob deletion retains the reservation for a later retry rather than
-silently orphaning billable data. Opportunistic cleanup inside authentication
-actions remains as a fallback. Alert when the route returns non-2xx or when a
-scheduled invocation is missing for more than 36 hours.
+five-minute in-flight grace follows intent expiry before cleanup may claim the
+pair. A failed Blob deletion or any live media row with a conflicting UUID or
+path retains the reservation for a later retry rather than silently orphaning
+billable data. Cleanup marks an intent consumed only when the registered media
+identity, owner, entry, original path, and thumbnail path all match exactly.
+Opportunistic cleanup inside authentication actions remains as a fallback.
+Alert when the route returns non-2xx or when a scheduled invocation is missing
+for more than 36 hours.
+
+Cleanup stages settle independently. The media-deletion drain waits for the
+upload-intent and import producers to settle, then runs even if either producer,
+unrelated authentication retention, or notification delivery failed. A stage
+failure still returns HTTP 500 and includes only stable task names in
+`failedTasks`; it never exposes database or provider error details. HTTP 503 is
+reserved for an otherwise successful run whose outbox health still reports
+dead-lettered work.
 
 ## Security-event operations
 

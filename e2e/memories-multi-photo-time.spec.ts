@@ -14,26 +14,6 @@ const photoFiles = [
   path.join(fixtureRoot, 'kyoto-test.png'),
 ];
 
-type MonitoredBrowserIssue = ReturnType<
-  ReturnType<typeof monitorBrowserIssues>['flush']
->[number];
-
-function isUnrelatedMissingThumbnail(issue: MonitoredBrowserIssue) {
-  if (!('url' in issue) || !issue.url) return false;
-
-  const issueUrl = new URL(issue.url);
-  const isThumbnail =
-    issueUrl.pathname.startsWith('/api/atlas/media/') &&
-    issueUrl.searchParams.get('variant') === 'thumbnail';
-  if (!isThumbnail) return false;
-
-  return issue.kind === 'http-response'
-    ? issue.status === 404
-    : issue.kind === 'console' &&
-        issue.level === 'error' &&
-        issue.message.includes('404');
-}
-
 async function signIn(page: Page) {
   const email = process.env.E2E_TEST_EMAIL?.trim();
   const password = process.env.E2E_TEST_PASSWORD;
@@ -283,9 +263,7 @@ test('one Memory keeps multiple photos and a sortable local occurrence time', as
       );
     }
 
-    expect(
-      monitor.flush().filter((issue) => !isUnrelatedMissingThumbnail(issue)),
-    ).toEqual([]);
+    expect(monitor.flush()).toEqual([]);
     monitor.stop();
     monitor = null;
   } finally {

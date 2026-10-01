@@ -1,7 +1,8 @@
 import 'server-only';
 
 import { db, sql } from '@/app/lib/db';
-import { deleteAtlasMediaObjects } from './media-storage';
+import { scheduleAtlasMediaDeletion } from './media-deletion-scheduler';
+import { enqueueAtlasMediaDeletionWithinTransaction } from './media-deletion-outbox';
 
 const CLEANUP_LEASE_MINUTES = 15;
 const CLEANUP_BATCH_SIZE = 10;
@@ -29,38 +30,8 @@ async function releaseImportCleanupLease(claim: CleanupClaim) {
 }
 
 async function cleanupClaimedImportBatch(claim: CleanupClaim) {
-  const pathResult = await sql<{ pathname: string }>`
-    SELECT media.storage_path AS pathname
-    FROM atlas_import_items AS item
-    INNER JOIN atlas_media AS media
-      ON media.entry_id = item.entry_id AND media.user_id = item.user_id
-    WHERE item.batch_id = ${claim.id} AND item.user_id = ${claim.user_id}
-    UNION
-    SELECT media.thumbnail_path AS pathname
-    FROM atlas_import_items AS item
-    INNER JOIN atlas_media AS media
-      ON media.entry_id = item.entry_id AND media.user_id = item.user_id
-    WHERE item.batch_id = ${claim.id}
-      AND item.user_id = ${claim.user_id}
-      AND media.thumbnail_path IS NOT NULL
-    UNION
-    SELECT intent.original_path AS pathname
-    FROM atlas_import_items AS item
-    INNER JOIN atlas_media_upload_intents AS intent
-      ON intent.entry_id = item.entry_id AND intent.user_id = item.user_id
-    WHERE item.batch_id = ${claim.id} AND item.user_id = ${claim.user_id}
-    UNION
-    SELECT intent.thumbnail_path AS pathname
-    FROM atlas_import_items AS item
-    INNER JOIN atlas_media_upload_intents AS intent
-      ON intent.entry_id = item.entry_id AND intent.user_id = item.user_id
-    WHERE item.batch_id = ${claim.id} AND item.user_id = ${claim.user_id}
-  `;
-  const paths = Array.from(new Set(pathResult.rows.map((row) => row.pathname)));
-
+  let queuedMedia = false;
   try {
-    if (paths.length) await deleteAtlasMediaObjects(paths);
-
     const client = await db.connect();
     try {
       await client.query('BEGIN');
@@ -91,6 +62,86 @@ async function cleanupClaimedImportBatch(claim: CleanupClaim) {
       );
       const entryIds = entries.rows.map((row) => row.entry_id);
       if (entryIds.length) {
+        const intents = await client.query<{
+          media_id: string;
+          entry_id: string;
+          original_path: string;
+          thumbnail_path: string;
+          reserved_bytes: number | string;
+          has_exact_registered_match: boolean;
+          has_registered_conflict: boolean;
+        }>(
+          `
+            SELECT
+              intent.media_id,
+              intent.entry_id,
+              intent.original_path,
+              intent.thumbnail_path,
+              intent.reserved_bytes,
+              EXISTS (
+                SELECT 1
+                FROM atlas_media AS registered_media
+                WHERE registered_media.id = intent.media_id
+                  AND registered_media.entry_id = intent.entry_id
+                  AND registered_media.user_id = intent.user_id
+                  AND registered_media.storage_path = intent.original_path
+                  AND registered_media.thumbnail_path = intent.thumbnail_path
+              ) AS has_exact_registered_match,
+              EXISTS (
+                SELECT 1
+                FROM atlas_media AS registered_media
+                WHERE (
+                    registered_media.id = intent.media_id
+                    OR registered_media.storage_path IN (
+                      intent.original_path,
+                      intent.thumbnail_path
+                    )
+                    OR registered_media.thumbnail_path IN (
+                      intent.original_path,
+                      intent.thumbnail_path
+                    )
+                  )
+                  AND NOT (
+                    registered_media.id = intent.media_id
+                    AND registered_media.entry_id = intent.entry_id
+                    AND registered_media.user_id = intent.user_id
+                    AND registered_media.storage_path = intent.original_path
+                    AND registered_media.thumbnail_path = intent.thumbnail_path
+                  )
+              ) AS has_registered_conflict
+            FROM atlas_media_upload_intents AS intent
+            WHERE intent.user_id = $1
+              AND intent.entry_id = ANY($2::uuid[])
+            ORDER BY intent.media_id
+            FOR UPDATE
+          `,
+          [claim.user_id, entryIds],
+        );
+        // Never discard the only durable record of an object pair when a
+        // malformed legacy intent aliases just part of live media. Retain the
+        // whole batch for operator repair instead of guessing which object is
+        // safe to remove.
+        if (intents.rows.some((intent) => intent.has_registered_conflict)) {
+          throw new Error(
+            'Atlas import cleanup found a conflicting live media identity.',
+          );
+        }
+        for (const intent of intents.rows) {
+          // Exact registered pairs are queued by the atlas_media DELETE
+          // trigger below. Only unregistered reservations need an explicit
+          // outbox row.
+          if (intent.has_exact_registered_match) continue;
+          await enqueueAtlasMediaDeletionWithinTransaction(client, {
+            mediaId: intent.media_id,
+            entryId: intent.entry_id,
+            userId: claim.user_id,
+            originalPath: intent.original_path,
+            thumbnailPath: intent.thumbnail_path,
+            reservedBytes: Number(intent.reserved_bytes),
+            reason: 'cancelled_upload',
+          });
+          queuedMedia = true;
+        }
         await client.query(
           `DELETE FROM atlas_media_upload_intents
            WHERE user_id = $1 AND entry_id = ANY($2::uuid[])`,
@@ -101,6 +152,7 @@ async function cleanupClaimedImportBatch(claim: CleanupClaim) {
            WHERE user_id = $1 AND entry_id = ANY($2::uuid[])`,
           [claim.user_id, entryIds],
         );
+        queuedMedia = true;
         await client.query(
           `DELETE FROM atlas_entries
            WHERE user_id = $1 AND id = ANY($2::uuid[])`,
@@ -113,6 +165,7 @@ async function cleanupClaimedImportBatch(claim: CleanupClaim) {
         [claim.id, claim.user_id],
       );
       await client.query('COMMIT');
+      if (queuedMedia) scheduleAtlasMediaDeletion();
       return true;
     } catch (error) {
       await client.query('ROLLBACK').catch(() => undefined);

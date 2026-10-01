@@ -288,6 +288,7 @@ enrolled a passkey.
 | privileged_recovery_attempts                              | Recovery abuse accounting                                               |
 | auth_security_events                                      | Durable redacted audit events                                           |
 | security_notification_outbox                              | Transactional leased security-email delivery and retry state            |
+| atlas_media_deletion_outbox                               | Transactional leased private-Blob deletion and retry state              |
 
 Expired challenge, token, session, attempt, upload-intent, and audit data is
 removed by the authenticated daily cleanup route. WebAuthn challenges and

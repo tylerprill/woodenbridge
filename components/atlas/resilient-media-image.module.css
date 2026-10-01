@@ -1,0 +1,7 @@
+.fallback {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  overflow: hidden;
+  place-items: center;
+}

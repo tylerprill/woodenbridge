@@ -266,6 +266,7 @@ jobs:
           --project=mobile-chromium
           --project=mobile-chromium-landscape
       - name: Verify isolated media storage cleanup
+        if: ${{ always() && !cancelled() }}
         shell: bash
         run: |
           if [ ! -d "$E2E_MEDIA_STORAGE_ROOT" ] || [ -L "$E2E_MEDIA_STORAGE_ROOT" ]; then

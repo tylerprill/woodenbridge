@@ -8,11 +8,11 @@ import {
   PlayIcon,
   XMarkIcon,
 } from '@heroicons/react/24/outline';
-import Image from 'next/image';
 import Link from 'next/link';
 import { useEffect, useRef } from 'react';
 
 import type { AtlasJourneyDetail } from '@/app/lib/atlas/journeys/definitions';
+import { ResilientMediaImage } from './resilient-media-image';
 import styles from './atlas.module.css';
 
 export function AtlasJourneyPlayback({
@@ -95,12 +95,13 @@ export function AtlasJourneyPlayback({
               data-has-image={stop.thumbnailUrl ? 'true' : 'false'}
             >
               {stop.thumbnailUrl ? (
-                <Image
+                <ResilientMediaImage
                   src={stop.thumbnailUrl}
                   alt={stop.thumbnailAlt}
                   fill
                   sizes="(max-width: 760px) 100vw, 24rem"
                   unoptimized
+                  fallback={<span aria-hidden="true">{stopIndex + 1}</span>}
                 />
               ) : (
                 <span aria-hidden="true">{stopIndex + 1}</span>

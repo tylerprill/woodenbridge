@@ -13,9 +13,9 @@ import type {
   AtlasViewInput,
 } from '@/app/lib/atlas/definitions';
 import { reverseGeocodeAtlasPlace } from '@/app/lib/atlas/geocoding';
+import { scheduleAtlasMediaDeletion } from '@/app/lib/atlas/media-deletion-scheduler';
 import type { AtlasPlaceContext } from '@/app/lib/atlas/place';
 import { type AtlasEntryRow, toAtlasEntry } from '@/app/lib/atlas/rows';
-import { deleteAtlasMediaObjects } from '@/app/lib/atlas/media-storage';
 import {
   CHAPTER_MAX_MEMORIES,
   CHAPTER_MAX_SEGMENTS,
@@ -630,31 +630,12 @@ export async function archiveAtlasEntryAction(
       };
     }
 
-    const media = await client.query<{
-      storage_path: string;
-      thumbnail_path: string | null;
-    }>(
-      `
-        SELECT storage_path, thumbnail_path
-        FROM atlas_media
-        WHERE entry_id = $1
-          AND user_id = $2
-      `,
+    // The atlas_media DELETE trigger persists every immutable Blob pair in the
+    // durable deletion outbox before the association can disappear.
+    await client.query(
+      'DELETE FROM atlas_media WHERE entry_id = $1 AND user_id = $2',
       [parsed.data, session.user.id],
     );
-    const storagePaths = media.rows.flatMap((row) =>
-      [row.storage_path, row.thumbnail_path].filter(
-        (pathname): pathname is string => Boolean(pathname),
-      ),
-    );
-
-    if (storagePaths.length) {
-      await deleteAtlasMediaObjects(storagePaths);
-      await client.query(
-        'DELETE FROM atlas_media WHERE entry_id = $1 AND user_id = $2',
-        [parsed.data, session.user.id],
-      );
-    }
 
     const result = await client.query<{ id: string }>(
       `
@@ -672,6 +653,7 @@ export async function archiveAtlasEntryAction(
       [parsed.data, session.user.id],
     );
     await client.query('COMMIT');
+    scheduleAtlasMediaDeletion();
 
     revalidatePath('/dashboard');
     revalidatePath('/dashboard/places');

@@ -243,6 +243,11 @@ async function seedE2EDatabase(environment = process.env) {
           (SELECT COUNT(*)::integer FROM atlas_media WHERE user_id = $1) AS media_count,
           (
             SELECT COUNT(*)::integer
+            FROM atlas_media_deletion_outbox
+            WHERE user_id = $1
+          ) AS deletion_queue_count,
+          (
+            SELECT COUNT(*)::integer
             FROM atlas_media_upload_intents
             WHERE user_id = $1
           ) AS upload_intent_count
@@ -250,6 +255,7 @@ async function seedE2EDatabase(environment = process.env) {
       [E2E_FIXTURE.userId],
     );
     const mediaCount = mediaResult.rows[0]?.media_count ?? 0;
+    const deletionQueueCount = mediaResult.rows[0]?.deletion_queue_count ?? 0;
     const uploadIntentCount = mediaResult.rows[0]?.upload_intent_count ?? 0;
     mediaStorageConfiguration =
       environment.E2E_MEDIA_STORAGE_ADAPTER === 'filesystem'
@@ -257,11 +263,11 @@ async function seedE2EDatabase(environment = process.env) {
         : null;
 
     if (
-      (mediaCount > 0 || uploadIntentCount > 0) &&
+      (mediaCount > 0 || deletionQueueCount > 0 || uploadIntentCount > 0) &&
       !mediaStorageConfiguration
     ) {
       throw new Error(
-        'Refusing to reset an E2E fixture that has media or upload reservations without its isolated filesystem storage.',
+        'Refusing to reset an E2E fixture that has media, queued deletions, or upload reservations without its isolated filesystem storage.',
       );
     }
     if (mediaStorageConfiguration) {
@@ -542,6 +548,31 @@ async function seedE2EDatabase(environment = process.env) {
     await client.query('COMMIT');
     if (mediaStorageConfiguration) {
       await resetE2EMediaStorage(mediaStorageConfiguration);
+      // Deleting the old user queued its immutable object pairs. Only release
+      // those fixture-owned jobs after the fenced filesystem reset succeeds.
+      // A failed reset therefore leaves durable cleanup work and quota intact.
+      await client.query('BEGIN');
+      await client.query(
+        "SELECT pg_advisory_xact_lock(hashtextextended('field-atlas-e2e-seed', 0))",
+      );
+      await client.query(
+        'DELETE FROM atlas_media_deletion_outbox WHERE user_id = $1',
+        [E2E_FIXTURE.userId],
+      );
+      const queueState = await client.query(
+        `
+          SELECT COUNT(*)::integer AS deletion_queue_count
+          FROM atlas_media_deletion_outbox
+          WHERE user_id = $1
+        `,
+        [E2E_FIXTURE.userId],
+      );
+      if (queueState.rows[0]?.deletion_queue_count !== 0) {
+        throw new Error(
+          'The deterministic E2E media deletion queue was not reset.',
+        );
+      }
+      await client.query('COMMIT');
     }
     console.log('Seeded the deterministic Field Atlas E2E fixture.');
   } catch (error) {

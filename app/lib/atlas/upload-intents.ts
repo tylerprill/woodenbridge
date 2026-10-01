@@ -9,9 +9,16 @@ import {
   ATLAS_MEDIA_USER_STORAGE_MAX_BYTES,
 } from '@/app/lib/atlas/media-policy';
 import { deleteAtlasMediaObjects } from '@/app/lib/atlas/media-storage';
+import { enqueueAtlasMediaDeletionWithinTransaction } from '@/app/lib/atlas/media-deletion-outbox';
+import { scheduleAtlasMediaDeletion } from '@/app/lib/atlas/media-deletion-scheduler';
 
 const UPLOAD_INTENT_TTL_MS = 30 * 60 * 1000;
 const UPLOAD_TOKEN_TTL_MS = 10 * 60 * 1000;
+// A PUT that began just before its signed URL expired may still be in flight.
+// Cleanup therefore waits five more minutes after the intent expiry. Combined
+// with the 10-minute maximum URL lifetime, new outbox jobs use a 15-minute
+// first-attempt fence.
+const UPLOAD_IN_FLIGHT_GRACE_MINUTES = 5;
 const CLEANUP_LEASE_MINUTES = 15;
 const CLEANUP_BATCH_SIZE = 50;
 
@@ -47,8 +54,20 @@ type UploadIntentRow = {
 
 type CleanupIntentRow = Pick<
   UploadIntentRow,
-  'media_id' | 'original_path' | 'thumbnail_path'
-> & { cleanup_started_at: Date; cleanup_attempts: number };
+  'media_id' | 'user_id' | 'entry_id' | 'original_path' | 'thumbnail_path'
+> & {
+  reserved_bytes: number | string;
+  cleanup_started_at: Date | null;
+  cleanup_attempts: number;
+};
+
+type RegisteredMediaMatch = {
+  id: string;
+  user_id: string;
+  entry_id: string;
+  storage_path: string;
+  thumbnail_path: string;
+};
 
 export class AtlasUploadIntentError extends Error {
   constructor(
@@ -66,6 +85,19 @@ function pathsMatch(row: UploadIntentRow, intent: AtlasUploadIntentIdentity) {
     row.entry_id === intent.entryId &&
     row.original_path === intent.pathname &&
     row.thumbnail_path === intent.thumbnailPathname
+  );
+}
+
+function isExactRegisteredMediaMatch(
+  row: CleanupIntentRow,
+  media: RegisteredMediaMatch,
+) {
+  return (
+    media.id === row.media_id &&
+    media.user_id === row.user_id &&
+    media.entry_id === row.entry_id &&
+    media.storage_path === row.original_path &&
+    media.thumbnail_path === row.thumbnail_path
   );
 }
 
@@ -227,6 +259,48 @@ export async function reserveAtlasMediaUploadVariant(
     );
     const existingIntent = existing.rows[0];
 
+    // Immutable media identities cannot be recycled. Check both columns for
+    // both paths because a malformed legacy row must also fail closed instead
+    // of allowing a fresh upload that aliases an object still in use.
+    const liveMedia = await client.query<{ id: string }>(
+      `
+        SELECT id
+        FROM atlas_media
+        WHERE id = $1
+          OR storage_path IN ($2, $3)
+          OR thumbnail_path IN ($2, $3)
+        LIMIT 1
+      `,
+      [intent.mediaId, intent.pathname, intent.thumbnailPathname],
+    );
+    if (liveMedia.rows[0]) {
+      throw new AtlasUploadIntentError(
+        'invalid',
+        'This photo upload is no longer available.',
+      );
+    }
+
+    // A retained deletion row is an object-identity tombstone. Reusing its
+    // UUID or either immutable path could let a delayed retry remove a newly
+    // uploaded photograph, so reject it before issuing an upload token.
+    const deletionTombstone = await client.query<{ id: string }>(
+      `
+        SELECT id
+        FROM atlas_media_deletion_outbox
+        WHERE media_id = $1
+          OR original_path IN ($2, $3)
+          OR thumbnail_path IN ($2, $3)
+        LIMIT 1
+      `,
+      [intent.mediaId, intent.pathname, intent.thumbnailPathname],
+    );
+    if (deletionTombstone.rows[0]) {
+      throw new AtlasUploadIntentError(
+        'invalid',
+        'This photo upload is no longer available.',
+      );
+    }
+
     if (existingIntent) {
       if (
         !pathsMatch(existingIntent, intent) ||
@@ -255,6 +329,7 @@ export async function reserveAtlasMediaUploadVariant(
       reserved_entry_count: number | string;
       registered_user_bytes: number | string;
       reserved_user_bytes: number | string;
+      queued_deletion_user_bytes: number | string;
     }>(
       `
         SELECT
@@ -277,7 +352,12 @@ export async function reserveAtlasMediaUploadVariant(
             SELECT COALESCE(SUM(reserved_bytes), 0)::bigint
             FROM atlas_media_upload_intents
             WHERE user_id = $2 AND consumed_at IS NULL
-          ) AS reserved_user_bytes
+          ) AS reserved_user_bytes,
+          (
+            SELECT COALESCE(SUM(reserved_bytes), 0)::bigint
+            FROM atlas_media_deletion_outbox
+            WHERE user_id = $2 AND completed_at IS NULL
+          ) AS queued_deletion_user_bytes
       `,
       [intent.entryId, intent.userId],
     );
@@ -287,7 +367,8 @@ export async function reserveAtlasMediaUploadVariant(
       Number(usage?.reserved_entry_count ?? 0);
     const userBytes =
       Number(usage?.registered_user_bytes ?? 0) +
-      Number(usage?.reserved_user_bytes ?? 0);
+      Number(usage?.reserved_user_bytes ?? 0) +
+      Number(usage?.queued_deletion_user_bytes ?? 0);
 
     if (entrySlots >= ATLAS_MEDIA_MAX_FILES) {
       throw new AtlasUploadIntentError(
@@ -490,25 +571,45 @@ async function releaseCleanupLease(row: CleanupIntentRow) {
 }
 
 async function deleteClaimedIntentBlobs(row: CleanupIntentRow) {
-  const registered = await sql<{ id: string }>`
-    SELECT id
+  const registered = await sql<RegisteredMediaMatch>`
+    SELECT id, user_id, entry_id, storage_path, thumbnail_path
     FROM atlas_media
     WHERE id = ${row.media_id}
-      OR storage_path = ${row.original_path}
-      OR thumbnail_path = ${row.thumbnail_path}
-    LIMIT 1
+      OR storage_path IN (${row.original_path}, ${row.thumbnail_path})
+      OR thumbnail_path IN (${row.original_path}, ${row.thumbnail_path})
+    ORDER BY id
+    LIMIT 2
   `;
 
-  if (registered.rows[0]) {
-    await sql`
+  if (
+    registered.rows.length === 1 &&
+    isExactRegisteredMediaMatch(row, registered.rows[0]!)
+  ) {
+    const consumed = await sql`
       UPDATE atlas_media_upload_intents
       SET consumed_at = COALESCE(consumed_at, NOW()),
           cleanup_started_at = NULL,
           updated_at = NOW()
       WHERE media_id = ${row.media_id}
+        AND user_id = ${row.user_id}
+        AND entry_id = ${row.entry_id}
+        AND original_path = ${row.original_path}
+        AND thumbnail_path = ${row.thumbnail_path}
         AND cleanup_attempts = ${row.cleanup_attempts}
+        AND consumed_at IS NULL
     `;
+    if (consumed.rowCount !== 1) {
+      throw new Error('Atlas upload intent cleanup lease was lost.');
+    }
     return;
+  }
+
+  if (registered.rows.length > 0) {
+    // A same-ID or same-path row with any different identity may still own one
+    // of these objects. Keep the reservation billable and retryable rather
+    // than guessing which Blob is safe to remove.
+    await releaseCleanupLease(row);
+    throw new Error('Atlas upload intent conflicts with registered media.');
   }
 
   try {
@@ -532,13 +633,13 @@ export async function cleanupExpiredAtlasMediaUploadIntents() {
         SELECT media_id
         FROM atlas_media_upload_intents
         WHERE consumed_at IS NULL
-          AND expires_at < NOW()
+          AND expires_at < NOW() - ($1 * INTERVAL '1 minute')
           AND (
             cleanup_started_at IS NULL
-            OR cleanup_started_at < NOW() - ($1 * INTERVAL '1 minute')
+            OR cleanup_started_at < NOW() - ($2 * INTERVAL '1 minute')
           )
         ORDER BY expires_at
-        LIMIT $2
+        LIMIT $3
         FOR UPDATE SKIP LOCKED
       )
       UPDATE atlas_media_upload_intents AS intent
@@ -549,12 +650,15 @@ export async function cleanupExpiredAtlasMediaUploadIntents() {
       WHERE intent.media_id = candidates.media_id
       RETURNING
         intent.media_id,
+        intent.user_id,
+        intent.entry_id,
         intent.original_path,
         intent.thumbnail_path,
+        intent.reserved_bytes,
         intent.cleanup_started_at,
         intent.cleanup_attempts
     `,
-    [CLEANUP_LEASE_MINUTES, CLEANUP_BATCH_SIZE],
+    [UPLOAD_IN_FLIGHT_GRACE_MINUTES, CLEANUP_LEASE_MINUTES, CLEANUP_BATCH_SIZE],
   );
 
   const results = await Promise.allSettled(
@@ -579,28 +683,137 @@ export async function cleanupExpiredAtlasMediaUploadIntents() {
 export async function discardAtlasMediaUploadIntent(
   intent: AtlasUploadIntentIdentity,
 ) {
-  const claimed = await sql<CleanupIntentRow>`
-    UPDATE atlas_media_upload_intents
-    SET cleanup_started_at = date_trunc('milliseconds', clock_timestamp()),
-        cleanup_attempts = cleanup_attempts + 1,
-        updated_at = NOW()
-    WHERE media_id = ${intent.mediaId}
-      AND user_id = ${intent.userId}
-      AND entry_id = ${intent.entryId}
-      AND original_path = ${intent.pathname}
-      AND thumbnail_path = ${intent.thumbnailPathname}
-      AND consumed_at IS NULL
-      AND cleanup_started_at IS NULL
-    RETURNING
-      media_id,
-      original_path,
-      thumbnail_path,
-      cleanup_started_at,
-      cleanup_attempts
-  `;
-  const row = claimed.rows[0];
-  if (!row) return false;
+  const client = await db.connect();
+  let queued = false;
 
-  await deleteClaimedIntentBlobs(row);
-  return true;
+  try {
+    await client.query('BEGIN');
+    const claimed = await client.query<CleanupIntentRow>(
+      `
+        SELECT
+          media_id,
+          user_id,
+          entry_id,
+          original_path,
+          thumbnail_path,
+          reserved_bytes,
+          cleanup_started_at,
+          cleanup_attempts
+        FROM atlas_media_upload_intents
+        WHERE media_id = $1
+          AND user_id = $2
+          AND entry_id = $3
+          AND original_path = $4
+          AND thumbnail_path = $5
+          AND consumed_at IS NULL
+          AND cleanup_started_at IS NULL
+        LIMIT 1
+        FOR UPDATE
+      `,
+      [
+        intent.mediaId,
+        intent.userId,
+        intent.entryId,
+        intent.pathname,
+        intent.thumbnailPathname,
+      ],
+    );
+    const row = claimed.rows[0];
+    if (!row) {
+      await client.query('ROLLBACK');
+      return false;
+    }
+
+    const registered = await client.query<RegisteredMediaMatch>(
+      `
+        SELECT id, user_id, entry_id, storage_path, thumbnail_path
+        FROM atlas_media
+        WHERE id = $1
+          OR storage_path IN ($2, $3)
+          OR thumbnail_path IN ($2, $3)
+        ORDER BY id
+        LIMIT 2
+      `,
+      [row.media_id, row.original_path, row.thumbnail_path],
+    );
+
+    if (
+      registered.rows.length === 1 &&
+      isExactRegisteredMediaMatch(row, registered.rows[0]!)
+    ) {
+      const consumed = await client.query(
+        `
+          UPDATE atlas_media_upload_intents
+          SET consumed_at = COALESCE(consumed_at, NOW()),
+              updated_at = NOW()
+          WHERE media_id = $1
+            AND user_id = $2
+            AND entry_id = $3
+            AND original_path = $4
+            AND thumbnail_path = $5
+            AND consumed_at IS NULL
+          RETURNING media_id
+        `,
+        [
+          row.media_id,
+          row.user_id,
+          row.entry_id,
+          row.original_path,
+          row.thumbnail_path,
+        ],
+      );
+      if (consumed.rowCount !== 1) {
+        throw new Error('Atlas upload intent discard lock was lost.');
+      }
+      await client.query('COMMIT');
+      return true;
+    }
+
+    if (registered.rows.length > 0) {
+      throw new Error('Atlas upload intent conflicts with registered media.');
+    }
+
+    await enqueueAtlasMediaDeletionWithinTransaction(client, {
+      mediaId: row.media_id,
+      entryId: row.entry_id,
+      userId: row.user_id,
+      originalPath: row.original_path,
+      thumbnailPath: row.thumbnail_path,
+      reservedBytes: Number(row.reserved_bytes),
+      reason: 'cancelled_upload',
+    });
+    const removed = await client.query(
+      `
+        DELETE FROM atlas_media_upload_intents
+        WHERE media_id = $1
+          AND user_id = $2
+          AND entry_id = $3
+          AND original_path = $4
+          AND thumbnail_path = $5
+          AND consumed_at IS NULL
+          AND cleanup_started_at IS NULL
+        RETURNING media_id
+      `,
+      [
+        row.media_id,
+        row.user_id,
+        row.entry_id,
+        row.original_path,
+        row.thumbnail_path,
+      ],
+    );
+    if (removed.rowCount !== 1) {
+      throw new Error('Atlas upload intent discard lock was lost.');
+    }
+
+    await client.query('COMMIT');
+    queued = true;
+    return true;
+  } catch (error) {
+    await client.query('ROLLBACK').catch(() => undefined);
+    throw error;
+  } finally {
+    client.release();
+    if (queued) scheduleAtlasMediaDeletion();
+  }
 }

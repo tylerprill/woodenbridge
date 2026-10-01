@@ -171,6 +171,8 @@
 .close,
 .direction {
   display: grid;
+  min-width: 44px;
+  min-height: 44px;
   place-items: center;
   border: 1px solid rgba(251, 250, 245, 0.2);
   border-radius: 999px;
@@ -241,6 +243,16 @@
   object-fit: cover;
 }
 
+.ambientFallback {
+  width: 100%;
+  height: 100%;
+  background: radial-gradient(
+    circle at 50% 42%,
+    rgba(204, 125, 85, 0.2),
+    rgba(4, 11, 9, 0) 62%
+  );
+}
+
 .imageFrame {
   position: absolute;
   z-index: 1;
@@ -251,6 +263,16 @@
   object-fit: contain;
   filter: drop-shadow(0 1.1rem 2.4rem rgba(0, 0, 0, 0.38));
   animation: image-in 360ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.unavailableArtwork {
+  width: min(72vw, 58rem);
+  height: min(62vh, 42rem);
+  min-height: 0;
+  aspect-ratio: auto;
+  border: 1px solid rgba(251, 250, 245, 0.12);
+  border-radius: clamp(0.8rem, 1.5vw, 1.25rem);
+  box-shadow: 0 1.1rem 2.4rem rgba(0, 0, 0, 0.24);
 }
 
 .direction {
@@ -347,6 +369,18 @@
   object-fit: cover;
 }
 
+.thumbnailFallback {
+  width: 100%;
+  height: 100%;
+  background:
+    radial-gradient(
+      circle at 68% 28%,
+      rgba(235, 188, 146, 0.36) 0 12%,
+      transparent 13%
+    ),
+    linear-gradient(145deg, #55746b, #1b392f 68%);
+}
+
 .thumbnails button span {
   position: absolute;
   z-index: 2;
@@ -424,6 +458,11 @@
 
   .imageFrame {
     inset: 0.8rem 0.65rem;
+  }
+
+  .unavailableArtwork {
+    width: min(88vw, 34rem);
+    height: min(56vh, 34rem);
   }
 
   .direction {
@@ -506,6 +545,11 @@
     min-height: 4.4rem;
     display: flex;
     padding-block: 0.45rem;
+  }
+
+  .unavailableArtwork {
+    width: min(72vw, 34rem);
+    height: min(48vh, 20rem);
   }
 
   .caption {

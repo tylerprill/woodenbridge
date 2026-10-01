@@ -15,15 +15,15 @@ jest.mock('next/cache', () => ({ revalidatePath: jest.fn() }));
 jest.mock('@/app/lib/auth/session', () => ({
   requireVerifiedSession: jest.fn(),
 }));
-jest.mock('@/app/lib/atlas/media-storage', () => ({
-  deleteAtlasMediaObjects: jest.fn(),
+jest.mock('@/app/lib/atlas/media-deletion-scheduler', () => ({
+  scheduleAtlasMediaDeletion: jest.fn(),
 }));
 
-import { deleteAtlasMediaObjects } from '@/app/lib/atlas/media-storage';
 import {
   archiveAtlasEntryAction,
   updateAtlasEntryAction,
 } from '@/app/lib/actions/atlas';
+import { scheduleAtlasMediaDeletion } from '@/app/lib/atlas/media-deletion-scheduler';
 import { requireVerifiedSession } from '@/app/lib/auth/session';
 import { revalidatePath } from 'next/cache';
 
@@ -107,12 +107,56 @@ describe('Atlas entry active-import mutation guard', () => {
       ok: false,
       error: 'conflict',
     });
-    expect(deleteAtlasMediaObjects).not.toHaveBeenCalled();
+    expect(scheduleAtlasMediaDeletion).not.toHaveBeenCalled();
     expect(
       __testMocks.clientQuery.mock.calls.some(([query]) =>
         normalizeQuery(query).includes('SELECT storage_path, thumbnail_path'),
       ),
     ).toBe(false);
+  });
+
+  it('commits the trigger-backed media delete before scheduling Blob cleanup', async () => {
+    __testMocks.clientQuery.mockImplementation(async (query: string) => {
+      const text = normalizeQuery(query);
+      if (text.includes('FROM atlas_import_items')) {
+        return { rows: [], rowCount: 0 };
+      }
+      if (text.startsWith('SELECT id FROM atlas_entries')) {
+        return { rows: [{ id: entryId }], rowCount: 1 };
+      }
+      if (text.startsWith('DELETE FROM atlas_media')) {
+        return { rows: [], rowCount: 2 };
+      }
+      if (text.startsWith('UPDATE atlas_entries')) {
+        return { rows: [{ id: entryId }], rowCount: 1 };
+      }
+      return { rows: [], rowCount: 0 };
+    });
+
+    await expect(archiveAtlasEntryAction(entryId)).resolves.toEqual({
+      ok: true,
+      data: { id: entryId },
+    });
+
+    const statements = __testMocks.clientQuery.mock.calls.map(([query]) =>
+      normalizeQuery(query),
+    );
+    const mediaDeleteIndex = statements.findIndex((query) =>
+      query.startsWith('DELETE FROM atlas_media'),
+    );
+    const archiveIndex = statements.findIndex((query) =>
+      query.startsWith('UPDATE atlas_entries'),
+    );
+    const commitIndex = statements.indexOf('COMMIT');
+    expect(mediaDeleteIndex).toBeGreaterThan(statements.indexOf('BEGIN'));
+    expect(archiveIndex).toBeGreaterThan(mediaDeleteIndex);
+    expect(commitIndex).toBeGreaterThan(archiveIndex);
+    expect(scheduleAtlasMediaDeletion).toHaveBeenCalledTimes(1);
+    expect(
+      __testMocks.clientQuery.mock.invocationCallOrder[commitIndex],
+    ).toBeLessThan(
+      jest.mocked(scheduleAtlasMediaDeletion).mock.invocationCallOrder[0],
+    );
   });
 
   it('persists local occurrence time and its photo offset in the owner-scoped update', async () => {

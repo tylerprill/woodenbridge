@@ -242,4 +242,76 @@ describe('MemoryArtwork', () => {
       within(dialog).getByRole('status', { name: 'Photo 2 of 3' }),
     ).toBeInTheDocument();
   });
+
+  it('keeps the full-image gallery usable when a photograph is unavailable', async () => {
+    const user = userEvent.setup();
+    const entry = {
+      ...baseEntry,
+      media: [media('missing', 0), media('two', 1)],
+    };
+
+    render(<MemoryArtwork entry={entry} tone="ember" preview expandable />);
+    await user.click(
+      screen.getByRole('button', { name: /photo 1 full size/i }),
+    );
+
+    const dialog = screen.getByRole('dialog');
+    fireEvent.error(within(dialog).getByRole('img', { name: 'Giza view 1' }));
+
+    expect(
+      within(dialog).getByRole('img', {
+        name: 'Giza view 1 — photo unavailable',
+      }),
+    ).toBeInTheDocument();
+    expect(dialog.querySelector('.bridge-card-art-ember')).toBeInTheDocument();
+
+    await user.click(
+      within(dialog).getByRole('button', {
+        name: 'Show next full-size photo',
+      }),
+    );
+    expect(
+      within(dialog).getByRole('img', { name: 'Giza view 2' }),
+    ).toHaveAttribute('src', '/media/two.webp');
+  });
+
+  it('replaces a failed photograph without collapsing the artwork', () => {
+    const { container } = render(
+      <MemoryArtwork
+        entry={{ ...baseEntry, media: [media('missing', 0)] }}
+        tone="ember"
+        preview
+      />,
+    );
+
+    fireEvent.error(screen.getByRole('img'));
+
+    expect(
+      screen.getByRole('img', {
+        name: 'Giza view 1 — photo unavailable',
+      }),
+    ).toBeInTheDocument();
+    expect(
+      container.querySelector('.atlas-memory-artwork-fallback'),
+    ).toBeInTheDocument();
+  });
+
+  it('recovers when a carousel advances past a failed photograph', async () => {
+    const user = userEvent.setup();
+    render(
+      <MemoryArtwork
+        entry={{ ...baseEntry, media: [media('missing', 0), media('two', 1)] }}
+        tone="cedar"
+        preview
+      />,
+    );
+
+    fireEvent.error(screen.getByRole('img'));
+    await user.click(screen.getByRole('button', { name: 'Show next photo' }));
+
+    expect(screen.getByRole('img')).toHaveAttribute(
+      'src',
+      '/media/two-thumbnail.webp',
+    );
+  });
 });
