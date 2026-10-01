@@ -1,12 +1,18 @@
 'use client';
 
-import { ChevronLeftIcon, ChevronRightIcon } from '@heroicons/react/24/outline';
+import {
+  ArrowsPointingOutIcon,
+  ChevronLeftIcon,
+  ChevronRightIcon,
+} from '@heroicons/react/24/outline';
 import Image from 'next/image';
 import { useRef, useState } from 'react';
 
 import type { AtlasEntryPresentation } from '@/app/lib/atlas/definitions';
 import { getAtlasPlaceContextLabel } from '@/app/lib/atlas/place';
 import { BridgeScene } from '@/components/clean/bridge-scene';
+import { MemoryLightbox } from './memory-lightbox';
+import styles from './memory-lightbox.module.css';
 
 type MemoryArtworkProps = {
   entry: AtlasEntryPresentation;
@@ -15,6 +21,7 @@ type MemoryArtworkProps = {
   sizes?: string;
   eager?: boolean;
   preview?: boolean;
+  expandable?: boolean;
 };
 
 export function MemoryArtwork({
@@ -24,9 +31,12 @@ export function MemoryArtwork({
   sizes,
   eager = false,
   preview = false,
+  expandable = false,
 }: MemoryArtworkProps) {
   const [activeIndex, setActiveIndex] = useState(0);
+  const [lightboxOpen, setLightboxOpen] = useState(false);
   const touchStartX = useRef<number | null>(null);
+  const suppressOpenUntil = useRef(0);
   const photos = entry.media;
   const photoCount = photos.length;
   const photo = photos[activeIndex];
@@ -61,19 +71,52 @@ export function MemoryArtwork({
       aria-roledescription={hasCarousel ? 'carousel' : undefined}
       aria-label={hasCarousel ? `${entry.title || context} photos` : undefined}
       onTouchStart={(event) => {
+        if (lightboxOpen) {
+          touchStartX.current = null;
+          return;
+        }
         touchStartX.current = event.touches[0]?.clientX ?? null;
       }}
       onTouchEnd={(event) => {
+        if (lightboxOpen) {
+          touchStartX.current = null;
+          return;
+        }
         const start = touchStartX.current;
         const end = event.changedTouches[0]?.clientX;
         touchStartX.current = null;
         if (!hasCarousel || start === null || end === undefined) return;
 
         const distance = end - start;
-        if (Math.abs(distance) >= 36) move(distance > 0 ? -1 : 1);
+        if (Math.abs(distance) >= 36) {
+          suppressOpenUntil.current = Date.now() + 450;
+          move(distance > 0 ? -1 : 1);
+        }
       }}
     >
       {visual}
+
+      {expandable && photo ? (
+        <button
+          className={styles.openImage}
+          type="button"
+          onClick={() => {
+            if (Date.now() < suppressOpenUntil.current) {
+              suppressOpenUntil.current = 0;
+              return;
+            }
+            setLightboxOpen(true);
+          }}
+          aria-haspopup="dialog"
+          aria-expanded={lightboxOpen}
+          aria-label={`View ${entry.title || context} photo ${activeIndex + 1} full size`}
+        >
+          <span>
+            <ArrowsPointingOutIcon aria-hidden="true" />
+            View full image
+          </span>
+        </button>
+      ) : null}
 
       {index ? (
         <span className="atlas-memory-artwork-index">{index}</span>
@@ -118,6 +161,18 @@ export function MemoryArtwork({
             {activeIndex + 1} / {photoCount}
           </span>
         </>
+      ) : null}
+
+      {expandable && photo ? (
+        <MemoryLightbox
+          photos={photos}
+          activeIndex={activeIndex}
+          open={lightboxOpen}
+          title={entry.title}
+          place={context}
+          onActiveIndexChange={setActiveIndex}
+          onClose={() => setLightboxOpen(false)}
+        />
       ) : null}
     </div>
   );

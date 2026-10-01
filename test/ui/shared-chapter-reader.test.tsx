@@ -203,6 +203,50 @@ describe('shared Chapter reader', () => {
     ).not.toBeInTheDocument();
   });
 
+  it('offers the full-image gallery to shared readers without changing the owner card', () => {
+    const chapterWithPhoto = {
+      ...chapter,
+      entries: chapter.entries.map((entry, index) =>
+        index === 0
+          ? {
+              ...entry,
+              media: [
+                {
+                  id: 'petra-photo-1',
+                  entryId: entry.id,
+                  mimeType: 'image/webp',
+                  width: 1200,
+                  height: 800,
+                  byteSize: 24_000,
+                  altText: 'Petra glowing at dawn',
+                  sortOrder: 0,
+                  createdAt: '2026-01-03T00:00:00.000Z',
+                  deliveryUrl: '/shared/petra-photo-1.webp',
+                  thumbnailUrl: '/shared/petra-photo-1-thumbnail.webp',
+                },
+              ],
+            }
+          : entry,
+      ),
+    } satisfies SharedAtlasChapter;
+
+    const { rerender } = render(
+      <ChapterReader chapter={chapterWithPhoto} mode="shared" />,
+    );
+    expect(
+      screen.getByRole('button', {
+        name: 'View Petra at dawn photo 1 full size',
+      }),
+    ).toBeInTheDocument();
+
+    rerender(<ChapterReader chapter={chapterWithPhoto} mode="owner" />);
+    expect(
+      screen.queryByRole('button', {
+        name: 'View Petra at dawn photo 1 full size',
+      }),
+    ).not.toBeInTheDocument();
+  });
+
   it('preserves the featured destination when a journey returns to its origin', () => {
     const origin = {
       ...chapter.entries[0],

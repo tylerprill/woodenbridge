@@ -4,7 +4,13 @@
 
 /* eslint-disable @next/next/no-img-element */
 
-import { render, screen } from '@testing-library/react';
+import {
+  fireEvent,
+  render,
+  screen,
+  waitFor,
+  within,
+} from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 
 import type { AtlasEntryPresentation } from '@/app/lib/atlas/definitions';
@@ -125,5 +131,115 @@ describe('MemoryArtwork', () => {
       screen.queryByRole('button', { name: 'Show next photo' }),
     ).not.toBeInTheDocument();
     expect(screen.queryByText('1 / 1')).not.toBeInTheDocument();
+  });
+
+  it('opens an accessible full-image gallery only when explicitly enabled', async () => {
+    const user = userEvent.setup();
+    const entry = {
+      ...baseEntry,
+      media: [media('one', 0), media('two', 1), media('three', 2)],
+    };
+
+    const { rerender } = render(
+      <MemoryArtwork entry={entry} tone="cedar" preview />,
+    );
+    expect(
+      screen.queryByRole('button', { name: /photo 1 full size/i }),
+    ).not.toBeInTheDocument();
+
+    rerender(<MemoryArtwork entry={entry} tone="cedar" preview expandable />);
+    const trigger = screen.getByRole('button', {
+      name: /photo 1 full size/i,
+    });
+    expect(trigger).toHaveAttribute('aria-haspopup', 'dialog');
+    expect(trigger).toHaveAttribute('aria-expanded', 'false');
+
+    await user.click(trigger);
+    const dialog = screen.getByRole('dialog', {
+      name: 'Stone Against the Desert',
+    });
+    expect(trigger).toHaveAttribute('aria-expanded', 'true');
+    expect(
+      within(dialog).getByRole('img', { name: 'Giza view 1' }),
+    ).toHaveAttribute('src', '/media/one.webp');
+    expect(
+      within(dialog).getByRole('status', { name: 'Photo 1 of 3' }),
+    ).toBeInTheDocument();
+
+    await user.click(
+      within(dialog).getByRole('button', {
+        name: 'Show next full-size photo',
+      }),
+    );
+    expect(
+      within(dialog).getByRole('img', { name: 'Giza view 2' }),
+    ).toHaveAttribute('src', '/media/two.webp');
+
+    await user.click(
+      within(dialog).getByRole('button', {
+        name: 'Show full-size photo 3 of 3',
+      }),
+    );
+    expect(
+      within(dialog).getByRole('status', { name: 'Photo 3 of 3' }),
+    ).toBeInTheDocument();
+
+    await user.keyboard('{ArrowLeft}');
+    expect(
+      within(dialog).getByRole('status', { name: 'Photo 2 of 3' }),
+    ).toBeInTheDocument();
+
+    await user.keyboard('{Escape}');
+    await waitFor(() =>
+      expect(screen.queryByRole('dialog')).not.toBeInTheDocument(),
+    );
+    expect(trigger).toHaveFocus();
+  });
+
+  it('moves one photo per lightbox swipe and immediately reopens afterward', async () => {
+    const user = userEvent.setup();
+    const entry = {
+      ...baseEntry,
+      media: [media('one', 0), media('two', 1), media('three', 2)],
+    };
+
+    render(<MemoryArtwork entry={entry} tone="cedar" preview expandable />);
+    const trigger = screen.getByRole('button', {
+      name: /photo 1 full size/i,
+    });
+    await user.click(trigger);
+
+    let dialog = screen.getByRole('dialog');
+    const stage = within(dialog).getByRole('img', {
+      name: 'Giza view 1',
+    }).parentElement?.parentElement;
+    expect(stage).not.toBeNull();
+    fireEvent.touchStart(stage as HTMLElement, {
+      touches: [{ clientX: 260, clientY: 120 }],
+    });
+    fireEvent.touchEnd(stage as HTMLElement, {
+      changedTouches: [{ clientX: 120, clientY: 124 }],
+    });
+
+    expect(
+      within(dialog).getByRole('status', { name: 'Photo 2 of 3' }),
+    ).toBeInTheDocument();
+    expect(
+      within(dialog).queryByRole('status', { name: 'Photo 3 of 3' }),
+    ).not.toBeInTheDocument();
+
+    await user.click(
+      within(dialog).getByRole('button', { name: 'Close full image' }),
+    );
+    await waitFor(() =>
+      expect(screen.queryByRole('dialog')).not.toBeInTheDocument(),
+    );
+    await user.click(
+      screen.getByRole('button', { name: /photo 2 full size/i }),
+    );
+    dialog = screen.getByRole('dialog');
+    expect(
+      within(dialog).getByRole('status', { name: 'Photo 2 of 3' }),
+    ).toBeInTheDocument();
   });
 });
